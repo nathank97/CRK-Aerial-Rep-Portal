@@ -1,0 +1,190 @@
+import { useState } from 'react'
+import { updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
+import { updateDoc, doc } from 'firebase/firestore'
+import { useAuth } from '../../context/AuthContext'
+import { auth, db } from '../../firebase/config'
+import { formatDate } from '../../utils/formatters'
+
+export default function ProfilePage() {
+  const { user, profile, isAdmin, isDealer } = useAuth()
+
+  // Display name
+  const [displayName, setDisplayName] = useState(profile?.displayName ?? '')
+  const [savingName, setSavingName] = useState(false)
+  const [nameSaved, setNameSaved] = useState(false)
+  const [nameError, setNameError] = useState('')
+
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSaved, setPasswordSaved] = useState(false)
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]'
+  const labelCls = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
+
+  async function saveName() {
+    if (!displayName.trim()) { setNameError('Name cannot be empty.'); return }
+    setSavingName(true)
+    setNameError('')
+    try {
+      await updateProfile(auth.currentUser, { displayName: displayName.trim() })
+      await updateDoc(doc(db, 'users', user.uid), { displayName: displayName.trim() })
+      setNameSaved(true)
+      setTimeout(() => setNameSaved(false), 3000)
+    } catch (e) {
+      setNameError(e.message ?? 'Failed to update name.')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  async function savePassword() {
+    setPasswordError('')
+    if (!currentPassword) { setPasswordError('Current password is required.'); return }
+    if (newPassword.length < 6) { setPasswordError('New password must be at least 6 characters.'); return }
+    if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match.'); return }
+    setSavingPassword(true)
+    try {
+      const credential = EmailAuthProvider.credential(user.email, currentPassword)
+      await reauthenticateWithCredential(auth.currentUser, credential)
+      await updatePassword(auth.currentUser, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setPasswordSaved(true)
+      setTimeout(() => setPasswordSaved(false), 3000)
+    } catch (e) {
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+        setPasswordError('Current password is incorrect.')
+      } else {
+        setPasswordError(e.message ?? 'Failed to change password.')
+      }
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  const roleLabel = isAdmin ? 'Admin' : isDealer ? 'Dealer' : 'User'
+  const roleColor = isAdmin ? 'bg-[#4A90B8]/10 text-[#4A90B8]' : 'bg-[#8B6914]/10 text-[#8B6914]'
+
+  return (
+    <div className="p-4 md:p-6 max-w-2xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[#1A1A1A]">My Profile</h1>
+        <p className="text-sm text-[#9A9A9A] mt-0.5">Manage your account settings</p>
+      </div>
+
+      {/* Account Overview */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-5">
+        <div className="flex items-center gap-4 mb-5">
+          <div className="w-14 h-14 rounded-full bg-[#8B6914]/15 flex items-center justify-center text-2xl font-bold text-[#8B6914]">
+            {(profile?.displayName ?? user?.email ?? '?')[0].toUpperCase()}
+          </div>
+          <div>
+            <p className="font-bold text-[#1A1A1A] text-lg">{profile?.displayName ?? '—'}</p>
+            <p className="text-sm text-[#9A9A9A]">{user?.email}</p>
+            <span className={`inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full ${roleColor}`}>
+              {roleLabel}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-gray-50">
+          <div>
+            <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-0.5">Member Since</p>
+            <p className="text-sm text-[#1A1A1A]">{formatDate(profile?.createdAt)}</p>
+          </div>
+          {isDealer && profile?.marginPercent != null && (
+            <div>
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-0.5">Your Margin</p>
+              <p className="text-sm text-[#1A1A1A]">
+                Dealer prices are MSRP minus your assigned margin.
+              </p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-0.5">User ID</p>
+            <p className="text-xs font-mono text-[#9A9A9A] truncate">{user?.uid}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Update Display Name */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-5">
+        <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Display Name</h2>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Name</label>
+            <input value={displayName} onChange={(e) => { setDisplayName(e.target.value); setNameError(''); setNameSaved(false) }}
+              className={inputCls} placeholder="Your name" />
+          </div>
+          {nameError && <p className="text-sm text-[#D95F5F]">{nameError}</p>}
+          {nameSaved && <p className="text-sm text-[#4CAF7D]">Name updated successfully.</p>}
+          <button onClick={saveName} disabled={savingName}
+            className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
+            {savingName ? 'Saving…' : 'Save Name'}
+          </button>
+        </div>
+      </div>
+
+      {/* Change Password */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-5">
+        <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Change Password</h2>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Current Password</label>
+            <input type="password" value={currentPassword} onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError('') }}
+              className={inputCls} placeholder="Enter current password" />
+          </div>
+          <div>
+            <label className={labelCls}>New Password</label>
+            <input type="password" value={newPassword} onChange={(e) => { setNewPassword(e.target.value); setPasswordError('') }}
+              className={inputCls} placeholder="Min. 6 characters" />
+          </div>
+          <div>
+            <label className={labelCls}>Confirm New Password</label>
+            <input type="password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError('') }}
+              className={inputCls} placeholder="Repeat new password" />
+          </div>
+          {passwordError && <p className="text-sm text-[#D95F5F]">{passwordError}</p>}
+          {passwordSaved && <p className="text-sm text-[#4CAF7D]">Password changed successfully.</p>}
+          <button onClick={savePassword} disabled={savingPassword}
+            className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
+            {savingPassword ? 'Changing…' : 'Change Password'}
+          </button>
+        </div>
+      </div>
+
+      {/* Module Access (dealer only) */}
+      {isDealer && profile?.moduleAccess && (
+        <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6">
+          <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Your Module Access</h2>
+          <p className="text-xs text-[#9A9A9A] mb-3">Contact your admin to change module permissions.</p>
+          <div className="space-y-2">
+            {[
+              { key: 'quotesOrders', label: 'Quotes & Orders' },
+              { key: 'inventory', label: 'Inventory' },
+              { key: 'service', label: 'Service & Repair' },
+              { key: 'documents', label: 'Documents' },
+              { key: 'map', label: 'Customer Map' },
+            ].map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between py-1.5">
+                <span className="text-sm text-[#1A1A1A]">{label}</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  profile.moduleAccess[key] !== false
+                    ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]'
+                    : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {profile.moduleAccess[key] !== false ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

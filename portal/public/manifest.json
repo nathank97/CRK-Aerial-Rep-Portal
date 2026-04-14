@@ -1,0 +1,21 @@
+{
+  "name": "CRK Aerial Rep Portal",
+  "short_name": "CRK Portal",
+  "description": "CRK Aerial dealer operations platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#8B6914",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

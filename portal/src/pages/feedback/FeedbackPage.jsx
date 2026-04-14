@@ -34,6 +34,7 @@ const PRIORITY_DOT = {
   High:     'bg-[#E6A817]',
   Medium:   'bg-[#4A90B8]',
   Low:      'bg-gray-400',
+  Resolved: 'bg-[#4CAF7D]',
 }
 
 const EMPTY = {

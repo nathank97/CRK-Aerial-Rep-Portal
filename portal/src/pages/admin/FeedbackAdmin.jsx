@@ -7,8 +7,10 @@ import { useAuth } from '../../context/AuthContext'
 import { formatDate, formatDateTime } from '../../utils/formatters'
 
 const STATUSES = ['New', 'In Review', 'In Progress', 'Resolved', "Won't Fix"]
-const PRIORITIES = ['Critical', 'High', 'Medium', 'Low']
+const PRIORITIES = ['Critical', 'High', 'Medium', 'Low', 'Resolved']
 const TYPES = ['Bug Report', 'Feature Request', 'General Feedback']
+
+const CLOSED_STATUSES = new Set(['Resolved', "Won't Fix"])
 
 const STATUS_STYLE = {
   New:          'bg-[#4A90B8]/10 text-[#4A90B8]',
@@ -23,6 +25,7 @@ const PRIORITY_STYLE = {
   High:     'bg-[#E6A817]/10 text-[#E6A817]',
   Medium:   'bg-[#4A90B8]/10 text-[#4A90B8]',
   Low:      'bg-gray-100 text-gray-500',
+  Resolved: 'bg-[#4CAF7D]/10 text-[#4CAF7D]',
 }
 
 const PRIORITY_DOT = {
@@ -30,9 +33,10 @@ const PRIORITY_DOT = {
   High:     'bg-[#E6A817]',
   Medium:   'bg-[#4A90B8]',
   Low:      'bg-gray-400',
+  Resolved: 'bg-[#4CAF7D]',
 }
 
-const PRIORITY_SORT = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+const PRIORITY_SORT = { Critical: 0, High: 1, Medium: 2, Low: 3, Resolved: 4 }
 
 function CommentThread({ ticketId }) {
   const { comments, loading } = useTicketComments(ticketId)
@@ -197,7 +201,12 @@ function DetailPanel({ item, onClose }) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Status</label>
-              <select value={status} onChange={(e) => { setStatus(e.target.value); setSaved(false) }} className={inputCls}>
+              <select value={status} onChange={(e) => {
+                const s = e.target.value
+                setStatus(s)
+                if (CLOSED_STATUSES.has(s)) setAdminPriority('Resolved')
+                setSaved(false)
+              }} className={inputCls}>
                 {STATUSES.map((s) => <option key={s}>{s}</option>)}
               </select>
             </div>

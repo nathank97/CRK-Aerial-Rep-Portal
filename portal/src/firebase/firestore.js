@@ -23,6 +23,8 @@ export const leadActivityCol = (leadId) =>
   collection(db, 'leads', leadId, 'activity')
 export const leadChatCol = (leadId) =>
   collection(db, 'leads', leadId, 'chat')
+export const feedbackCommentsCol = (feedbackId) =>
+  collection(db, 'feedback', feedbackId, 'comments')
 
 // Doc refs
 export const userDoc = (uid) => doc(db, 'users', uid)

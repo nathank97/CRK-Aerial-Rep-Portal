@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { query, where, orderBy, onSnapshot } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
-import { feedbackCol } from '../firebase/firestore'
+import { feedbackCol, feedbackCommentsCol } from '../firebase/firestore'
 
 export function useAllFeedback() {
   const [feedback, setFeedback] = useState([])
@@ -35,4 +35,21 @@ export function useMyFeedback() {
   }, [user?.uid])
 
   return { feedback, loading }
+}
+
+export function useTicketComments(ticketId) {
+  const [comments, setComments] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!ticketId) return
+    const q = query(feedbackCommentsCol(ticketId), orderBy('createdAt', 'asc'))
+    const unsub = onSnapshot(q, (snap) => {
+      setComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    })
+    return unsub
+  }, [ticketId])
+
+  return { comments, loading }
 }

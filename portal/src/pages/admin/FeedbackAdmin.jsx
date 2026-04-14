@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
-import { updateDoc, doc, serverTimestamp } from 'firebase/firestore'
-import { useAllFeedback } from '../../hooks/useFeedback'
+import { updateDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore'
+import { useAllFeedback, useTicketComments } from '../../hooks/useFeedback'
 import { db } from '../../firebase/config'
+import { feedbackCommentsCol } from '../../firebase/firestore'
+import { useAuth } from '../../context/AuthContext'
 import { formatDate, formatDateTime } from '../../utils/formatters'
 
 const STATUSES = ['New', 'In Review', 'In Progress', 'Resolved', "Won't Fix"]
@@ -31,6 +33,94 @@ const PRIORITY_DOT = {
 }
 
 const PRIORITY_SORT = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+
+function CommentThread({ ticketId }) {
+  const { comments, loading } = useTicketComments(ticketId)
+  const { profile, user } = useAuth()
+  const [text, setText] = useState('')
+  const [posting, setPosting] = useState(false)
+
+  async function postComment() {
+    if (!text.trim()) return
+    setPosting(true)
+    try {
+      await addDoc(feedbackCommentsCol(ticketId), {
+        text: text.trim(),
+        authorName: profile?.displayName ?? user.email,
+        authorRole: 'admin',
+        authorUid: user.uid,
+        createdAt: serverTimestamp(),
+      })
+      setText('')
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  return (
+    <div>
+      <p className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-2">
+        Updates &amp; Comments (visible to submitter)
+      </p>
+
+      {/* Thread */}
+      <div className="space-y-2 mb-3 max-h-52 overflow-y-auto">
+        {loading ? (
+          <div className="h-8 bg-gray-100 rounded animate-pulse" />
+        ) : comments.length === 0 ? (
+          <p className="text-xs text-[#9A9A9A] italic">No comments yet. Post one below.</p>
+        ) : (
+          comments.map((c) => (
+            <div key={c.id} className={`rounded-xl px-3 py-2.5 text-sm ${
+              c.authorRole === 'admin'
+                ? 'bg-[#8B6914]/8 border border-[#8B6914]/20'
+                : 'bg-[#F4F4F5] border border-gray-200'
+            }`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                  c.authorRole === 'admin'
+                    ? 'bg-[#8B6914]/15 text-[#8B6914]'
+                    : 'bg-gray-200 text-gray-500'
+                }`}>
+                  {c.authorRole === 'admin' ? 'Admin' : 'Dealer'}
+                </span>
+                <span className="text-xs font-medium text-[#1A1A1A]">{c.authorName}</span>
+                {c.createdAt && (
+                  <span className="text-[10px] text-[#9A9A9A] ml-auto">
+                    {formatDateTime(c.createdAt)}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{c.text}</p>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Post input */}
+      <div className="flex gap-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={2}
+          placeholder="Post an update visible to the submitter…"
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] resize-none"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) postComment()
+          }}
+        />
+        <button
+          onClick={postComment}
+          disabled={posting || !text.trim()}
+          className="self-end px-4 py-2 bg-[#8B6914] text-white rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-40"
+        >
+          {posting ? '…' : 'Post'}
+        </button>
+      </div>
+      <p className="text-[10px] text-[#9A9A9A] mt-1">Ctrl+Enter to post</p>
+    </div>
+  )
+}
 
 function DetailPanel({ item, onClose }) {
   const [status, setStatus] = useState(item.status ?? 'New')
@@ -85,7 +175,6 @@ function DetailPanel({ item, onClose }) {
             <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap bg-[#F4F4F5] rounded-lg p-3">{item.description}</p>
           </div>
 
-          {/* Steps to reproduce */}
           {item.steps && (
             <div>
               <p className={labelCls}>Steps to Reproduce</p>
@@ -93,7 +182,7 @@ function DetailPanel({ item, onClose }) {
             </div>
           )}
 
-          {/* Submitted priority (read-only) */}
+          {/* Submitted priority */}
           <div>
             <p className={labelCls}>Submitted Priority</p>
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${PRIORITY_STYLE[item.priority]}`}>
@@ -121,24 +210,31 @@ function DetailPanel({ item, onClose }) {
           </div>
 
           <div>
-            <label className={labelCls}>Admin Notes / Response</label>
+            <label className={labelCls}>Internal Notes (admin only)</label>
             <textarea value={adminNotes} onChange={(e) => { setAdminNotes(e.target.value); setSaved(false) }}
-              rows={4} className={inputCls}
-              placeholder="Internal notes or response visible to the submitter…" />
+              rows={3} className={inputCls}
+              placeholder="Private notes for internal use — not shown to the submitter…" />
           </div>
 
-          {saved && <p className="text-sm text-[#4CAF7D]">Changes saved.</p>}
-        </div>
+          {saved && (
+            <p className="text-sm text-[#4CAF7D]">Changes saved.</p>
+          )}
 
-        {/* Footer */}
-        <div className="p-5 border-t border-gray-100 flex gap-3 flex-shrink-0">
-          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors">
-            Close
-          </button>
-          <button onClick={save} disabled={saving}
-            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
+          {/* Save status/priority/notes */}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors">
+              Close
+            </button>
+            <button onClick={save} disabled={saving}
+              className="flex-1 bg-[#8B6914] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+
+          <hr className="border-gray-100" />
+
+          {/* Comment thread */}
+          <CommentThread ticketId={item.id} />
         </div>
       </div>
     </div>
@@ -170,7 +266,6 @@ export default function FeedbackAdmin() {
       })
   }, [feedback, filterStatus, filterPriority, filterType, search])
 
-  // Summary counts
   const openCount = feedback.filter((f) => !['Resolved', "Won't Fix"].includes(f.status)).length
   const criticalCount = feedback.filter((f) => (f.adminPriority ?? f.priority) === 'Critical' && !['Resolved', "Won't Fix"].includes(f.status)).length
   const newCount = feedback.filter((f) => f.status === 'New').length
@@ -240,7 +335,6 @@ export default function FeedbackAdmin() {
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                      {/* Priority dot + badge */}
                       <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${PRIORITY_STYLE[effectivePriority]}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_DOT[effectivePriority]}`} />
                         {effectivePriority}

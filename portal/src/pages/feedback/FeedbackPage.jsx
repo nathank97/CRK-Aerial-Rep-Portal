@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
-import { feedbackCol } from '../../firebase/firestore'
-import { useMyFeedback } from '../../hooks/useFeedback'
-import { formatDate } from '../../utils/formatters'
+import { feedbackCol, feedbackCommentsCol } from '../../firebase/firestore'
+import { useMyFeedback, useTicketComments } from '../../hooks/useFeedback'
+import { formatDate, formatDateTime } from '../../utils/formatters'
 
 const TYPES = ['Bug Report', 'Feature Request', 'General Feedback']
 
@@ -222,12 +222,35 @@ export default function FeedbackPage() {
 
 function SubmissionCard({ item }) {
   const [expanded, setExpanded] = useState(false)
-  const hasResponse = !!item.adminNotes
+  const { user, profile } = useAuth()
+  const { comments, loading: commentsLoading } = useTicketComments(expanded ? item.id : null)
+  const [replyText, setReplyText] = useState('')
+  const [posting, setPosting] = useState(false)
+
+  const hasComments = comments.length > 0
+  const latestAdminComment = [...comments].reverse().find((c) => c.authorRole === 'admin')
   const statusChanged = item.status !== 'New'
+
+  async function postReply() {
+    if (!replyText.trim()) return
+    setPosting(true)
+    try {
+      await addDoc(feedbackCommentsCol(item.id), {
+        text: replyText.trim(),
+        authorName: profile?.displayName ?? user.email,
+        authorRole: 'dealer',
+        authorUid: user.uid,
+        createdAt: serverTimestamp(),
+      })
+      setReplyText('')
+    } finally {
+      setPosting(false)
+    }
+  }
 
   return (
     <div className={`bg-white border rounded-xl shadow-sm transition-colors ${
-      hasResponse ? 'border-[#8B6914]/30' : 'border-gray-100'
+      latestAdminComment ? 'border-[#8B6914]/30' : 'border-gray-100'
     }`}>
       {/* Summary row — always visible */}
       <button
@@ -246,7 +269,7 @@ function SubmissionCard({ item }) {
               </span>
               <span className="text-xs text-[#9A9A9A]">{item.type}</span>
               {item.module && <span className="text-xs text-[#9A9A9A]">· {item.module}</span>}
-              {hasResponse && (
+              {latestAdminComment && (
                 <span className="text-[10px] font-semibold text-[#8B6914] bg-[#8B6914]/10 px-2 py-0.5 rounded-full">
                   Response received
                 </span>
@@ -277,29 +300,77 @@ function SubmissionCard({ item }) {
             </div>
           )}
 
-          {/* Status update */}
+          {/* Status */}
           {statusChanged && (
             <div className="flex items-center gap-2">
-              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Current Status:</p>
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status:</p>
               <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${STATUS_STYLE[item.status] ?? 'bg-gray-100 text-gray-500'}`}>
                 {item.status}
               </span>
+              {item.updatedAt && (
+                <span className="text-[10px] text-[#9A9A9A]">· Updated {formatDate(item.updatedAt)}</span>
+              )}
             </div>
           )}
 
-          {/* Admin response */}
-          {hasResponse ? (
-            <div className="bg-[#8B6914]/5 border border-[#8B6914]/20 rounded-xl p-4">
-              <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wider mb-2">Admin Response</p>
-              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{item.adminNotes}</p>
-            </div>
-          ) : (
-            <p className="text-xs text-[#9A9A9A] italic">No response yet — we'll update this once reviewed.</p>
-          )}
+          {/* Comment thread */}
+          <div>
+            <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-2">Updates & Responses</p>
+            {commentsLoading ? (
+              <div className="space-y-2">
+                <div className="h-12 bg-gray-100 rounded-xl animate-pulse" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-xs text-[#9A9A9A] italic">No updates yet — we'll post here as we work on it.</p>
+            ) : (
+              <div className="space-y-2">
+                {comments.map((c) => (
+                  <div key={c.id} className={`rounded-xl px-3 py-2.5 ${
+                    c.authorRole === 'admin'
+                      ? 'bg-[#8B6914]/8 border border-[#8B6914]/20'
+                      : 'bg-[#F4F4F5] border border-gray-200'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                        c.authorRole === 'admin'
+                          ? 'bg-[#8B6914]/15 text-[#8B6914]'
+                          : 'bg-gray-200 text-gray-500'
+                      }`}>
+                        {c.authorRole === 'admin' ? 'CRK Aerial' : 'You'}
+                      </span>
+                      {c.createdAt && (
+                        <span className="text-[10px] text-[#9A9A9A] ml-auto">
+                          {formatDateTime(c.createdAt)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{c.text}</p>
+                  </div>
+                ))}
+              </div>
+            )}
 
-          {item.updatedAt && statusChanged && (
-            <p className="text-xs text-[#9A9A9A]">Last updated: {formatDate(item.updatedAt)}</p>
-          )}
+            {/* Reply box */}
+            <div className="flex gap-2 mt-3">
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                rows={2}
+                placeholder="Add more details or ask a question…"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] resize-none bg-white"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) postReply()
+                }}
+              />
+              <button
+                onClick={postReply}
+                disabled={posting || !replyText.trim()}
+                className="self-end px-4 py-2 bg-[#8B6914] text-white rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-40"
+              >
+                {posting ? '…' : 'Send'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

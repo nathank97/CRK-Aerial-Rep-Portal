@@ -29,10 +29,12 @@ export default function InvoiceDetail() {
   const [editNotes, setEditNotes] = useState('')
   const [editInternalNotes, setEditInternalNotes] = useState('')
   const [editAmountPaid, setEditAmountPaid] = useState(0)
+  const [editPaidAt, setEditPaidAt] = useState('')
 
   // Partial payment modal
   const [showPartialModal, setShowPartialModal] = useState(false)
   const [partialAmount, setPartialAmount] = useState('')
+  const [partialDate, setPartialDate] = useState('')
 
   const flash = (msg, isErr = false) => {
     if (isErr) {
@@ -44,17 +46,19 @@ export default function InvoiceDetail() {
     }
   }
 
+  const toDateString = (ts) => {
+    if (!ts) return ''
+    const d = ts?.toDate ? ts.toDate() : new Date(ts)
+    return d.toISOString().split('T')[0]
+  }
+
   const enterEdit = () => {
     setEditPaymentTerms(invoice.paymentTerms ?? 'Net 30')
-    setEditDueDate(
-      invoice.dueDate
-        ? (invoice.dueDate?.toDate ? invoice.dueDate.toDate() : new Date(invoice.dueDate))
-            .toISOString().split('T')[0]
-        : ''
-    )
+    setEditDueDate(toDateString(invoice.dueDate))
     setEditNotes(invoice.notes ?? '')
     setEditInternalNotes(invoice.internalNotes ?? '')
     setEditAmountPaid(invoice.amountPaid ?? 0)
+    setEditPaidAt(toDateString(invoice.paidAt))
     setEditMode(true)
   }
 
@@ -65,10 +69,12 @@ export default function InvoiceDetail() {
       const total = invoice.total ?? 0
       const balanceDue = total - paid
       const dueTs = editDueDate ? new Date(editDueDate) : null
+      const paidTs = editPaidAt ? new Date(editPaidAt) : null
       const paymentStatus = computePaymentStatus({ total, amountPaid: paid, dueDate: dueTs })
       await updateDoc(invoiceDoc(id), {
         paymentTerms: editPaymentTerms,
         dueDate: dueTs,
+        paidAt: paidTs,
         notes: editNotes,
         internalNotes: editInternalNotes,
         amountPaid: paid,
@@ -97,6 +103,7 @@ export default function InvoiceDetail() {
         balanceDue: 0,
         paymentStatus: 'Paid',
         status: 'Paid',
+        paidAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
       flash('Invoice marked as Paid.')
@@ -117,15 +124,23 @@ export default function InvoiceDetail() {
       const newPaid = Math.min((invoice.amountPaid ?? 0) + amount, total)
       const balanceDue = total - newPaid
       const paymentStatus = computePaymentStatus({ total, amountPaid: newPaid, dueDate: invoice.dueDate })
+      const fullyPaid = balanceDue === 0
+      const paidTs = partialDate
+        ? new Date(partialDate)
+        : fullyPaid
+          ? serverTimestamp()
+          : undefined
       await updateDoc(invoiceDoc(id), {
         amountPaid: newPaid,
         balanceDue,
         paymentStatus,
         status: paymentStatus,
+        ...(paidTs !== undefined ? { paidAt: paidTs } : {}),
         updatedAt: serverTimestamp(),
       })
       setShowPartialModal(false)
       setPartialAmount('')
+      setPartialDate('')
       flash(`Payment of ${formatCurrency(amount)} recorded.`)
     } catch (err) {
       console.error(err)
@@ -253,6 +268,10 @@ export default function InvoiceDetail() {
               <span>Created: {formatDate(invoice.createdAt)}</span>
               {invoice.sentAt && <span>Sent: {formatDateTime(invoice.sentAt)}</span>}
               {invoice.paymentTerms && <span>Terms: {invoice.paymentTerms}</span>}
+              {invoice.dueDate && <span>Due: {formatDate(invoice.dueDate)}</span>}
+              {invoice.paidAt && (
+                <span className="text-[#4CAF7D] font-semibold">Paid: {formatDate(invoice.paidAt)}</span>
+              )}
             </div>
           </div>
 
@@ -333,6 +352,10 @@ export default function InvoiceDetail() {
                 onChange={(e) => setEditAmountPaid(e.target.value)} className={inputCls} />
             </div>
             <div>
+              <label className={labelCls}>Payment Date</label>
+              <input type="date" value={editPaidAt} onChange={(e) => setEditPaidAt(e.target.value)} className={inputCls} />
+            </div>
+            <div>
               <label className={labelCls}>Notes (visible on PDF)</label>
               <textarea rows={3} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className={inputCls} />
             </div>
@@ -361,26 +384,52 @@ export default function InvoiceDetail() {
           <p className="text-sm text-[#9A9A9A] text-center py-8">No line items.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[450px]">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
-                  <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-16">Qty</th>
-                  <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
-                  <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {invoice.lineItems.map((item, i) => (
-                  <tr key={item.id ?? i}>
-                    <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
-                    <td className="py-2 px-2 text-right text-[#9A9A9A]">{item.quantity}</td>
-                    <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>
-                    <td className="py-2 pl-2 text-right font-semibold text-[#111111]">{formatCurrency((item.quantity ?? 1) * (item.unitPrice ?? 0))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const hasDiscounts = invoice.lineItems.some((i) => (i.discount ?? 0) > 0)
+              return (
+                <table className="w-full text-sm min-w-[450px]">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
+                      <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-16">Qty</th>
+                      <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
+                      {hasDiscounts && (
+                        <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Discount</th>
+                      )}
+                      <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {invoice.lineItems.map((item, i) => {
+                      const qty = item.quantity ?? 1
+                      const base = qty * (item.unitPrice ?? 0)
+                      const lineTotal = item.discount
+                        ? item.discountType === 'percent'
+                          ? base * (1 - item.discount / 100)
+                          : Math.max(0, base - item.discount)
+                        : base
+                      return (
+                        <tr key={item.id ?? i}>
+                          <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
+                          <td className="py-2 px-2 text-right text-[#9A9A9A]">{qty}</td>
+                          <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>
+                          {hasDiscounts && (
+                            <td className="py-2 px-2 text-right text-[#4CAF7D]">
+                              {(item.discount ?? 0) > 0
+                                ? item.discountType === 'percent'
+                                  ? `${item.discount}%`
+                                  : formatCurrency(item.discount)
+                                : '—'}
+                            </td>
+                          )}
+                          <td className="py-2 pl-2 text-right font-semibold text-[#111111]">{formatCurrency(lineTotal)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )
+            })()}
           </div>
         )}
 
@@ -445,25 +494,36 @@ export default function InvoiceDetail() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
             <h2 className="text-base font-semibold text-[#111111] mb-4">Record Partial Payment</h2>
-            <div className="mb-4">
-              <label className={labelCls}>Amount Received ($)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={partialAmount}
-                onChange={(e) => setPartialAmount(e.target.value)}
-                className={inputCls}
-                autoFocus
-                placeholder="0.00"
-              />
-              <p className="text-xs text-[#9A9A9A] mt-1">
-                Balance due: {formatCurrency(balanceDue)}
-              </p>
+            <div className="space-y-4 mb-4">
+              <div>
+                <label className={labelCls}>Amount Received ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={partialAmount}
+                  onChange={(e) => setPartialAmount(e.target.value)}
+                  className={inputCls}
+                  autoFocus
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-[#9A9A9A] mt-1">
+                  Balance due: {formatCurrency(balanceDue)}
+                </p>
+              </div>
+              <div>
+                <label className={labelCls}>Payment Date</label>
+                <input
+                  type="date"
+                  value={partialDate}
+                  onChange={(e) => setPartialDate(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => { setShowPartialModal(false); setPartialAmount('') }}
+                onClick={() => { setShowPartialModal(false); setPartialAmount(''); setPartialDate('') }}
                 className="flex-1 border border-gray-200 text-sm font-medium text-[#111111] hover:bg-[#F4F4F5] py-2 rounded-lg transition-colors"
               >
                 Cancel

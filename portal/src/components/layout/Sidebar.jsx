@@ -16,6 +16,7 @@ const ADMIN_NAV = [
   { to: '/service', label: 'Service', icon: '🔧' },
   { to: '/documents', label: 'Documents', icon: '📁' },
   { to: '/map', label: 'Map', icon: '🗺️' },
+  { to: '/calendar', label: 'Calendar', icon: '📅' },
   { to: '/feedback', label: 'Feedback', icon: '💬' },
 ]
 

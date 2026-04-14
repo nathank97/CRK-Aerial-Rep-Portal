@@ -63,6 +63,8 @@ export default function LeadNew() {
     assignedDealerId: isAdmin ? '' : user?.uid ?? '',
     assignedDealerName: isAdmin ? '' : profile?.displayName ?? '',
     notes: '',
+    nextFollowUp: '',
+    demoDate: '',
   })
 
   const set = (field) => (e) => {
@@ -88,6 +90,8 @@ export default function LeadNew() {
       const docRef = await addDoc(leadsCol, {
         ...form,
         budget: form.budget ? parseFloat(form.budget) : null,
+        nextFollowUp: form.nextFollowUp ? new Date(form.nextFollowUp) : null,
+        demoDate: form.demoDate ? new Date(form.demoDate) : null,
         createdById: user.uid,
         createdByName: profile?.displayName ?? 'Unknown',
         createdAt: now,
@@ -185,6 +189,16 @@ export default function LeadNew() {
             </select>
           </Field>
         )}
+
+        {/* Follow-up / Demo dates */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Follow-up Date">
+            <input type="date" value={form.nextFollowUp} onChange={set('nextFollowUp')} className={inputCls} />
+          </Field>
+          <Field label="Demo Date">
+            <input type="date" value={form.demoDate} onChange={set('demoDate')} className={inputCls} />
+          </Field>
+        </div>
 
         {/* Notes */}
         <Field label="Notes">

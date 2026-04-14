@@ -34,8 +34,19 @@ export default function LeadDetail() {
   const canEdit = isAdmin || lead?.assignedDealerId === user?.uid
   const canDelete = isAdmin
 
+  const toDateInput = (ts) => {
+    if (!ts) return ''
+    const d = ts?.toDate ? ts.toDate() : new Date(ts)
+    return d.toISOString().split('T')[0]
+  }
+
   const startEdit = () => {
-    setForm({ ...lead, budget: lead.budget ?? '' })
+    setForm({
+      ...lead,
+      budget: lead.budget ?? '',
+      nextFollowUp: toDateInput(lead.nextFollowUp),
+      demoDate: toDateInput(lead.demoDate),
+    })
     setEditing(true)
   }
   const cancelEdit = () => { setForm(null); setEditing(false) }
@@ -65,6 +76,8 @@ export default function LeadDetail() {
         notes: form.notes,
         assignedDealerId: form.assignedDealerId,
         assignedDealerName: form.assignedDealerName,
+        nextFollowUp: form.nextFollowUp ? new Date(form.nextFollowUp) : null,
+        demoDate: form.demoDate ? new Date(form.demoDate) : null,
         updatedAt: serverTimestamp(),
       }
       await updateDoc(doc(db, 'leads', id), updates)
@@ -271,6 +284,18 @@ export default function LeadDetail() {
                         : <p className="text-sm text-[#1A1A1A]">{lead.assignedDealerName || 'Unassigned'}</p>}
                     </div>
                   )}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Follow-up Date</label>
+                    {editing
+                      ? <input type="date" value={f.nextFollowUp ?? ''} onChange={set('nextFollowUp')} className={inputCls} />
+                      : <p className="text-sm text-[#1A1A1A]">{lead.nextFollowUp ? formatDate(lead.nextFollowUp) : '—'}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Demo Date</label>
+                    {editing
+                      ? <input type="date" value={f.demoDate ?? ''} onChange={set('demoDate')} className={inputCls} />
+                      : <p className="text-sm text-[#1A1A1A]">{lead.demoDate ? formatDate(lead.demoDate) : '—'}</p>}
+                  </div>
                 </div>
 
                 {lead.droneModels?.length > 0 && (
@@ -316,6 +341,12 @@ export default function LeadDetail() {
             <InfoRow label="Created By" value={lead.createdByName || '—'} />
             {!isAdmin && <InfoRow label="Assigned Rep" value={lead.assignedDealerName || 'Unassigned'} />}
             {lead.budget && <InfoRow label="Budget" value={formatCurrency(lead.budget)} />}
+            {lead.nextFollowUp && (
+              <InfoRow label="Follow-up" value={formatDate(lead.nextFollowUp)} highlight />
+            )}
+            {lead.demoDate && (
+              <InfoRow label="Demo Date" value={formatDate(lead.demoDate)} highlight />
+            )}
           </div>
 
           {/* Quick actions */}
@@ -348,11 +379,11 @@ export default function LeadDetail() {
   )
 }
 
-function InfoRow({ label, value }) {
+function InfoRow({ label, value, highlight }) {
   return (
     <div className="flex items-start justify-between gap-2">
       <span className="text-xs text-[#9A9A9A] shrink-0">{label}</span>
-      <span className="text-xs text-[#1A1A1A] font-medium text-right">{value}</span>
+      <span className={`text-xs font-medium text-right ${highlight ? 'text-[#8B6914]' : 'text-[#1A1A1A]'}`}>{value}</span>
     </div>
   )
 }

@@ -44,6 +44,7 @@ import DocumentLibrary from './pages/documents/DocumentLibrary'
 import MapPage from './pages/map/MapPage'
 import ChatPage from './pages/chat/ChatPage'
 import ProfilePage from './pages/profile/ProfilePage'
+import CalendarPage from './pages/calendar/CalendarPage'
 
 // Admin
 import FeedbackPage from './pages/feedback/FeedbackPage'
@@ -154,6 +155,7 @@ export const router = createBrowserRouter([
         element: <RequireModule module="map"><MapPage /></RequireModule>,
       },
       { path: '/chat', element: <ChatPage /> },
+      { path: '/calendar', element: <CalendarPage /> },
       { path: '/feedback', element: <FeedbackPage /> },
       { path: '/profile', element: <ProfilePage /> },
 

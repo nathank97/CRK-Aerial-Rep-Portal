@@ -5,15 +5,14 @@ import { customersCol, ordersCol, serviceTicketsCol } from '../firebase/firestor
 import { db } from '../firebase/config'
 
 export function useCustomers() {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) return
-    const q = isAdmin
-      ? query(customersCol, orderBy('createdAt', 'desc'))
-      : query(customersCol, where('assignedDealerId', '==', user.uid), orderBy('createdAt', 'desc'))
+    // All authenticated users see all customers
+    const q = query(customersCol, orderBy('createdAt', 'desc'))
 
     const unsub = onSnapshot(q, (snap) => {
       setCustomers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))

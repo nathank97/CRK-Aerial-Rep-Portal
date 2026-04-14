@@ -5,16 +5,14 @@ import { leadsCol, leadActivityCol, leadChatCol } from '../firebase/firestore'
 import { db } from '../firebase/config'
 
 export function useLeads() {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) return
-    // Admin sees all leads; dealer sees only their assigned leads
-    const q = isAdmin
-      ? query(leadsCol, orderBy('createdAt', 'desc'))
-      : query(leadsCol, where('assignedDealerId', '==', user.uid), orderBy('createdAt', 'desc'))
+    // All authenticated users see all leads
+    const q = query(leadsCol, orderBy('createdAt', 'desc'))
 
     const unsub = onSnapshot(q, (snap) => {
       setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() })))

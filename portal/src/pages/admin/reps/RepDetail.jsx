@@ -1,14 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   updateDoc, deleteDoc, addDoc, doc, collection, onSnapshot, query,
-  orderBy, serverTimestamp,
+  orderBy, serverTimestamp, where,
 } from 'firebase/firestore'
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts'
 import { useRep, useRepNotes } from '../../../hooks/useReps'
 import { useAllUsers } from '../../../hooks/useUsers'
+import { useRepQuotes } from '../../../hooks/useQuotes'
+import { useRepInvoices, computePaymentStatus } from '../../../hooks/useInvoices'
+import { useLeadsByDealer } from '../../../hooks/useLeads'
 import { db, storage } from '../../../firebase/config'
-import { formatDate } from '../../../utils/formatters'
+import { formatDate, formatCurrency } from '../../../utils/formatters'
+import StatusBadge from '../../../components/common/StatusBadge'
 
 const STATUSES = ['Prospect', 'In Onboarding', 'Active Rep', 'Inactive Rep', 'Terminated']
 const PIPELINE_STAGES = ['Prospect', 'Contacted', 'In Negotiation', 'Signed', 'Declined']
@@ -206,6 +213,270 @@ function DocsTab({ repId }) {
   )
 }
 
+// ─── Performance Tab ─────────────────────────────────────────────────────────
+
+function PerformanceTab({ rep, repId }) {
+  const linkedDealerId = rep.linkedDealerId
+  const { leads, loading: leadsLoading } = useLeadsByDealer(linkedDealerId)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [rating, setRating] = useState(rep.performanceRating ?? 0)
+  const [reviewDate, setReviewDate] = useState(rep.lastReviewDate ?? '')
+  const [reviewNotes, setReviewNotes] = useState(rep.reviewNotes ?? '')
+  const [goalPeriod, setGoalPeriod] = useState(rep.goalPeriod ?? 'Month')
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]'
+
+  // Derived metrics
+  const totalLeads = leads.length
+  const wonLeads = leads.filter((l) => l.status === 'Won').length
+  const lostLeads = leads.filter((l) => l.status === 'Lost').length
+  const activeLeads = leads.filter((l) => !['Won', 'Lost'].includes(l.status)).length
+  const winRate = (wonLeads + lostLeads) > 0 ? Math.round(wonLeads / (wonLeads + lostLeads) * 100) : 0
+
+  // Monthly chart data — last 6 months of leads
+  const now = new Date()
+  const monthlyData = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+    const label = d.toLocaleString('en-US', { month: 'short', year: '2-digit' })
+    const monthLeads = leads.filter((l) => {
+      const ts = l.createdAt?.toDate ? l.createdAt.toDate() : l.createdAt ? new Date(l.createdAt) : null
+      return ts && ts.getMonth() === d.getMonth() && ts.getFullYear() === d.getFullYear()
+    })
+    const monthWon = monthLeads.filter((l) => l.status === 'Won').length
+    return { month: label, leads: monthLeads.length, won: monthWon }
+  })
+
+  async function saveManual() {
+    setSaving(true)
+    try {
+      await updateDoc(doc(db, 'reps', repId), {
+        performanceRating: rating,
+        lastReviewDate: reviewDate || null,
+        reviewNotes: reviewNotes.trim(),
+        goalPeriod,
+        updatedAt: serverTimestamp(),
+      })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } finally { setSaving(false) }
+  }
+
+  const goalRevenue = rep.performanceGoalRevenue ?? 0
+  const goalLeads = rep.performanceGoalLeads ?? 0
+  const progressLeads = goalLeads > 0 ? Math.min(100, Math.round(wonLeads / goalLeads * 100)) : 0
+
+  if (!linkedDealerId) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-xl p-8 text-center shadow-sm">
+        <p className="text-[#9A9A9A] text-sm">No dealer account linked. Link a dealer in the Details tab to see performance metrics.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Auto-pulled metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Leads', value: totalLeads, color: 'text-[#4A90B8]' },
+          { label: 'Leads Won', value: wonLeads, color: 'text-[#4CAF7D]' },
+          { label: 'Win Rate', value: `${winRate}%`, color: 'text-[#8B6914]' },
+          { label: 'Active Pipeline', value: activeLeads, color: 'text-[#E6A817]' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm text-center">
+            <p className={`text-2xl font-bold ${color}`}>{leadsLoading ? '…' : value}</p>
+            <p className="text-xs text-[#9A9A9A] mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Progress bars */}
+      {(goalLeads > 0) && (
+        <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm space-y-4">
+          <h3 className="text-sm font-semibold text-[#1A1A1A]">Goal Progress</h3>
+          <div>
+            <div className="flex justify-between text-xs text-[#9A9A9A] mb-1">
+              <span>Leads Won vs Goal</span>
+              <span>{wonLeads} / {goalLeads}</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-[#4CAF7D] rounded-full transition-all" style={{ width: `${progressLeads}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly chart */}
+      <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-[#1A1A1A] mb-4">Monthly Activity (last 6 months)</h3>
+        {leadsLoading ? (
+          <div className="h-48 animate-pulse bg-gray-50 rounded-lg" />
+        ) : (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F4F4F5" />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9A9A9A' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#9A9A9A' }} allowDecimals={false} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="leads" name="Leads Created" fill="#4A90B8" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="won" name="Won" fill="#4CAF7D" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Manual performance fields */}
+      <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm space-y-4">
+        <h3 className="text-sm font-semibold text-[#1A1A1A]">Admin Rating & Review</h3>
+
+        <div>
+          <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-2">Performance Rating</p>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} type="button" onClick={() => setRating(n)}
+                className={`text-2xl transition-colors ${n <= rating ? 'text-[#E6A817]' : 'text-gray-200'}`}>
+                ★
+              </button>
+            ))}
+            {rating > 0 && (
+              <button type="button" onClick={() => setRating(0)} className="text-xs text-[#9A9A9A] hover:text-[#D95F5F] ml-2 self-center">
+                clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Last Review Date</label>
+            <input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Goal Period</label>
+            <select value={goalPeriod} onChange={(e) => setGoalPeriod(e.target.value)} className={inputCls}>
+              {['Month', 'Quarter', 'Year'].map((p) => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Review Notes</label>
+          <textarea value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} rows={3} className={inputCls}
+            placeholder="Notes from last performance review…" />
+        </div>
+
+        {saved && <p className="text-sm text-[#4CAF7D]">Saved.</p>}
+        <button onClick={saveManual} disabled={saving}
+          className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
+          {saving ? 'Saving…' : 'Save Review'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Quotes/Invoices Tab ──────────────────────────────────────────────────────
+
+function QuotesInvoicesTab({ repId }) {
+  const { quotes, loading: qLoading } = useRepQuotes(repId)
+  const { invoices, loading: iLoading } = useRepInvoices(repId)
+
+  const QUOTE_STATUS_COLOR = {
+    Draft: 'bg-gray-100 text-gray-500',
+    Sent: 'bg-[#4A90B8]/10 text-[#4A90B8]',
+    Accepted: 'bg-[#4CAF7D]/10 text-[#4CAF7D]',
+    Declined: 'bg-[#D95F5F]/10 text-[#D95F5F]',
+  }
+
+  const PAYMENT_COLOR = {
+    Paid: 'bg-[#4CAF7D]/10 text-[#4CAF7D]',
+    Partial: 'bg-[#4A90B8]/10 text-[#4A90B8]',
+    Unpaid: 'bg-[#E6A817]/10 text-[#E6A817]',
+    Overdue: 'bg-[#D95F5F]/10 text-[#D95F5F]',
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Quotes */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[#1A1A1A]">Quotes ({quotes.length})</h3>
+          <Link to={`/quotes/new?repId=${repId}`}
+            className="text-xs bg-[#8B6914] text-white px-3 py-1.5 rounded-lg font-medium hover:bg-[#7a5c12] transition-colors">
+            + New Quote
+          </Link>
+        </div>
+        {qLoading ? (
+          <div className="animate-pulse space-y-2">
+            {[1, 2].map((i) => <div key={i} className="h-12 bg-gray-100 rounded-xl" />)}
+          </div>
+        ) : quotes.length === 0 ? (
+          <p className="text-sm text-[#9A9A9A] py-4 text-center bg-white border border-gray-100 rounded-xl">No quotes yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {quotes.map((q) => (
+              <div key={q.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-medium text-sm text-[#1A1A1A]">Quote #{q.quoteNumber}</p>
+                  <p className="text-xs text-[#9A9A9A] mt-0.5">{q.linkedCustomerName || 'No customer'} · {formatDate(q.createdAt)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-[#1A1A1A]">{formatCurrency(q.total)}</span>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${QUOTE_STATUS_COLOR[q.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {q.status}
+                  </span>
+                  <Link to={`/quotes/${q.id}`} className="text-xs text-[#8B6914] hover:underline">View</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Invoices */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-[#1A1A1A]">Invoices ({invoices.length})</h3>
+          <Link to={`/invoices/new?repId=${repId}`}
+            className="text-xs bg-[#8B6914] text-white px-3 py-1.5 rounded-lg font-medium hover:bg-[#7a5c12] transition-colors">
+            + New Invoice
+          </Link>
+        </div>
+        {iLoading ? (
+          <div className="animate-pulse space-y-2">
+            {[1, 2].map((i) => <div key={i} className="h-12 bg-gray-100 rounded-xl" />)}
+          </div>
+        ) : invoices.length === 0 ? (
+          <p className="text-sm text-[#9A9A9A] py-4 text-center bg-white border border-gray-100 rounded-xl">No invoices yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {invoices.map((inv) => {
+              const ps = computePaymentStatus(inv)
+              return (
+                <div key={inv.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-sm text-[#1A1A1A]">Invoice #{inv.invoiceNumber}</p>
+                    <p className="text-xs text-[#9A9A9A] mt-0.5">{inv.customerName || 'No customer'} · {formatDate(inv.createdAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold text-[#1A1A1A]">{formatCurrency(inv.total)}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${PAYMENT_COLOR[ps] ?? 'bg-gray-100 text-gray-500'}`}>
+                      {ps}
+                    </span>
+                    <Link to={`/invoices/${inv.id}`} className="text-xs text-[#8B6914] hover:underline">View</Link>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function RepDetail() {
@@ -314,13 +585,19 @@ export default function RepDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-100 mb-5">
-        {['details', 'notes', 'documents'].map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
-              activeTab === tab ? 'border-[#8B6914] text-[#8B6914]' : 'border-transparent text-[#9A9A9A] hover:text-[#1A1A1A]'
+      <div className="flex gap-1 border-b border-gray-100 mb-5 overflow-x-auto">
+        {[
+          { key: 'details', label: 'Details' },
+          { key: 'performance', label: 'Performance' },
+          { key: 'quotes', label: 'Quotes & Invoices' },
+          { key: 'notes', label: 'Notes' },
+          { key: 'documents', label: 'Documents' },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+              activeTab === key ? 'border-[#8B6914] text-[#8B6914]' : 'border-transparent text-[#9A9A9A] hover:text-[#1A1A1A]'
             }`}>
-            {tab}
+            {label}
           </button>
         ))}
       </div>
@@ -392,6 +669,8 @@ export default function RepDetail() {
         </div>
       )}
 
+      {activeTab === 'performance' && <PerformanceTab rep={rep} repId={id} />}
+      {activeTab === 'quotes' && <QuotesInvoicesTab repId={id} />}
       {activeTab === 'notes' && <NotesTab repId={id} />}
       {activeTab === 'documents' && <DocsTab repId={id} />}
     </div>

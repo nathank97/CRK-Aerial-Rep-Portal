@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { APIProvider, Map, AdvancedMarker, InfoWindow, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
-import { updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { updateDoc, doc, serverTimestamp, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { useTerritories } from '../../../hooks/useTerritories'
 import { db } from '../../../firebase/config'
+import { leadsCol, customersCol } from '../../../firebase/firestore'
 
 const MAPS_API_KEY = 'AIzaSyCbDX3uCDdLFh9MkhxXlc83UxyqAQt58A4'
 
@@ -22,7 +23,13 @@ function centroid(polygon) {
 
 // ─── Inner map (needs map context) ───────────────────────────────────────────
 
-function MapContent({ territories }) {
+const LEAD_STATUS_COLOR = {
+  New: '#4A90B8', Contacted: '#9B59B6', Pending: '#E6A817',
+  'Demo Scheduled': '#E67E22', 'Proposal Sent': '#8B6914',
+  Won: '#4CAF7D', Lost: '#D95F5F',
+}
+
+function MapContent({ territories, leads, customers, showLeads, showCustomers }) {
   const map = useMap()
   const mapsLib = useMapsLibrary('maps')
   const drawingLib = useMapsLibrary('drawing')
@@ -89,6 +96,20 @@ function MapContent({ territories }) {
         )
       })}
 
+      {/* Lead pins overlay */}
+      {showLeads && leads.filter((l) => l.lat && l.lng).map((l) => (
+        <AdvancedMarker key={`lead-${l.id}`} position={{ lat: l.lat, lng: l.lng }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: LEAD_STATUS_COLOR[l.status] ?? '#4A90B8', border: '2px solid white', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} title={`${l.firstName ?? ''} ${l.lastName ?? ''}`.trim() || 'Lead'} />
+        </AdvancedMarker>
+      ))}
+
+      {/* Customer pins overlay */}
+      {showCustomers && customers.filter((c) => c.lat && c.lng).map((c) => (
+        <AdvancedMarker key={`cust-${c.id}`} position={{ lat: c.lat, lng: c.lng }}>
+          <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#4CAF7D', border: '2px solid white', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' }} title={`${c.firstName ?? ''} ${c.lastName ?? ''}`.trim() || c.companyName || 'Customer'} />
+        </AdvancedMarker>
+      ))}
+
       {/* Info popup */}
       {selectedTerritory && (() => {
         const center = centroid(selectedTerritory.polygon)
@@ -144,6 +165,24 @@ function MapContent({ territories }) {
 export default function TerritoryMap() {
   const navigate = useNavigate()
   const { territories, loading } = useTerritories()
+  const [showLeads, setShowLeads] = useState(false)
+  const [showCustomers, setShowCustomers] = useState(false)
+  const [leads, setLeads] = useState([])
+  const [customers, setCustomers] = useState([])
+
+  useEffect(() => {
+    if (!showLeads) return
+    const q = query(leadsCol, orderBy('createdAt', 'desc'))
+    const unsub = onSnapshot(q, (snap) => setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    return unsub
+  }, [showLeads])
+
+  useEffect(() => {
+    if (!showCustomers) return
+    const q = query(customersCol, orderBy('createdAt', 'desc'))
+    const unsub = onSnapshot(q, (snap) => setCustomers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+    return unsub
+  }, [showCustomers])
 
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
@@ -161,6 +200,17 @@ export default function TerritoryMap() {
               {status}
             </span>
           ))}
+          <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+            <span className="text-xs text-[#9A9A9A] font-medium">Overlay:</span>
+            <button onClick={() => setShowLeads((v) => !v)}
+              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${showLeads ? 'bg-[#4A90B8] text-white' : 'bg-gray-100 text-[#9A9A9A] hover:bg-gray-200'}`}>
+              Leads
+            </button>
+            <button onClick={() => setShowCustomers((v) => !v)}
+              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${showCustomers ? 'bg-[#4CAF7D] text-white' : 'bg-gray-100 text-[#9A9A9A] hover:bg-gray-200'}`}>
+              Customers
+            </button>
+          </div>
           <span className="text-xs text-[#9A9A9A]">
             {territories.filter((t) => t.polygon?.length > 0).length}/{territories.length} mapped
           </span>
@@ -182,7 +232,7 @@ export default function TerritoryMap() {
             gestureHandling="greedy"
             style={{ width: '100%', height: '100%' }}
           >
-            <MapContent territories={territories} />
+            <MapContent territories={territories} leads={leads} customers={customers} showLeads={showLeads} showCustomers={showCustomers} />
           </Map>
         </APIProvider>
       </div>

@@ -15,6 +15,7 @@ export default function QuoteNew() {
   const { customers } = useCustomers()
 
   const preCustomerId = searchParams.get('customerId') ?? ''
+  const preRepId = searchParams.get('repId') ?? ''
 
   const [customerId, setCustomerId] = useState(preCustomerId)
   const [linkedLeadName, setLinkedLeadName] = useState('')
@@ -62,12 +63,17 @@ export default function QuoteNew() {
         dealerId: user.uid,
         dealerName: profile?.displayName ?? '',
         createdByName: profile?.displayName ?? '',
+        repId: preRepId || null,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         sentAt: null,
         convertedOrderId: null,
       })
-      navigate(`/quotes/${doc.id}`)
+      if (preRepId) {
+        navigate(`/admin/reps/${preRepId}`)
+      } else {
+        navigate(`/quotes/${doc.id}`)
+      }
     } catch (err) {
       console.error(err)
       setError('Failed to save quote. Please try again.')
@@ -82,8 +88,8 @@ export default function QuoteNew() {
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/quotes')} className="text-[#9A9A9A] hover:text-[#111111] text-sm transition-colors">
-          ← Quotes
+        <button onClick={() => preRepId ? navigate(`/admin/reps/${preRepId}`) : navigate('/quotes')} className="text-[#9A9A9A] hover:text-[#111111] text-sm transition-colors">
+          {preRepId ? '← Rep' : '← Quotes'}
         </button>
         <span className="text-[#9A9A9A]">/</span>
         <h1 className="text-xl font-bold text-[#111111]">New Quote</h1>

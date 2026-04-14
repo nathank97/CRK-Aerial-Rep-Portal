@@ -38,6 +38,21 @@ export function useInvoice(id) {
   return { invoice, loading }
 }
 
+export function useRepInvoices(repId) {
+  const [invoices, setInvoices] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!repId) { setLoading(false); return }
+    const q = query(invoicesCol, where('repId', '==', repId), orderBy('createdAt', 'desc'))
+    const unsub = onSnapshot(q, (snap) => {
+      setInvoices(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    })
+    return unsub
+  }, [repId])
+  return { invoices, loading }
+}
+
 /** Compute payment status from invoice fields */
 export function computePaymentStatus(invoice) {
   if (!invoice) return 'Unpaid'

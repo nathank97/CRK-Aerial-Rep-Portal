@@ -42,6 +42,21 @@ export function useLead(leadId) {
   return { lead, loading }
 }
 
+export function useLeadsByDealer(dealerId) {
+  const [leads, setLeads] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!dealerId) { setLoading(false); return }
+    const q = query(leadsCol, where('assignedDealerId', '==', dealerId), orderBy('createdAt', 'desc'))
+    const unsub = onSnapshot(q, (snap) => {
+      setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    })
+    return unsub
+  }, [dealerId])
+  return { leads, loading }
+}
+
 export function useLeadActivity(leadId) {
   const [activity, setActivity] = useState([])
   const [loading, setLoading] = useState(true)

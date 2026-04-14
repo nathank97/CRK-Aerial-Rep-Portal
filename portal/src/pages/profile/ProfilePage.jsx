@@ -8,6 +8,11 @@ import { formatDate } from '../../utils/formatters'
 export default function ProfilePage() {
   const { user, profile, isAdmin, isDealer } = useAuth()
 
+  // Chat notification preference
+  const [chatNotifPref, setChatNotifPref] = useState(profile?.chatNotificationPref ?? 'mentions')
+  const [savingNotif, setSavingNotif] = useState(false)
+  const [notifSaved, setNotifSaved] = useState(false)
+
   // Display name
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '')
   const [savingName, setSavingName] = useState(false)
@@ -65,6 +70,15 @@ export default function ProfilePage() {
     } finally {
       setSavingPassword(false)
     }
+  }
+
+  async function saveNotifPref() {
+    setSavingNotif(true)
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { chatNotificationPref: chatNotifPref })
+      setNotifSaved(true)
+      setTimeout(() => setNotifSaved(false), 3000)
+    } finally { setSavingNotif(false) }
   }
 
   const roleLabel = isAdmin ? 'Admin' : isDealer ? 'Dealer' : 'User'
@@ -156,6 +170,38 @@ export default function ProfilePage() {
             {savingPassword ? 'Changing…' : 'Change Password'}
           </button>
         </div>
+      </div>
+
+      {/* Chat Notification Preferences */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-5">
+        <h2 className="text-base font-semibold text-[#1A1A1A] mb-1">Chat Notifications</h2>
+        <p className="text-xs text-[#9A9A9A] mb-4">How often would you like email notifications for global chat messages?</p>
+        <div className="space-y-2 mb-4">
+          {[
+            { value: 'every', label: 'Every message', desc: 'Email on each new message' },
+            { value: 'daily', label: 'Daily digest', desc: 'One summary email per day' },
+            { value: 'weekly', label: 'Weekly digest', desc: 'One summary email per week' },
+            { value: 'mentions', label: 'Mentions only', desc: 'Only when @mentioned (default)' },
+            { value: 'off', label: 'Off', desc: 'No email notifications' },
+          ].map(({ value, label, desc }) => (
+            <label key={value} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              chatNotifPref === value ? 'border-[#8B6914] bg-[#8B6914]/5' : 'border-gray-100 hover:border-gray-200'
+            }`}>
+              <input type="radio" name="chatNotifPref" value={value} checked={chatNotifPref === value}
+                onChange={() => { setChatNotifPref(value); setNotifSaved(false) }}
+                className="accent-[#8B6914]" />
+              <div>
+                <p className="text-sm font-medium text-[#1A1A1A]">{label}</p>
+                <p className="text-xs text-[#9A9A9A]">{desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        {notifSaved && <p className="text-sm text-[#4CAF7D] mb-2">Preferences saved.</p>}
+        <button onClick={saveNotifPref} disabled={savingNotif}
+          className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
+          {savingNotif ? 'Saving…' : 'Save Preference'}
+        </button>
       </div>
 
       {/* Module Access (dealer only) */}

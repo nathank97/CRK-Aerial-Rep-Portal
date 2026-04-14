@@ -19,6 +19,7 @@ export default function InvoiceNew() {
 
   const preCustomerId = searchParams.get('customerId') ?? ''
   const preOrderId = searchParams.get('orderId') ?? ''
+  const preRepId = searchParams.get('repId') ?? ''
 
   // Customer fields
   const [customerId, setCustomerId] = useState(preCustomerId)
@@ -172,12 +173,17 @@ export default function InvoiceNew() {
         linkedOrderId: linkedOrderId || null,
         linkedOrderNumber: linkedOrderNumber || null,
         sentAt: null,
+        repId: preRepId || null,
         dealerId: user.uid,
         dealerName: profile?.displayName ?? '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
-      navigate(`/invoices/${ref.id}`)
+      if (preRepId) {
+        navigate(`/admin/reps/${preRepId}`)
+      } else {
+        navigate(`/invoices/${ref.id}`)
+      }
     } catch (err) {
       console.error(err)
       setError('Failed to save invoice. Please try again.')
@@ -199,8 +205,8 @@ export default function InvoiceNew() {
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/invoices')} className="text-[#9A9A9A] hover:text-[#111111] text-sm transition-colors">
-          ← Invoices
+        <button onClick={() => preRepId ? navigate(`/admin/reps/${preRepId}`) : navigate('/invoices')} className="text-[#9A9A9A] hover:text-[#111111] text-sm transition-colors">
+          {preRepId ? '← Rep' : '← Invoices'}
         </button>
         <span className="text-[#9A9A9A]">/</span>
         <h1 className="text-xl font-bold text-[#111111]">New Invoice</h1>

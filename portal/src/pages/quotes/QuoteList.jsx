@@ -147,6 +147,12 @@ export default function QuoteList() {
           ))
         )}
       </div>
+
+      {/* Mobile FAB */}
+      <button onClick={() => navigate('/quotes/new')}
+        className="fixed bottom-6 right-6 md:hidden bg-[#8B6914] text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-[#7a5c12] transition-colors z-30">
+        +
+      </button>
     </div>
   )
 }

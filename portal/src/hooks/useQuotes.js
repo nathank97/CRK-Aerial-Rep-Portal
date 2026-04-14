@@ -37,3 +37,18 @@ export function useQuote(id) {
   }, [id])
   return { quote, loading }
 }
+
+export function useRepQuotes(repId) {
+  const [quotes, setQuotes] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!repId) { setLoading(false); return }
+    const q = query(quotesCol, where('repId', '==', repId), orderBy('createdAt', 'desc'))
+    const unsub = onSnapshot(q, (snap) => {
+      setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    })
+    return unsub
+  }, [repId])
+  return { quotes, loading }
+}

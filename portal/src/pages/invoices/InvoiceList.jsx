@@ -174,6 +174,12 @@ export default function InvoiceList() {
           })
         )}
       </div>
+
+      {/* Mobile FAB */}
+      <button onClick={() => navigate('/invoices/new')}
+        className="fixed bottom-6 right-6 md:hidden bg-[#8B6914] text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-[#7a5c12] transition-colors z-30">
+        +
+      </button>
     </div>
   )
 }

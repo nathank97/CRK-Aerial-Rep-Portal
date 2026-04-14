@@ -2,12 +2,8 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
-  createUserWithEmailAndPassword,
-  updateProfile,
-  getAuth,
 } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { initializeApp, getApps } from 'firebase/app'
 import { auth, db } from './config'
 
 export const loginWithEmail = (email, password) =>
@@ -17,70 +13,69 @@ export const logout = () => signOut(auth)
 
 export const resetPassword = (email) => sendPasswordResetEmail(auth, email)
 
-// Admin creates dealer accounts without logging out the current admin session.
-// We use a secondary Firebase app instance so createUserWithEmailAndPassword
-// doesn't affect the primary auth session.
+// Admin creates dealer accounts via Firebase Auth REST API so the admin
+// session is never interrupted (avoids createUserWithEmailAndPassword
+// which signs in as the new user on the primary auth instance).
 export const createDealerAccount = async ({ email, tempPassword, displayName, marginPercent }) => {
-  // Get the primary app's config to spin up a secondary instance
-  const firebaseConfig = {
-    apiKey: "AIzaSyBgh4DelRBgPigdyZaYSigUXoxzOVMbp94",
-    authDomain: "crk-aerial-rep-portal.firebaseapp.com",
-    projectId: "crk-aerial-rep-portal",
-    storageBucket: "crk-aerial-rep-portal.firebasestorage.app",
-    messagingSenderId: "148287925625",
-    appId: "1:148287925625:web:f8f84e611e141694d013a8",
+  const API_KEY = 'AIzaSyBgh4DelRBgPigdyZaYSigUXoxzOVMbp94'
+
+  // Create the user via REST — does not affect current auth session
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: tempPassword, returnSecureToken: true }),
+    }
+  )
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data?.error?.message ?? 'Failed to create account.'
+    throw new Error(
+      msg === 'EMAIL_EXISTS' ? 'An account with that email already exists.' : msg
+    )
   }
 
-  // Use a secondary app so the admin session stays intact
-  const secondaryApp = initializeApp(firebaseConfig, `dealer-create-${Date.now()}`)
-  const secondaryAuth = getAuth(secondaryApp)
+  const uid = data.localId
 
-  try {
-    const { user } = await createUserWithEmailAndPassword(secondaryAuth, email, tempPassword)
-    await updateProfile(user, { displayName })
+  // Write dealer profile to Firestore (using admin's authenticated db connection)
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    email,
+    displayName,
+    role: 'dealer',
+    marginPercent: marginPercent ?? 0,
+    dashboardVisibility: {
+      kpiLeads: true,
+      kpiCustomers: true,
+      kpiQuotes: true,
+      kpiOrders: true,
+      kpiServiceTickets: true,
+      kpiInventory: true,
+      kpiPipelineValue: true,
+      kpiRevenueClosed: true,
+      chartLeadsByStatus: true,
+      chartLeadsByDealer: true,
+      chartWonVsLost: true,
+      chartLeadsOverTime: true,
+      chartRevenueOverTime: true,
+      chartTopModels: true,
+      chartInventoryLevels: true,
+      chartServiceTickets: true,
+      leaderboard: true,
+    },
+    moduleAccess: {
+      quotesOrders: true,
+      inventory: true,
+      service: true,
+      documents: true,
+      map: true,
+    },
+    createdAt: serverTimestamp(),
+  })
 
-    // Write dealer profile to Firestore
-    await setDoc(doc(db, 'users', user.uid), {
-      uid: user.uid,
-      email,
-      displayName,
-      role: 'dealer',
-      marginPercent: marginPercent ?? 0,
-      dashboardVisibility: {
-        kpiLeads: true,
-        kpiCustomers: true,
-        kpiQuotes: true,
-        kpiOrders: true,
-        kpiServiceTickets: true,
-        kpiInventory: true,
-        kpiPipelineValue: true,
-        kpiRevenueClosed: true,
-        chartLeadsByStatus: true,
-        chartLeadsByDealer: true,
-        chartWonVsLost: true,
-        chartLeadsOverTime: true,
-        chartRevenueOverTime: true,
-        chartTopModels: true,
-        chartInventoryLevels: true,
-        chartServiceTickets: true,
-        leaderboard: true,
-      },
-      moduleAccess: {
-        quotesOrders: true,
-        inventory: true,
-        service: true,
-        documents: true,
-        map: true,
-      },
-      createdAt: serverTimestamp(),
-    })
+  // Send password-reset email so dealer can set their own password
+  await sendPasswordResetEmail(auth, email)
 
-    // Send password reset so dealer sets their own password via email
-    await sendPasswordResetEmail(auth, email)
-
-    return user
-  } finally {
-    // Clean up the secondary app
-    await secondaryAuth.signOut()
-  }
+  return { uid, email, displayName }
 }

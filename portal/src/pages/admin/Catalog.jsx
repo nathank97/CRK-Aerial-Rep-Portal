@@ -26,28 +26,36 @@ const EMPTY_FORM = {
   imageUrl: '',
   notes: '',
   active: true,
+  tags: '',
+  tier1: '',
+  tier2: '',
+  tier3: '',
 }
 
 // ─── CSV Import ──────────────────────────────────────────────────────────────
 
-const TEMPLATE_HEADERS = ['name','type','sku','msrp','cost','description','manufacturer','imageUrl','notes']
+const TEMPLATE_HEADERS = ['Name','Internal Reference','Tags','Sales Price','Tier1','Tier2','Tier3']
 const TEMPLATE_SAMPLE = [
-  ['DJI Agras T50','Drone','DJI-T50','15000','10500','High-capacity agricultural drone','DJI','',''],
-  ['Replacement Battery','Part','BAT-T50','450','300','T50 compatible battery pack','DJI','',''],
-  ['Nozzle Kit','Accessory','NOZ-001','89','55','Universal spray nozzle set','XAG','',''],
+  ['DJI Agras T50','DJI-T50','Drone','15000','13500','12000','10500'],
+  ['Replacement Battery','BAT-T50','Part','450','400','370','300'],
+  ['Nozzle Kit','NOZ-001','Accessory','89','80','72','55'],
 ]
 
 // Flexible column name aliases → our field name
 const COL_ALIASES = {
   name:         ['name','productname','itemname','title','product'],
   type:         ['type','category','itemtype','producttype','itemcategory'],
-  sku:          ['sku','partnumber','partno','part#','itemno','code','itemcode','partnr'],
-  msrp:         ['msrp','price','listprice','retailprice','sellingprice','retail','msrpprice'],
+  sku:          ['sku','partnumber','partno','part#','itemno','code','itemcode','partnr','internalreference','internalref','referenceinterne'],
+  msrp:         ['msrp','price','listprice','retailprice','sellingprice','retail','msrpprice','salesprice','saleprice','unitprice'],
   cost:         ['cost','wholesale','dealercost','purchaseprice','buyprice','invoicecost','netcost'],
   description:  ['description','desc','details','productdescription','itemdescription'],
   manufacturer: ['manufacturer','brand','make','vendor','supplier','mfr','mfg'],
   imageUrl:     ['imageurl','image','imagelink','photo','photourl','imgurl','img'],
   notes:        ['notes','note','internalnotes','comments','memo'],
+  tags:         ['tags','tag','labels','label','categories'],
+  tier1:        ['tier1','tier1price','price1','level1','level1price','dealerprice1'],
+  tier2:        ['tier2','tier2price','price2','level2','level2price','dealerprice2'],
+  tier3:        ['tier3','tier3price','price3','level3','level3price','dealerprice3'],
 }
 
 function normalizeHeader(h) {
@@ -112,8 +120,8 @@ function parseCSVText(text) {
 function validateRow(row, idx) {
   const errors = []
   if (!row.name?.trim()) errors.push('Name is required')
-  const msrp = parseFloat(row.msrp)
-  if (isNaN(msrp) || msrp < 0) errors.push('MSRP must be a valid number')
+  // MSRP optional — defaults to 0 if blank/missing
+  if (row.msrp !== '' && isNaN(parseFloat(row.msrp))) errors.push('Sales Price must be a number')
   return errors
 }
 
@@ -162,17 +170,18 @@ function ImportModal({ onClose, existingSkus }) {
       if (lines.length < 2) { setImportError('CSV appears to be empty or has no data rows.'); return }
       const rawHeaders = lines[0]
       const colMap = mapHeaders(rawHeaders)
-      if (!('name' in colMap) && !('msrp' in colMap)) {
-        setImportError("Couldn't detect required columns (name, msrp). Check that your CSV has a header row and matches the template.")
+      if (!('name' in colMap)) {
+        setImportError("Couldn't detect a 'Name' column. Check that your CSV has a header row and matches the template.")
         return
       }
       const rows = lines.slice(1)
         .filter((r) => r.some((c) => c.trim()))  // skip blank lines
         .map((fields, idx) => {
           const get = (field) => (colMap[field] !== undefined ? (fields[colMap[field]] ?? '') : '')
+          const rawTags = get('tags')
           const row = {
             name: get('name'),
-            type: normalizeType(get('type')),
+            type: normalizeType(get('type') || rawTags),
             sku: get('sku'),
             msrp: get('msrp'),
             cost: get('cost'),
@@ -180,6 +189,10 @@ function ImportModal({ onClose, existingSkus }) {
             manufacturer: get('manufacturer'),
             imageUrl: get('imageUrl'),
             notes: get('notes'),
+            tags: rawTags,
+            tier1: get('tier1'),
+            tier2: get('tier2'),
+            tier3: get('tier3'),
           }
           row._errors = validateRow(row, idx)
           row._isDupe = skipDupes && !!row.sku && existingSkus.has(row.sku.trim())
@@ -216,16 +229,21 @@ function ImportModal({ onClose, existingSkus }) {
         const now = serverTimestamp()
         chunk.forEach((row) => {
           const ref = doc(catalogCol)
+          const toPrice = (v) => (v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null)
           batch.set(ref, {
             name: row.name.trim(),
             type: row.type,
             sku: row.sku.trim(),
             msrp: parseFloat(row.msrp) || 0,
-            cost: row.cost !== '' && !isNaN(parseFloat(row.cost)) ? parseFloat(row.cost) : null,
+            cost: toPrice(row.cost),
             description: row.description.trim(),
             manufacturer: row.manufacturer.trim(),
             imageUrl: row.imageUrl.trim(),
             notes: row.notes.trim(),
+            tags: row.tags.trim() || null,
+            tier1: toPrice(row.tier1),
+            tier2: toPrice(row.tier2),
+            tier3: toPrice(row.tier3),
             active: true,
             createdAt: now,
             updatedAt: now,
@@ -355,29 +373,33 @@ function ImportModal({ onClose, existingSkus }) {
 
                   {/* Preview table */}
                   <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-xs min-w-[600px]">
+                    <table className="w-full text-xs min-w-[700px]">
                       <thead>
                         <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                           <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider w-6"></th>
                           <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Name</th>
-                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Type</th>
-                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
-                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">MSRP</th>
-                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Cost</th>
-                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Manufacturer</th>
+                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Int. Ref</th>
+                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tags</th>
+                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Sales Price</th>
+                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tier 1</th>
+                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tier 2</th>
+                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tier 3</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {parsed.rows.map((row, i) => {
                           const hasError = row._errors.length > 0
                           const isDupe = row._isDupe
+                          const priceCell = (v) => v && !isNaN(parseFloat(v))
+                            ? formatCurrency(parseFloat(v))
+                            : <span className="text-[#9A9A9A]">—</span>
                           return (
                             <tr key={i} className={hasError ? 'bg-[#D95F5F]/5' : isDupe ? 'bg-[#E6A817]/5' : 'hover:bg-[#FAFAFA]'}>
                               <td className="py-2 px-3 text-center">
                                 {hasError ? (
                                   <span title={row._errors.join(', ')} className="text-[#D95F5F] cursor-help">⚠</span>
                                 ) : isDupe ? (
-                                  <span title="SKU already exists — will be skipped" className="text-[#E6A817] cursor-help">⊘</span>
+                                  <span title="Internal Reference already exists — will be skipped" className="text-[#E6A817] cursor-help">⊘</span>
                                 ) : (
                                   <span className="text-[#4CAF7D]">✓</span>
                                 )}
@@ -385,17 +407,12 @@ function ImportModal({ onClose, existingSkus }) {
                               <td className="py-2 px-3 font-medium text-[#1A1A1A]">
                                 {row.name || <span className="text-[#D95F5F] italic">missing</span>}
                               </td>
-                              <td className="py-2 px-3 text-[#9A9A9A]">{row.type}</td>
                               <td className="py-2 px-3 font-mono text-[#9A9A9A]">{row.sku || '—'}</td>
-                              <td className="py-2 px-3 text-right text-[#1A1A1A]">
-                                {row.msrp && !isNaN(parseFloat(row.msrp))
-                                  ? formatCurrency(parseFloat(row.msrp))
-                                  : <span className="text-[#D95F5F] italic">missing</span>}
-                              </td>
-                              <td className="py-2 px-3 text-right text-[#9A9A9A]">
-                                {row.cost && !isNaN(parseFloat(row.cost)) ? formatCurrency(parseFloat(row.cost)) : '—'}
-                              </td>
-                              <td className="py-2 px-3 text-[#9A9A9A] truncate max-w-[120px]">{row.manufacturer || '—'}</td>
+                              <td className="py-2 px-3 text-[#9A9A9A] max-w-[100px] truncate">{row.tags || '—'}</td>
+                              <td className="py-2 px-3 text-right text-[#1A1A1A]">{priceCell(row.msrp)}</td>
+                              <td className="py-2 px-3 text-right text-[#9A9A9A]">{priceCell(row.tier1)}</td>
+                              <td className="py-2 px-3 text-right text-[#9A9A9A]">{priceCell(row.tier2)}</td>
+                              <td className="py-2 px-3 text-right text-[#9A9A9A]">{priceCell(row.tier3)}</td>
                             </tr>
                           )
                         })}
@@ -483,6 +500,10 @@ function ItemModal({ item, onClose }) {
     imageUrl: item.imageUrl ?? '',
     notes: item.notes ?? '',
     active: item.active !== false,
+    tags: item.tags ?? '',
+    tier1: item.tier1 ?? '',
+    tier2: item.tier2 ?? '',
+    tier3: item.tier3 ?? '',
   } : EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -497,20 +518,24 @@ function ItemModal({ item, onClose }) {
 
   async function handleSave() {
     if (!form.name.trim()) { setError('Name is required.'); return }
-    if (form.msrp === '' || isNaN(parseFloat(form.msrp))) { setError('MSRP is required.'); return }
     setSaving(true)
+    const toPrice = (v) => (v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null)
     try {
       const data = {
         name: form.name.trim(),
         type: form.type,
         sku: form.sku.trim(),
-        msrp: parseFloat(form.msrp),
-        cost: form.cost !== '' ? parseFloat(form.cost) : null,
+        msrp: parseFloat(form.msrp) || 0,
+        cost: toPrice(form.cost),
         description: form.description.trim(),
         manufacturer: form.manufacturer.trim(),
         imageUrl: form.imageUrl.trim(),
         notes: form.notes.trim(),
         active: form.active,
+        tags: form.tags.trim() || null,
+        tier1: toPrice(form.tier1),
+        tier2: toPrice(form.tier2),
+        tier3: toPrice(form.tier3),
         updatedAt: serverTimestamp(),
       }
       if (isEdit) {
@@ -561,10 +586,16 @@ function ItemModal({ item, onClose }) {
             </div>
           </div>
 
-          {/* MSRP + Cost */}
+          {/* Tags */}
+          <div>
+            <label className={labelCls}>Tags</label>
+            <input value={form.tags} onChange={(e) => set('tags', e.target.value)} className={inputCls} placeholder="e.g. Drone, Agricultural, DJI" />
+          </div>
+
+          {/* Sales Price (MSRP) + Cost */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>MSRP ($) *</label>
+              <label className={labelCls}>Sales Price / MSRP ($)</label>
               <input type="number" min="0" step="0.01" value={form.msrp}
                 onChange={(e) => set('msrp', e.target.value)} className={inputCls} placeholder="0.00" />
             </div>
@@ -573,6 +604,28 @@ function ItemModal({ item, onClose }) {
               <input type="number" min="0" step="0.01" value={form.cost}
                 onChange={(e) => set('cost', e.target.value)} className={inputCls} placeholder="0.00" />
               <p className="text-xs text-[#9A9A9A] mt-1">Internal only — never shown to dealers.</p>
+            </div>
+          </div>
+
+          {/* Tier pricing */}
+          <div>
+            <label className={labelCls}>Dealer Pricing Tiers ($)</label>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-[#9A9A9A] mb-1">Tier 1</p>
+                <input type="number" min="0" step="0.01" value={form.tier1}
+                  onChange={(e) => set('tier1', e.target.value)} className={inputCls} placeholder="0.00" />
+              </div>
+              <div>
+                <p className="text-xs text-[#9A9A9A] mb-1">Tier 2</p>
+                <input type="number" min="0" step="0.01" value={form.tier2}
+                  onChange={(e) => set('tier2', e.target.value)} className={inputCls} placeholder="0.00" />
+              </div>
+              <div>
+                <p className="text-xs text-[#9A9A9A] mb-1">Tier 3</p>
+                <input type="number" min="0" step="0.01" value={form.tier3}
+                  onChange={(e) => set('tier3', e.target.value)} className={inputCls} placeholder="0.00" />
+              </div>
             </div>
           </div>
 

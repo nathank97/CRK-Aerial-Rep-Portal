@@ -1,0 +1,130 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the requester is logged in
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: check if the requester is an admin by reading their user doc
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ── users ────────────────────────────────────────────────────────────────
+    // Any authenticated user can read any user profile (needed for dealer
+    // name lookups throughout the app). Users can update their own doc;
+    // only admins can create or delete user docs.
+    match /users/{uid} {
+      allow read: if isAuth();
+      allow update: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow create, delete: if isAdmin();
+    }
+
+    // ── leads ────────────────────────────────────────────────────────────────
+    // All authenticated users can read and write leads (cross-dealer viewing).
+    match /leads/{leadId} {
+      allow read, write: if isAuth();
+
+      match /activity/{activityId} {
+        allow read, write: if isAuth();
+      }
+      match /chat/{messageId} {
+        allow read, write: if isAuth();
+      }
+    }
+
+    // ── customers ────────────────────────────────────────────────────────────
+    // All authenticated users can read and write customers (cross-dealer viewing).
+    match /customers/{customerId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── quotes ───────────────────────────────────────────────────────────────
+    match /quotes/{quoteId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── orders ───────────────────────────────────────────────────────────────
+    match /orders/{orderId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── invoices ─────────────────────────────────────────────────────────────
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── inventory ────────────────────────────────────────────────────────────
+    match /inventory/{itemId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── service tickets ───────────────────────────────────────────────────────
+    match /serviceTickets/{ticketId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── documents ────────────────────────────────────────────────────────────
+    match /documents/{docId} {
+      allow read, write: if isAuth();
+    }
+
+    // ── catalog ──────────────────────────────────────────────────────────────
+    // All authenticated users can read; only admins can modify.
+    match /catalog/{itemId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── tax rates ─────────────────────────────────────────────────────────────
+    // All authenticated users can read; only admins can modify.
+    match /taxRates/{rateId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── reps ─────────────────────────────────────────────────────────────────
+    match /reps/{repId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── territories ───────────────────────────────────────────────────────────
+    match /territories/{territoryId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── feedback ─────────────────────────────────────────────────────────────
+    // Any authenticated user can submit and read their own feedback;
+    // admins can read and write all feedback.
+    match /feedback/{feedbackId} {
+      allow read: if isAuth() &&
+        (resource.data.submittedBy == request.auth.uid || isAdmin());
+      allow create: if isAuth();
+      allow update, delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ── events (calendar) ────────────────────────────────────────────────────
+    match /events/{eventId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAuth() &&
+        (resource.data.createdBy == request.auth.uid || isAdmin());
+    }
+
+    // ── global chat ───────────────────────────────────────────────────────────
+    match /globalChat/{messageId} {
+      allow read, write: if isAuth();
+    }
+  }
+}

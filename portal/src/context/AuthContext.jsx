@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../firebase/config'
 
@@ -22,6 +22,10 @@ export function AuthProvider({ children }) {
           (snap) => {
             if (snap.exists()) {
               setProfile({ id: snap.id, ...snap.data() })
+            } else {
+              // Profile document deleted (dealer removed by admin) — sign out
+              setProfile(null)
+              signOut(auth)
             }
             setLoading(false)
           },

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useAllUsers } from '../../hooks/useUsers'
 import { createDealerAccount } from '../../firebase/auth'
 import { db } from '../../firebase/config'
@@ -270,7 +270,20 @@ export default function DealerManagement() {
   const { users, loading } = useAllUsers()
   const [showNewModal, setShowNewModal] = useState(false)
   const [selectedDealer, setSelectedDealer] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   const [search, setSearch] = useState('')
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteDoc(doc(db, 'users', deleteTarget.id))
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const dealers = useMemo(() =>
     users.filter((u) => u.role === 'dealer')
@@ -342,10 +355,16 @@ export default function DealerManagement() {
                   <td className="py-3 px-4 text-[#9A9A9A] text-xs">{enabledCount}/{MODULE_ACCESS.length} enabled</td>
                   <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(dealer.createdAt)}</td>
                   <td className="py-3 px-4">
-                    <button onClick={() => setSelectedDealer(dealer)}
-                      className="text-xs text-[#8B6914] hover:underline font-medium">
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => setSelectedDealer(dealer)}
+                        className="text-xs text-[#8B6914] hover:underline font-medium">
+                        Edit
+                      </button>
+                      <button onClick={() => setDeleteTarget(dealer)}
+                        className="text-xs text-[#D95F5F] hover:underline font-medium">
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -398,6 +417,31 @@ export default function DealerManagement() {
           dealer={selectedDealer}
           onClose={() => setSelectedDealer(null)}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-bold text-[#1A1A1A] mb-1">Delete Dealer?</h3>
+            <p className="text-sm text-[#9A9A9A] mb-1">
+              You are about to remove <span className="font-semibold text-[#1A1A1A]">{deleteTarget.displayName}</span> ({deleteTarget.email}).
+            </p>
+            <p className="text-sm text-[#9A9A9A] mb-5">
+              This removes their portal access immediately. Their leads, quotes, and orders will remain in the system.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#c44f4f] transition-colors disabled:opacity-50">
+                {deleting ? 'Deleting…' : 'Delete Dealer'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

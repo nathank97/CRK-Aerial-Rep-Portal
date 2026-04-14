@@ -68,6 +68,10 @@ export default function CustomerList() {
             {loading ? 'Loading…' : `${filtered.length} customer${filtered.length !== 1 ? 's' : ''}`}
           </p>
         </div>
+        <button onClick={() => navigate('/customers/new')}
+          className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
+          + Add Customer
+        </button>
       </div>
 
       {/* Controls */}

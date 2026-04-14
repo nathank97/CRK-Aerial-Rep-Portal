@@ -13,6 +13,7 @@ import LeadDetail from './pages/leads/LeadDetail'
 
 // Customers
 import CustomerList from './pages/customers/CustomerList'
+import CustomerNew from './pages/customers/CustomerNew'
 import CustomerDetail from './pages/customers/CustomerDetail'
 
 // Quotes
@@ -90,6 +91,7 @@ export const router = createBrowserRouter([
       { path: '/leads/new', element: <LeadNew /> },
       { path: '/leads/:id', element: <LeadDetail /> },
       { path: '/customers', element: <CustomerList /> },
+      { path: '/customers/new', element: <CustomerNew /> },
       { path: '/customers/:id', element: <CustomerDetail /> },
       {
         path: '/quotes',

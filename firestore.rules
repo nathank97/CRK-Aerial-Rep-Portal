@@ -43,18 +43,22 @@ service cloud.firestore {
     }
 
     // ── quotes ───────────────────────────────────────────────────────────────
+    // Admins see all; dealers see only their own (matched by dealerId).
     match /quotes/{quoteId} {
-      allow read, write: if isAuth();
+      allow read: if isAdmin() || resource.data.dealerId == request.auth.uid;
+      allow write: if isAuth();
     }
 
     // ── orders ───────────────────────────────────────────────────────────────
     match /orders/{orderId} {
-      allow read, write: if isAuth();
+      allow read: if isAdmin() || resource.data.dealerId == request.auth.uid;
+      allow write: if isAuth();
     }
 
     // ── invoices ─────────────────────────────────────────────────────────────
     match /invoices/{invoiceId} {
-      allow read, write: if isAuth();
+      allow read: if isAdmin() || resource.data.dealerId == request.auth.uid;
+      allow write: if isAuth();
     }
 
     // ── inventory ────────────────────────────────────────────────────────────
@@ -64,12 +68,16 @@ service cloud.firestore {
 
     // ── service tickets ───────────────────────────────────────────────────────
     match /serviceTickets/{ticketId} {
-      allow read, write: if isAuth();
+      allow read: if isAdmin() || resource.data.dealerId == request.auth.uid;
+      allow write: if isAuth();
     }
 
     // ── documents ────────────────────────────────────────────────────────────
+    // Documents are a shared library (no dealerId field) — all authenticated
+    // users can read. Uploads are tagged with uploadedById for reference only.
     match /documents/{docId} {
-      allow read, write: if isAuth();
+      allow read: if isAuth();
+      allow write: if isAuth();
     }
 
     // ── catalog ──────────────────────────────────────────────────────────────

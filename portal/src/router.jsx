@@ -45,6 +45,8 @@ import ChatPage from './pages/chat/ChatPage'
 import ProfilePage from './pages/profile/ProfilePage'
 
 // Admin
+import FeedbackPage from './pages/feedback/FeedbackPage'
+import FeedbackAdmin from './pages/admin/FeedbackAdmin'
 import DealerManagement from './pages/admin/DealerManagement'
 import Catalog from './pages/admin/Catalog'
 import TaxRates from './pages/admin/TaxRates'
@@ -150,9 +152,14 @@ export const router = createBrowserRouter([
         element: <RequireModule module="map"><MapPage /></RequireModule>,
       },
       { path: '/chat', element: <ChatPage /> },
+      { path: '/feedback', element: <FeedbackPage /> },
       { path: '/profile', element: <ProfilePage /> },
 
       // Admin routes
+      {
+        path: '/admin/feedback',
+        element: <RequireAdmin><FeedbackAdmin /></RequireAdmin>,
+      },
       {
         path: '/admin/dealers',
         element: <RequireAdmin><DealerManagement /></RequireAdmin>,

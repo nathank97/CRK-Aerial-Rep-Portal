@@ -16,6 +16,7 @@ const ADMIN_NAV = [
   { to: '/service', label: 'Service', icon: '🔧' },
   { to: '/documents', label: 'Documents', icon: '📁' },
   { to: '/map', label: 'Map', icon: '🗺️' },
+  { to: '/feedback', label: 'Feedback', icon: '💬' },
 ]
 
 const ADMIN_ONLY_NAV = [
@@ -24,6 +25,7 @@ const ADMIN_ONLY_NAV = [
   { to: '/admin/tax-rates', label: 'Tax Rates', icon: '💲' },
   { to: '/admin/reps', label: 'Rep Manager', icon: '🎯' },
   { to: '/admin/territories', label: 'Territories', icon: '🗾' },
+  { to: '/admin/feedback', label: 'Feedback Inbox', icon: '📥' },
 ]
 
 export default function Sidebar({ onClose }) {
@@ -43,6 +45,7 @@ export default function Sidebar({ onClose }) {
     if (item.to === '/service') return access.service !== false
     if (item.to === '/documents') return access.documents !== false
     if (item.to === '/map') return access.map !== false
+    if (item.to === '/feedback') return true // always visible
     return true
   })
 

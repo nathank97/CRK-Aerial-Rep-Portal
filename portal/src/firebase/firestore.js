@@ -16,6 +16,7 @@ export const taxRatesCol = collection(db, 'taxRates')
 export const repsCol = collection(db, 'reps')
 export const territoriesCol = collection(db, 'territories')
 export const globalChatCol = collection(db, 'globalChat')
+export const feedbackCol = collection(db, 'feedback')
 
 // Subcollection helpers
 export const leadActivityCol = (leadId) =>

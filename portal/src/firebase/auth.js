@@ -75,10 +75,7 @@ export const createDealerAccount = async ({ email, tempPassword, displayName, ma
   })
 
   // Send password-reset email so dealer can set their own password.
-  // continueUrl redirects them to the portal login after they set their password.
-  await sendPasswordResetEmail(auth, email, {
-    url: 'https://portal-umber-phi.vercel.app/',
-  })
+  await sendPasswordResetEmail(auth, email)
 
   return { uid, email, displayName }
 }

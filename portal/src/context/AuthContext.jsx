@@ -17,12 +17,21 @@ export function AuthProvider({ children }) {
       if (firebaseUser) {
         setUser(firebaseUser)
         // Subscribe to their Firestore profile for real-time permission updates
-        unsubProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
-          if (snap.exists()) {
-            setProfile({ id: snap.id, ...snap.data() })
+        unsubProfile = onSnapshot(
+          doc(db, 'users', firebaseUser.uid),
+          (snap) => {
+            if (snap.exists()) {
+              setProfile({ id: snap.id, ...snap.data() })
+            }
+            setLoading(false)
+          },
+          () => {
+            // Firestore read failed (rules issue) — still unblock the app
+            setLoading(false)
           }
-          setLoading(false)
-        })
+        )
+        // Safety fallback: never hang on black screen for more than 5s
+        setTimeout(() => setLoading(false), 5000)
       } else {
         setUser(null)
         setProfile(null)

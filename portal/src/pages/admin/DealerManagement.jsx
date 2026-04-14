@@ -64,6 +64,7 @@ function NewDealerModal({ onClose, onCreated }) {
   const [email, setEmail] = useState('')
   const [tempPassword, setTempPassword] = useState('')
   const [marginPercent, setMarginPercent] = useState('20')
+  const [pricingTier, setPricingTier] = useState('margin')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -82,6 +83,7 @@ function NewDealerModal({ onClose, onCreated }) {
         tempPassword: tempPassword.trim(),
         displayName: displayName.trim(),
         marginPercent: parseFloat(marginPercent) || 0,
+        pricingTier,
       })
       onCreated()
     } catch (e) {
@@ -112,14 +114,25 @@ function NewDealerModal({ onClose, onCreated }) {
             <input type="password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} className={inputCls} placeholder="Min. 6 characters" />
           </div>
           <div>
-            <label className={labelCls}>Margin % (dealer discount from MSRP)</label>
-            <div className="relative">
-              <input type="number" min="0" max="100" step="0.5" value={marginPercent}
-                onChange={(e) => setMarginPercent(e.target.value)} className={inputCls + ' pr-8'} />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
-            </div>
-            <p className="text-xs text-[#9A9A9A] mt-1">Dealer Price = MSRP × (1 − Margin%). Example: 20% → $2,000 MSRP = $1,600 dealer price.</p>
+            <label className={labelCls}>Pricing Method</label>
+            <select value={pricingTier} onChange={(e) => setPricingTier(e.target.value)} className={inputCls}>
+              <option value="margin">Margin % (calculated from MSRP)</option>
+              <option value="tier1">Tier 1 (fixed catalog price)</option>
+              <option value="tier2">Tier 2 (fixed catalog price)</option>
+              <option value="tier3">Tier 3 (fixed catalog price)</option>
+            </select>
           </div>
+          {pricingTier === 'margin' && (
+            <div>
+              <label className={labelCls}>Margin %</label>
+              <div className="relative">
+                <input type="number" min="0" max="100" step="0.5" value={marginPercent}
+                  onChange={(e) => setMarginPercent(e.target.value)} className={inputCls + ' pr-8'} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
+              </div>
+              <p className="text-xs text-[#9A9A9A] mt-1">Dealer Price = MSRP × (1 − Margin%). Example: 20% → $2,000 MSRP = $1,600 dealer price.</p>
+            </div>
+          )}
           {error && <p className="text-sm text-[#D95F5F]">{error}</p>}
         </div>
         <div className="p-6 border-t border-gray-100 flex gap-3">
@@ -140,6 +153,7 @@ function NewDealerModal({ onClose, onCreated }) {
 
 function DealerPanel({ dealer, onClose }) {
   const [marginPercent, setMarginPercent] = useState(dealer.marginPercent ?? 0)
+  const [pricingTier, setPricingTier] = useState(dealer.pricingTier ?? 'margin')
   const [dashVis, setDashVis] = useState(dealer.dashboardVisibility ?? DEFAULT_DASHBOARD_VISIBILITY)
   const [modAccess, setModAccess] = useState(dealer.moduleAccess ?? DEFAULT_MODULE_ACCESS)
   const [saving, setSaving] = useState(false)
@@ -170,6 +184,7 @@ function DealerPanel({ dealer, onClose }) {
     try {
       await updateDoc(doc(db, 'users', dealer.id), {
         marginPercent: parseFloat(marginPercent) || 0,
+        pricingTier,
         dashboardVisibility: dashVis,
         moduleAccess: modAccess,
         updatedAt: serverTimestamp(),
@@ -196,18 +211,31 @@ function DealerPanel({ dealer, onClose }) {
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-5 space-y-6">
-          {/* Margin */}
+          {/* Pricing */}
           <div>
-            <h3 className="text-sm font-semibold text-[#1A1A1A] mb-3">Pricing Margin</h3>
-            <div className="flex items-center gap-3">
-              <div className="relative w-36">
-                <input type="number" min="0" max="100" step="0.5" value={marginPercent}
-                  onChange={(e) => { setMarginPercent(e.target.value); setSaved(false) }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:border-[#8B6914]" />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
+            <h3 className="text-sm font-semibold text-[#1A1A1A] mb-3">Pricing Method</h3>
+            <select value={pricingTier}
+              onChange={(e) => { setPricingTier(e.target.value); setSaved(false) }}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] mb-3">
+              <option value="margin">Margin % (calculated from MSRP)</option>
+              <option value="tier1">Tier 1 (fixed catalog price)</option>
+              <option value="tier2">Tier 2 (fixed catalog price)</option>
+              <option value="tier3">Tier 3 (fixed catalog price)</option>
+            </select>
+            {pricingTier === 'margin' && (
+              <div className="flex items-center gap-3">
+                <div className="relative w-36">
+                  <input type="number" min="0" max="100" step="0.5" value={marginPercent}
+                    onChange={(e) => { setMarginPercent(e.target.value); setSaved(false) }}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:border-[#8B6914]" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
+                </div>
+                <p className="text-xs text-[#9A9A9A]">Dealer Price = MSRP × (1 − {marginPercent || 0}%)</p>
               </div>
-              <p className="text-xs text-[#9A9A9A]">Dealer Price = MSRP × (1 − {marginPercent || 0}%)</p>
-            </div>
+            )}
+            {pricingTier !== 'margin' && (
+              <p className="text-xs text-[#9A9A9A]">Dealer will see the fixed {pricingTier.toUpperCase()} price from each catalog item. Falls back to MSRP if no {pricingTier.toUpperCase()} is set on the item.</p>
+            )}
           </div>
 
           {/* Module Access */}
@@ -332,7 +360,7 @@ export default function DealerManagement() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-              {['Dealer', 'Email', 'Margin %', 'Modules', 'Joined', 'Actions'].map((h) => (
+              {['Dealer', 'Email', 'Pricing', 'Modules', 'Joined', 'Actions'].map((h) => (
                 <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
@@ -363,9 +391,15 @@ export default function DealerManagement() {
                   </td>
                   <td className="py-3 px-4 text-[#9A9A9A]">{dealer.email}</td>
                   <td className="py-3 px-4">
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#8B6914]/10 text-[#8B6914]">
-                      {dealer.marginPercent ?? 0}%
-                    </span>
+                    {(!dealer.pricingTier || dealer.pricingTier === 'margin') ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#8B6914]/10 text-[#8B6914]">
+                        {dealer.marginPercent ?? 0}% margin
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#4A90B8]/10 text-[#4A90B8]">
+                        {dealer.pricingTier.toUpperCase()}
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-[#9A9A9A] text-xs">{enabledCount}/{MODULE_ACCESS.length} enabled</td>
                   <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(dealer.createdAt)}</td>

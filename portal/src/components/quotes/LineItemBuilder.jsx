@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
-import { calcDealerPrice, isBelowDealerCost } from '../../utils/pricing'
+import { getDealerPrice, isBelowDealerCost } from '../../utils/pricing'
 import { formatCurrency } from '../../utils/formatters'
 
 /** Calculate a single line item total after discount */
@@ -45,8 +45,7 @@ function CatalogModal({ onSelect, onClose }) {
     item.sku?.toLowerCase().includes(search.toLowerCase())
   )
 
-  const dealerPrice = (item) =>
-    calcDealerPrice(item.msrp, profile?.marginPercent)
+  const dealerPrice = (item) => getDealerPrice(item, profile)
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -102,8 +101,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
   const addCustom = () => onChange([...items, newCustomItem()])
 
   const addFromCatalog = (catalogItem) => {
-    const marginPercent = profile?.marginPercent ?? 0
-    const dealerCost = calcDealerPrice(catalogItem.msrp, marginPercent)
+    const dealerCost = getDealerPrice(catalogItem, profile)
     const unitPrice = profile?.role === 'dealer' ? dealerCost : catalogItem.msrp
 
     onChange([...items, {
@@ -145,7 +143,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
               {items.map((item) => {
                 const lineTotal = calcLineTotal(item)
                 const belowCost = showDealerPricing && profile?.role === 'dealer' &&
-                  item.msrp != null && isBelowDealerCost(item.unitPrice, item.msrp, profile.marginPercent)
+                  isBelowDealerCost(item.unitPrice, item, profile)
 
                 return (
                   <tr key={item.id} className="group">

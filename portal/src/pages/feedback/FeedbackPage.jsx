@@ -211,35 +211,97 @@ export default function FeedbackPage() {
         ) : (
           <div className="space-y-2">
             {feedback.map((item) => (
-              <div key={item.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${STATUS_STYLE[item.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                        {item.status}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-[#9A9A9A]">
-                        <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[item.adminPriority ?? item.priority] ?? 'bg-gray-400'}`} />
-                        {item.adminPriority ?? item.priority}
-                      </span>
-                      <span className="text-xs text-[#9A9A9A]">{item.type}</span>
-                    </div>
-                    <p className="font-medium text-sm text-[#1A1A1A]">{item.title}</p>
-                    {item.module && <p className="text-xs text-[#9A9A9A] mt-0.5">{item.module}</p>}
-                  </div>
-                  <span className="text-xs text-[#9A9A9A] shrink-0">{formatDate(item.createdAt)}</span>
-                </div>
-                {item.adminNotes && (
-                  <div className="mt-3 pt-3 border-t border-gray-50">
-                    <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Admin Response</p>
-                    <p className="text-sm text-[#1A1A1A]">{item.adminNotes}</p>
-                  </div>
-                )}
-              </div>
+              <SubmissionCard key={item.id} item={item} />
             ))}
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function SubmissionCard({ item }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasResponse = !!item.adminNotes
+  const statusChanged = item.status !== 'New'
+
+  return (
+    <div className={`bg-white border rounded-xl shadow-sm transition-colors ${
+      hasResponse ? 'border-[#8B6914]/30' : 'border-gray-100'
+    }`}>
+      {/* Summary row — always visible */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full p-4 text-left"
+      >
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${STATUS_STYLE[item.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                {item.status}
+              </span>
+              <span className="flex items-center gap-1 text-xs text-[#9A9A9A]">
+                <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[item.adminPriority ?? item.priority] ?? 'bg-gray-400'}`} />
+                {item.adminPriority ?? item.priority}
+              </span>
+              <span className="text-xs text-[#9A9A9A]">{item.type}</span>
+              {item.module && <span className="text-xs text-[#9A9A9A]">· {item.module}</span>}
+              {hasResponse && (
+                <span className="text-[10px] font-semibold text-[#8B6914] bg-[#8B6914]/10 px-2 py-0.5 rounded-full">
+                  Response received
+                </span>
+              )}
+            </div>
+            <p className="font-medium text-sm text-[#1A1A1A]">{item.title}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-[#9A9A9A]">{formatDate(item.createdAt)}</span>
+            <span className="text-[#9A9A9A] text-sm">{expanded ? '▲' : '▼'}</span>
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
+          {/* Original submission */}
+          <div>
+            <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Your Submission</p>
+            <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap bg-[#F4F4F5] rounded-lg p-3">{item.description}</p>
+          </div>
+
+          {item.steps && (
+            <div>
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1.5">Steps to Reproduce</p>
+              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap bg-[#F4F4F5] rounded-lg p-3">{item.steps}</p>
+            </div>
+          )}
+
+          {/* Status update */}
+          {statusChanged && (
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Current Status:</p>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${STATUS_STYLE[item.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                {item.status}
+              </span>
+            </div>
+          )}
+
+          {/* Admin response */}
+          {hasResponse ? (
+            <div className="bg-[#8B6914]/5 border border-[#8B6914]/20 rounded-xl p-4">
+              <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wider mb-2">Admin Response</p>
+              <p className="text-sm text-[#1A1A1A] whitespace-pre-wrap">{item.adminNotes}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-[#9A9A9A] italic">No response yet — we'll update this once reviewed.</p>
+          )}
+
+          {item.updatedAt && statusChanged && (
+            <p className="text-xs text-[#9A9A9A]">Last updated: {formatDate(item.updatedAt)}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

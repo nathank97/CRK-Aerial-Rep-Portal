@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useAllUsers } from '../../hooks/useUsers'
-import { createDealerAccount } from '../../firebase/auth'
+import { createDealerAccount, resetPassword } from '../../firebase/auth'
 import { db } from '../../firebase/config'
 import { formatDate } from '../../utils/formatters'
 
@@ -272,7 +272,22 @@ export default function DealerManagement() {
   const [selectedDealer, setSelectedDealer] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [resendingId, setResendingId] = useState(null)
+  const [resentId, setResentId] = useState(null)
   const [search, setSearch] = useState('')
+
+  async function handleResendInvite(dealer) {
+    setResendingId(dealer.id)
+    try {
+      await resetPassword(dealer.email)
+      setResentId(dealer.id)
+      setTimeout(() => setResentId(null), 4000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setResendingId(null)
+    }
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -359,6 +374,12 @@ export default function DealerManagement() {
                       <button onClick={() => setSelectedDealer(dealer)}
                         className="text-xs text-[#8B6914] hover:underline font-medium">
                         Edit
+                      </button>
+                      <button
+                        onClick={() => handleResendInvite(dealer)}
+                        disabled={resendingId === dealer.id}
+                        className="text-xs text-[#4A90B8] hover:underline font-medium disabled:opacity-50">
+                        {resentId === dealer.id ? '✓ Sent' : resendingId === dealer.id ? 'Sending…' : 'Resend Invite'}
                       </button>
                       <button onClick={() => setDeleteTarget(dealer)}
                         className="text-xs text-[#D95F5F] hover:underline font-medium">

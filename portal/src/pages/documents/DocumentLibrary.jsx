@@ -4,6 +4,7 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebas
 import { documentsCol } from '../../firebase/firestore'
 import { db, storage } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
+import { useAllUsers } from '../../hooks/useUsers'
 import { formatDate, formatDateTime } from '../../utils/formatters'
 
 const LINK_TYPES = ['Global', 'Lead', 'Customer', 'Order', 'Service Ticket']
@@ -25,13 +26,14 @@ function formatBytes(bytes) {
 
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
 
-function UploadModal({ onClose }) {
+function UploadModal({ onClose, isAdmin, dealers }) {
   const { user, profile } = useAuth()
   const fileRef = useRef(null)
   const [files, setFiles] = useState([])
   const [linkType, setLinkType] = useState('Global')
   const [linkedId, setLinkedId] = useState('')
   const [description, setDescription] = useState('')
+  const [targetDealerId, setTargetDealerId] = useState('')
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
@@ -46,8 +48,11 @@ function UploadModal({ onClose }) {
 
   async function upload() {
     if (files.length === 0) { setError('Please select at least one file.'); return }
+    if (isAdmin && !targetDealerId) { setError('Please select which dealer this document is for.'); return }
     setUploading(true)
     setError('')
+    // Dealers always upload to themselves; admins upload to the selected dealer
+    const dealerId = isAdmin ? targetDealerId : user.uid
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
@@ -67,6 +72,7 @@ function UploadModal({ onClose }) {
                 sizeBytes: file.size,
                 storagePath: path,
                 downloadUrl: url,
+                dealerId,
                 linkType,
                 linkedId: linkType === 'Global' ? null : (linkedId.trim() || null),
                 description: description.trim(),
@@ -123,6 +129,19 @@ function UploadModal({ onClose }) {
             <input value={description} onChange={(e) => setDescription(e.target.value)}
               className={inputCls} placeholder="e.g. Spec sheet, Training guide, Contract…" />
           </div>
+
+          {/* Dealer selector (admin only) */}
+          {isAdmin && (
+            <div>
+              <label className={labelCls}>For Dealer *</label>
+              <select value={targetDealerId} onChange={(e) => setTargetDealerId(e.target.value)} className={inputCls}>
+                <option value="">— Select dealer —</option>
+                {dealers.map((d) => (
+                  <option key={d.id} value={d.id}>{d.displayName} ({d.email})</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Link type */}
           <div>
@@ -214,7 +233,9 @@ function PreviewModal({ doc: docItem, onClose }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DocumentLibrary() {
-  const { isAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
+  const { users } = useAllUsers()
+  const dealers = useMemo(() => users.filter((u) => u.role === 'dealer').sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? '')), [users])
   const [docs, setDocs] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -224,13 +245,16 @@ export default function DocumentLibrary() {
   const [deleting, setDeleting] = useState(null)
 
   useEffect(() => {
-    const q = query(documentsCol, orderBy('createdAt', 'desc'))
+    if (!user) return
+    const q = isAdmin
+      ? query(documentsCol, orderBy('createdAt', 'desc'))
+      : query(documentsCol, where('dealerId', '==', user.uid), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
     })
     return unsub
-  }, [])
+  }, [user?.uid, isAdmin])
 
   const filtered = useMemo(() => {
     return docs.filter((d) => {
@@ -371,7 +395,7 @@ export default function DocumentLibrary() {
         +
       </button>
 
-      {showUpload && <UploadModal onClose={() => setShowUpload(false)} />}
+      {showUpload && <UploadModal onClose={() => setShowUpload(false)} isAdmin={isAdmin} dealers={dealers} />}
       {preview && <PreviewModal doc={preview} onClose={() => setPreview(null)} />}
     </div>
   )

@@ -73,10 +73,10 @@ service cloud.firestore {
     }
 
     // ── documents ────────────────────────────────────────────────────────────
-    // Documents are a shared library (no dealerId field) — all authenticated
-    // users can read. Uploads are tagged with uploadedById for reference only.
+    // Confidential per-dealer documents. Admins see all; dealers see only
+    // documents assigned to their uid via the dealerId field.
     match /documents/{docId} {
-      allow read: if isAuth();
+      allow read: if isAdmin() || resource.data.dealerId == request.auth.uid;
       allow write: if isAuth();
     }
 

@@ -111,7 +111,7 @@ service cloud.firestore {
     // admins can read and write all feedback.
     match /feedback/{feedbackId} {
       allow read: if isAuth() &&
-        (resource.data.submittedBy == request.auth.uid || isAdmin());
+        (resource.data.submittedByUid == request.auth.uid || isAdmin());
       allow create: if isAuth();
       allow update, delete: if isAdmin();
 

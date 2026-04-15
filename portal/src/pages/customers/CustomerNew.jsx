@@ -58,6 +58,7 @@ export default function CustomerNew() {
       company: lead.company ?? f.company,
       email: lead.email ?? f.email,
       phone: lead.phone ?? f.phone,
+      address: lead.address ?? f.address,
       assignedDealerId: lead.assignedDealerId ?? f.assignedDealerId,
     }))
     setError('')

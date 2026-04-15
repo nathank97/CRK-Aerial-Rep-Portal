@@ -19,7 +19,7 @@ export function useCustomers() {
       setLoading(false)
     })
     return unsub
-  }, [user?.uid, isAdmin])
+  }, [user?.uid])
 
   return { customers, loading }
 }

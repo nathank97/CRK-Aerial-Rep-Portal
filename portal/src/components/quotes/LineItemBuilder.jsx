@@ -132,7 +132,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-full">Description</th>
-                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-16">Qty</th>
+                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Qty</th>
                 <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-28">Unit Price</th>
                 <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-32">Discount</th>
                 <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Total</th>
@@ -162,7 +162,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
                     <td className="py-2 px-2">
                       <input type="number" min="1" value={item.quantity}
                         onChange={(e) => update(item.id, 'quantity', parseFloat(e.target.value) || 1)}
-                        className={`${inputCls} text-right`} />
+                        className={`${inputCls} text-right`} style={{ minWidth: '72px' }} />
                     </td>
                     <td className="py-2 px-2">
                       <input type="number" min="0" step="0.01" value={item.unitPrice}

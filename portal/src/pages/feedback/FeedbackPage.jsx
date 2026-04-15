@@ -48,7 +48,7 @@ const EMPTY = {
 
 export default function FeedbackPage() {
   const { user, profile } = useAuth()
-  const { feedback, loading } = useMyFeedback()
+  const { feedback, loading, error: feedbackError } = useMyFeedback()
 
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
@@ -204,6 +204,10 @@ export default function FeedbackPage() {
         {loading ? (
           <div className="space-y-2">
             {[1, 2].map((i) => <div key={i} className="h-16 bg-white border border-gray-100 rounded-xl animate-pulse" />)}
+          </div>
+        ) : feedbackError ? (
+          <div className="bg-white border border-[#D95F5F]/30 rounded-xl p-8 text-center">
+            <p className="text-sm text-[#D95F5F]">Error loading submissions: {feedbackError}</p>
           </div>
         ) : feedback.length === 0 ? (
           <div className="bg-white border border-gray-100 rounded-xl p-8 text-center">

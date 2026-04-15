@@ -19,7 +19,7 @@ export function useLeads() {
       setLoading(false)
     })
     return unsub
-  }, [user?.uid, isAdmin])
+  }, [user?.uid])
 
   return { leads, loading }
 }

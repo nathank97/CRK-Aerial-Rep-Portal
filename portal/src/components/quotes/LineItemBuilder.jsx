@@ -134,7 +134,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
                 <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-full">Description</th>
                 <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Qty</th>
                 <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-28">Unit Price</th>
-                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-32">Discount</th>
+                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-40">Discount</th>
                 <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Total</th>
                 <th className="w-8" />
               </tr>
@@ -173,7 +173,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
                       <div className="flex gap-1">
                         <input type="number" min="0" value={item.discount ?? 0}
                           onChange={(e) => update(item.id, 'discount', parseFloat(e.target.value) || 0)}
-                          className={`${inputCls} text-right`} style={{ maxWidth: '60px' }} />
+                          className={`${inputCls} text-right`} style={{ minWidth: '72px' }} />
                         <select value={item.discountType ?? 'percent'}
                           onChange={(e) => update(item.id, 'discountType', e.target.value)}
                           className="border border-gray-200 rounded px-1 py-1.5 text-xs focus:outline-none focus:border-[#8B6914] bg-white">

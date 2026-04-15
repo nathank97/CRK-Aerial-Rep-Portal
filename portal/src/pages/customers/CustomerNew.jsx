@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { addDoc, serverTimestamp } from 'firebase/firestore'
 import { customersCol } from '../../firebase/firestore'
 import { useDealers } from '../../hooks/useUsers'
 import { useAuth } from '../../context/AuthContext'
+import { useLeads } from '../../hooks/useLeads'
 
 const EXEMPTION_TYPES = ['Agricultural Producer', 'Reseller', 'Non-Profit', 'Other']
 
@@ -14,7 +15,15 @@ export default function CustomerNew() {
   const navigate = useNavigate()
   const { dealers } = useDealers()
   const { user, profile, isAdmin } = useAuth()
+  const { leads } = useLeads()
 
+  const openLeads = useMemo(() =>
+    leads.filter((l) => l.status !== 'Won' && l.status !== 'Lost')
+      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)),
+    [leads]
+  )
+
+  const [sourceLeadId, setSourceLeadId] = useState('')
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -34,6 +43,23 @@ export default function CustomerNew() {
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
+    setError('')
+  }
+
+  function importFromLead(leadId) {
+    setSourceLeadId(leadId)
+    if (!leadId) return
+    const lead = leads.find((l) => l.id === leadId)
+    if (!lead) return
+    setForm((f) => ({
+      ...f,
+      firstName: lead.firstName ?? f.firstName,
+      lastName: lead.lastName ?? f.lastName,
+      company: lead.company ?? f.company,
+      email: lead.email ?? f.email,
+      phone: lead.phone ?? f.phone,
+      assignedDealerId: lead.assignedDealerId ?? f.assignedDealerId,
+    }))
     setError('')
   }
 
@@ -65,7 +91,7 @@ export default function CustomerNew() {
         exemptionCertificate: form.taxExempt ? (form.exemptionCertificate.trim() || null) : null,
         exemptionNotes: form.taxExempt ? (form.exemptionNotes.trim() || null) : null,
         notes: form.notes.trim() || null,
-        sourceLeadId: null,
+        sourceLeadId: sourceLeadId || null,
         createdByName: profile?.displayName ?? user?.email ?? 'Unknown',
         createdById: user?.uid ?? null,
         createdAt: now,
@@ -90,6 +116,26 @@ export default function CustomerNew() {
       </div>
 
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 space-y-5">
+
+        {/* Import from Lead */}
+        <div className="bg-[#8B6914]/5 border border-[#8B6914]/20 rounded-lg p-4">
+          <label className={labelCls}>Import from Lead</label>
+          <select
+            value={sourceLeadId}
+            onChange={(e) => importFromLead(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— Select a lead to pre-fill —</option>
+            {openLeads.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.firstName} {l.lastName}{l.company ? ` — ${l.company}` : ''}{l.status ? ` (${l.status})` : ''}
+              </option>
+            ))}
+          </select>
+          {sourceLeadId && (
+            <p className="text-xs text-[#8B6914] mt-1.5">Fields pre-filled from lead — edit as needed before saving.</p>
+          )}
+        </div>
 
         {/* Name */}
         <div className="grid grid-cols-2 gap-4">

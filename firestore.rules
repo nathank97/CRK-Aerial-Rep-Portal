@@ -80,6 +80,13 @@ service cloud.firestore {
       allow write: if isAuth();
     }
 
+    // ── counters ─────────────────────────────────────────────────────────────
+    // Auto-increment counters for quote/order/invoice/ticket numbering.
+    // Any authenticated user can read and write (needed for transactions).
+    match /counters/{counterId} {
+      allow read, write: if isAuth();
+    }
+
     // ── catalog ──────────────────────────────────────────────────────────────
     // All authenticated users can read; only admins can modify.
     match /catalog/{itemId} {

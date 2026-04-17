@@ -34,28 +34,20 @@ const EMPTY_FORM = {
 
 // ─── CSV Import ──────────────────────────────────────────────────────────────
 
-const TEMPLATE_HEADERS = ['Name','Internal Reference','Tags','Sales Price','Tier1','Tier2','Tier3']
+const TEMPLATE_HEADERS = ['Manufacturer','Item/Kit','Internal Reference','Tags','Sales Price']
 const TEMPLATE_SAMPLE = [
-  ['DJI Agras T50','DJI-T50','Drone','15000','13500','12000','10500'],
-  ['Replacement Battery','BAT-T50','Part','450','400','370','300'],
-  ['Nozzle Kit','NOZ-001','Accessory','89','80','72','55'],
+  ['DJI','DJI Agras T50','DJI-T50','Drone','15000'],
+  ['DJI','Replacement Battery','BAT-T50','Part','450'],
+  ['XAG','Nozzle Kit','NOZ-001','Accessory','89'],
 ]
 
 // Flexible column name aliases → our field name
 const COL_ALIASES = {
-  name:         ['name','productname','itemname','title','product'],
-  type:         ['type','category','itemtype','producttype','itemcategory'],
-  sku:          ['sku','partnumber','partno','part#','itemno','code','itemcode','partnr','internalreference','internalref','referenceinterne'],
-  msrp:         ['msrp','price','listprice','retailprice','sellingprice','retail','msrpprice','salesprice','saleprice','unitprice'],
-  cost:         ['cost','wholesale','dealercost','purchaseprice','buyprice','invoicecost','netcost'],
-  description:  ['description','desc','details','productdescription','itemdescription'],
-  manufacturer: ['manufacturer','brand','make','vendor','supplier','mfr','mfg'],
-  imageUrl:     ['imageurl','image','imagelink','photo','photourl','imgurl','img'],
-  notes:        ['notes','note','internalnotes','comments','memo'],
+  name:         ['name','item/kit','itemkit','item','kit','productname','itemname','title','product'],
+  sku:          ['internalreference','internalref','referenceinterne','sku','partnumber','partno','part#','itemno','code','itemcode','partnr'],
   tags:         ['tags','tag','labels','label','categories'],
-  tier1:        ['tier1','tier1price','price1','level1','level1price','dealerprice1'],
-  tier2:        ['tier2','tier2price','price2','level2','level2price','dealerprice2'],
-  tier3:        ['tier3','tier3price','price3','level3','level3price','dealerprice3'],
+  msrp:         ['salesprice','saleprice','msrp','price','listprice','retailprice','sellingprice','retail','msrpprice','unitprice'],
+  manufacturer: ['manufacturer','brand','make','vendor','supplier','mfr','mfg'],
 }
 
 function normalizeHeader(h) {
@@ -181,18 +173,11 @@ function ImportModal({ onClose, existingSkus }) {
           const rawTags = get('tags')
           const row = {
             name: get('name'),
-            type: normalizeType(get('type') || rawTags),
+            type: normalizeType(rawTags),
             sku: get('sku'),
             msrp: get('msrp'),
-            cost: get('cost'),
-            description: get('description'),
             manufacturer: get('manufacturer'),
-            imageUrl: get('imageUrl'),
-            notes: get('notes'),
             tags: rawTags,
-            tier1: get('tier1'),
-            tier2: get('tier2'),
-            tier3: get('tier3'),
           }
           row._errors = validateRow(row, idx)
           row._isDupe = skipDupes && !!row.sku && existingSkus.has(row.sku.trim())
@@ -229,21 +214,13 @@ function ImportModal({ onClose, existingSkus }) {
         const now = serverTimestamp()
         chunk.forEach((row) => {
           const ref = doc(catalogCol)
-          const toPrice = (v) => (v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null)
           batch.set(ref, {
             name: row.name.trim(),
             type: row.type,
             sku: row.sku.trim(),
             msrp: parseFloat(row.msrp) || 0,
-            cost: toPrice(row.cost),
-            description: row.description.trim(),
             manufacturer: row.manufacturer.trim(),
-            imageUrl: row.imageUrl.trim(),
-            notes: row.notes.trim(),
             tags: row.tags.trim() || null,
-            tier1: toPrice(row.tier1),
-            tier2: toPrice(row.tier2),
-            tier3: toPrice(row.tier3),
             active: true,
             createdAt: now,
             updatedAt: now,
@@ -312,7 +289,7 @@ function ImportModal({ onClose, existingSkus }) {
                 >
                   <p className="text-3xl mb-2">📂</p>
                   <p className="text-sm font-semibold text-[#1A1A1A]">Drop your CSV here or click to browse</p>
-                  <p className="text-xs text-[#9A9A9A] mt-1">Must have a header row. Columns: name, type, sku, msrp, cost, description, manufacturer</p>
+                  <p className="text-xs text-[#9A9A9A] mt-1">Columns: Manufacturer, Item/Kit, Internal Reference, Tags, Sales Price</p>
                   <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="hidden" />
                 </div>
               )}
@@ -377,13 +354,11 @@ function ImportModal({ onClose, existingSkus }) {
                       <thead>
                         <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                           <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider w-6"></th>
-                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Name</th>
-                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Int. Ref</th>
+                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Manufacturer</th>
+                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Item / Kit</th>
+                          <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Int. Reference</th>
                           <th className="text-left py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tags</th>
                           <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Sales Price</th>
-                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tier 1</th>
-                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tier 2</th>
-                          <th className="text-right py-2 px-3 font-semibold text-[#9A9A9A] uppercase tracking-wider">Tier 3</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
@@ -404,15 +379,13 @@ function ImportModal({ onClose, existingSkus }) {
                                   <span className="text-[#4CAF7D]">✓</span>
                                 )}
                               </td>
+                              <td className="py-2 px-3 text-[#9A9A9A]">{row.manufacturer || '—'}</td>
                               <td className="py-2 px-3 font-medium text-[#1A1A1A]">
                                 {row.name || <span className="text-[#D95F5F] italic">missing</span>}
                               </td>
                               <td className="py-2 px-3 font-mono text-[#9A9A9A]">{row.sku || '—'}</td>
-                              <td className="py-2 px-3 text-[#9A9A9A] max-w-[100px] truncate">{row.tags || '—'}</td>
+                              <td className="py-2 px-3 text-[#9A9A9A] max-w-[120px] truncate">{row.tags || '—'}</td>
                               <td className="py-2 px-3 text-right text-[#1A1A1A]">{priceCell(row.msrp)}</td>
-                              <td className="py-2 px-3 text-right text-[#9A9A9A]">{priceCell(row.tier1)}</td>
-                              <td className="py-2 px-3 text-right text-[#9A9A9A]">{priceCell(row.tier2)}</td>
-                              <td className="py-2 px-3 text-right text-[#9A9A9A]">{priceCell(row.tier3)}</td>
                             </tr>
                           )
                         })}

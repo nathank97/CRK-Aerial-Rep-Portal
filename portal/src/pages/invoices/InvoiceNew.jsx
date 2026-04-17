@@ -48,6 +48,9 @@ export default function InvoiceNew() {
   const [linkedOrderId, setLinkedOrderId] = useState(preOrderId)
   const [linkedOrderNumber, setLinkedOrderNumber] = useState('')
 
+  // Branding
+  const [logoChoice, setLogoChoice] = useState('crk') // 'crk' | 'custom'
+
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [loadingPrefill, setLoadingPrefill] = useState(false)
@@ -172,6 +175,8 @@ export default function InvoiceNew() {
         internalNotes,
         linkedOrderId: linkedOrderId || null,
         linkedOrderNumber: linkedOrderNumber || null,
+        logoChoice,
+        customLogoUrl: logoChoice === 'custom' ? (profile?.logoUrl ?? null) : null,
         sentAt: null,
         repId: preRepId || null,
         dealerId: user.uid,
@@ -353,6 +358,49 @@ export default function InvoiceNew() {
               <span className="text-sm text-[#9A9A9A]">· Balance Due: {formatCurrency(balanceDue)}</span>
             </div>
           )}
+        </div>
+
+        {/* Branding */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-[#111111] mb-1">Branding</h2>
+          <p className="text-xs text-[#9A9A9A] mb-4">Choose which logo appears on the invoice PDF.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* CRK Option */}
+            <button type="button" onClick={() => setLogoChoice('crk')}
+              className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-colors ${
+                logoChoice === 'crk' ? 'border-[#8B6914] bg-[#8B6914]/5' : 'border-gray-200 hover:border-gray-300'
+              }`}>
+              <div className="w-14 h-10 bg-[#111111] rounded flex items-center justify-center flex-shrink-0">
+                <span className="text-[#8B6914] text-xs font-bold tracking-wider">CRK</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#111111]">CRK Aerial</p>
+                <p className="text-xs text-[#9A9A9A]">Default company logo</p>
+              </div>
+              {logoChoice === 'crk' && <span className="ml-auto text-[#8B6914] text-base">✓</span>}
+            </button>
+            {/* Custom Option */}
+            <button type="button" onClick={() => profile?.logoUrl && setLogoChoice('custom')}
+              className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-colors ${
+                logoChoice === 'custom' ? 'border-[#8B6914] bg-[#8B6914]/5'
+                : profile?.logoUrl ? 'border-gray-200 hover:border-gray-300'
+                : 'border-gray-100 opacity-50 cursor-not-allowed'
+              }`}>
+              <div className="w-14 h-10 bg-[#F4F4F5] rounded border border-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {profile?.logoUrl
+                  ? <img src={profile.logoUrl} alt="Your logo" className="w-full h-full object-contain p-0.5" />
+                  : <span className="text-[#9A9A9A] text-xs text-center leading-tight px-1">No logo</span>
+                }
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#111111]">My Business</p>
+                <p className="text-xs text-[#9A9A9A]">
+                  {profile?.logoUrl ? 'Your uploaded logo' : 'Upload in Profile first'}
+                </p>
+              </div>
+              {logoChoice === 'custom' && <span className="ml-auto text-[#8B6914] text-base">✓</span>}
+            </button>
+          </div>
         </div>
 
         {/* Notes */}

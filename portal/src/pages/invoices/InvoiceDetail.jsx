@@ -10,6 +10,7 @@ import { SkeletonCard } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters'
 import { nextInvoiceNumber } from '../../utils/numbering'
 import InvoicePDF from '../../components/invoices/InvoicePDF'
+import crkLogoUrl from '../../assets/logo.png'
 import { emailService } from '../../services/emailService'
 
 export default function InvoiceDetail() {
@@ -285,7 +286,7 @@ export default function InvoiceDetail() {
             )}
             <Suspense fallback={<span className="text-xs text-[#9A9A9A] px-3 py-1.5">Preparing PDF…</span>}>
               <PDFDownloadLink
-                document={<InvoicePDF invoice={invoice} />}
+                document={<InvoicePDF invoice={invoice} logoSrc={invoice.logoChoice === 'custom' && invoice.customLogoUrl ? invoice.customLogoUrl : crkLogoUrl} />}
                 fileName={`${invoice.invoiceNumber}.pdf`}
                 className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors"
               >

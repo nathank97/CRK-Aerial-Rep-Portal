@@ -13,6 +13,7 @@ import { nextOrderNumber } from '../../utils/numbering'
 import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
 import QuotePDF from '../../components/quotes/QuotePDF'
 import { emailService } from '../../services/emailService'
+import crkLogoUrl from '../../assets/logo.png'
 
 export default function QuoteDetail() {
   const { id } = useParams()
@@ -218,7 +219,7 @@ export default function QuoteDetail() {
             )}
             <Suspense fallback={<span className="text-xs text-[#9A9A9A] px-3 py-1.5">Preparing PDF…</span>}>
               <PDFDownloadLink
-                document={<QuotePDF quote={quote} />}
+                document={<QuotePDF quote={quote} logoSrc={quote.logoChoice === 'custom' && quote.customLogoUrl ? quote.customLogoUrl : crkLogoUrl} />}
                 fileName={`${quote.quoteNumber}.pdf`}
                 className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors"
               >

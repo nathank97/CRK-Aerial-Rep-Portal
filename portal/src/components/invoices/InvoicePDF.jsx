@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { calcLineTotal } from '../quotes/LineItemBuilder'
-import logoUrl from '../../assets/logo.png'
+import crkLogoUrl from '../../assets/logo.png'
 
 const BRONZE = '#8B6914'
 const JET = '#111111'
@@ -47,7 +47,8 @@ const s = StyleSheet.create({
   footerText: { fontSize: 8, color: GRAY },
 })
 
-export default function InvoicePDF({ invoice }) {
+export default function InvoicePDF({ invoice, logoSrc }) {
+  const resolvedLogo = logoSrc || crkLogoUrl
   const { subtotal = 0, taxAmount = 0, total = 0, amountPaid = 0, lineItems = [] } = invoice
   const balanceDue = Math.max(0, total - amountPaid)
 
@@ -55,7 +56,7 @@ export default function InvoicePDF({ invoice }) {
     <Document>
       <Page size="LETTER" style={s.page}>
         <View style={s.headerBand}>
-          <Image src={logoUrl} style={s.logo} />
+          <Image src={resolvedLogo} style={s.logo} />
           <Text style={s.headerTitle}>Invoice</Text>
         </View>
         <View style={s.bronzeLine} />

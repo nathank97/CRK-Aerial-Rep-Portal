@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { updateProfile, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { updateDoc, doc } from 'firebase/firestore'
+import { ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage'
 import { useAuth } from '../../context/AuthContext'
-import { auth, db } from '../../firebase/config'
+import { auth, db, storage } from '../../firebase/config'
 import { formatDate } from '../../utils/formatters'
 
 export default function ProfilePage() {
@@ -18,6 +19,13 @@ export default function ProfilePage() {
   const [savingName, setSavingName] = useState(false)
   const [nameSaved, setNameSaved] = useState(false)
   const [nameError, setNameError] = useState('')
+
+  // Business logo
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoProgress, setLogoProgress] = useState(0)
+  const [logoError, setLogoError] = useState('')
+  const [logoSaved, setLogoSaved] = useState(false)
+  const logoFileRef = useRef(null)
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState('')
@@ -69,6 +77,56 @@ export default function ProfilePage() {
       }
     } finally {
       setSavingPassword(false)
+    }
+  }
+
+  async function uploadLogo(file) {
+    if (!file) return
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp']
+    if (!allowed.includes(file.type)) {
+      setLogoError('Please upload a PNG, JPG, SVG, or WebP image.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError('Logo must be under 2 MB.')
+      return
+    }
+    setLogoError('')
+    setLogoUploading(true)
+    setLogoProgress(0)
+    try {
+      const path = `logos/${user.uid}/logo`
+      const sRef = storageRef(storage, path)
+      const task = uploadBytesResumable(sRef, file)
+      await new Promise((resolve, reject) => {
+        task.on('state_changed',
+          (snap) => setLogoProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+          reject,
+          resolve,
+        )
+      })
+      const url = await getDownloadURL(sRef)
+      await updateDoc(doc(db, 'users', user.uid), { logoUrl: url })
+      setLogoSaved(true)
+      setTimeout(() => setLogoSaved(false), 3000)
+    } catch (e) {
+      console.error(e)
+      setLogoError('Upload failed. Please try again.')
+    } finally {
+      setLogoUploading(false)
+      setLogoProgress(0)
+      if (logoFileRef.current) logoFileRef.current.value = ''
+    }
+  }
+
+  async function removeLogo() {
+    if (!window.confirm('Remove your business logo?')) return
+    try {
+      const sRef = storageRef(storage, `logos/${user.uid}/logo`)
+      await deleteObject(sRef).catch(() => {}) // ignore if file doesn't exist
+      await updateDoc(doc(db, 'users', user.uid), { logoUrl: null })
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -141,6 +199,57 @@ export default function ProfilePage() {
             className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
             {savingName ? 'Saving…' : 'Save Name'}
           </button>
+        </div>
+      </div>
+
+      {/* Business Logo */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm p-6 mb-5">
+        <h2 className="text-base font-semibold text-[#1A1A1A] mb-1">Business Logo</h2>
+        <p className="text-xs text-[#9A9A9A] mb-4">
+          Used on quotes and invoices when you select "My Business" branding. PNG, JPG, SVG or WebP — max 2 MB.
+        </p>
+        <div className="flex items-start gap-5">
+          {/* Preview */}
+          <div className="w-28 h-16 rounded-lg border border-gray-200 bg-[#F4F4F5] flex items-center justify-center flex-shrink-0 overflow-hidden">
+            {profile?.logoUrl
+              ? <img src={profile.logoUrl} alt="Your logo" className="w-full h-full object-contain p-1" />
+              : <span className="text-xs text-[#9A9A9A] text-center leading-tight px-2">No logo uploaded</span>
+            }
+          </div>
+          {/* Controls */}
+          <div className="flex-1 space-y-3">
+            <input
+              ref={logoFileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+              onChange={(e) => uploadLogo(e.target.files?.[0])}
+              className="hidden"
+            />
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => logoFileRef.current?.click()}
+                disabled={logoUploading}
+                className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50"
+              >
+                {logoUploading ? `Uploading… ${logoProgress}%` : profile?.logoUrl ? 'Replace Logo' : 'Upload Logo'}
+              </button>
+              {profile?.logoUrl && (
+                <button
+                  onClick={removeLogo}
+                  className="border border-[#D95F5F]/40 text-[#D95F5F] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#D95F5F]/5 transition-colors"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {logoUploading && (
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden w-48">
+                <div className="h-full bg-[#8B6914] rounded-full transition-all" style={{ width: `${logoProgress}%` }} />
+              </div>
+            )}
+            {logoError && <p className="text-sm text-[#D95F5F]">{logoError}</p>}
+            {logoSaved && <p className="text-sm text-[#4CAF7D]">Logo saved successfully.</p>}
+          </div>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { calcLineTotal } from './LineItemBuilder'
-import logoUrl from '../../assets/logo.png'
+import crkLogoUrl from '../../assets/logo.png'
 
 const BRONZE = '#8B6914'
 const JET = '#111111'
@@ -54,7 +54,8 @@ const s = StyleSheet.create({
   footerText: { fontSize: 8, color: GRAY },
 })
 
-export default function QuotePDF({ quote }) {
+export default function QuotePDF({ quote, logoSrc }) {
+  const resolvedLogo = logoSrc || crkLogoUrl
   const { subtotal = 0, taxAmount = 0, total = 0, lineItems = [] } = quote
 
   return (
@@ -62,7 +63,7 @@ export default function QuotePDF({ quote }) {
       <Page size="LETTER" style={s.page}>
         {/* Header band */}
         <View style={s.headerBand}>
-          <Image src={logoUrl} style={s.logo} />
+          <Image src={resolvedLogo} style={s.logo} />
           <Text style={s.headerTitle}>Quote</Text>
         </View>
         <View style={s.bronzeLine} />

@@ -70,14 +70,16 @@ function mapHeaders(rawHeaders) {
 
 function parseCSVText(text) {
   // RFC-4180 compliant parser
+  // The outer loop splits into lines while respecting quoted fields (for multi-line values).
+  // Quotes are preserved in the line string so the inner field parser can handle them correctly.
   const lines = []
   let cur = ''
   let inQ = false
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     if (ch === '"') {
-      if (inQ && text[i + 1] === '"') { cur += '"'; i++ }
-      else inQ = !inQ
+      if (inQ && text[i + 1] === '"') { cur += '""'; i++ } // escaped quote — keep both
+      else { inQ = !inQ; cur += '"' }                       // quote delimiter — keep it
     } else if ((ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) && !inQ) {
       if (ch === '\r') i++
       lines.push(cur)

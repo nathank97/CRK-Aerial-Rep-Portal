@@ -109,11 +109,18 @@ function parseCSVText(text) {
   })
 }
 
+function sanitizePrice(v) {
+  // Strip currency symbols, spaces, and commas before parsing (e.g. "$15,000.00" → "15000.00")
+  if (v === '' || v == null) return ''
+  return String(v).replace(/[$€£,\s]/g, '').trim()
+}
+
 function validateRow(row, idx) {
   const errors = []
   if (!row.name?.trim()) errors.push('Name is required')
   // MSRP optional — defaults to 0 if blank/missing
-  if (row.msrp !== '' && isNaN(parseFloat(row.msrp))) errors.push('Sales Price must be a number')
+  const cleanPrice = sanitizePrice(row.msrp)
+  if (cleanPrice !== '' && isNaN(parseFloat(cleanPrice))) errors.push('Sales Price must be a number')
   return errors
 }
 
@@ -175,7 +182,7 @@ function ImportModal({ onClose, existingSkus }) {
             name: get('name'),
             type: normalizeType(rawTags),
             sku: get('sku'),
-            msrp: get('msrp'),
+            msrp: sanitizePrice(get('msrp')),
             manufacturer: get('manufacturer'),
             tags: rawTags,
           }

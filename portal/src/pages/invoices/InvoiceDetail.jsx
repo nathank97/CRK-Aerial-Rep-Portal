@@ -262,6 +262,9 @@ export default function InvoiceDetail() {
               <span className="font-mono text-lg font-bold text-[#8B6914]">{invoice.invoiceNumber}</span>
               <StatusBadge status={paymentStatus} />
             </div>
+            {invoice.projectName && (
+              <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wider mt-1">{invoice.projectName}</p>
+            )}
             <p className="text-[#111111] font-semibold mt-1 text-lg">{invoice.customerName || '—'}</p>
             {invoice.customerEmail && <p className="text-sm text-[#9A9A9A]">{invoice.customerEmail}</p>}
             {invoice.customerAddress && <p className="text-sm text-[#9A9A9A]">{invoice.customerAddress}</p>}

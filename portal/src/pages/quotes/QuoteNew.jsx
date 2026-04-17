@@ -19,6 +19,7 @@ export default function QuoteNew() {
 
   const [customerId, setCustomerId] = useState(preCustomerId)
   const [linkedLeadName, setLinkedLeadName] = useState('')
+  const [projectName, setProjectName] = useState('')
   const [notes, setNotes] = useState('')
   const [terms, setTerms] = useState('')
   const [taxRate, setTaxRate] = useState(0)
@@ -51,6 +52,7 @@ export default function QuoteNew() {
           ? `${selectedCustomer.firstName ?? ''} ${selectedCustomer.lastName ?? ''}`.trim() || selectedCustomer.companyName || ''
           : '',
         linkedLeadName: customerId ? '' : linkedLeadName,
+        projectName: projectName.trim() || null,
         customerEmail: selectedCustomer?.email ?? '',
         customerAddress: selectedCustomer?.address ?? '',
         notes,
@@ -241,6 +243,16 @@ export default function QuoteNew() {
         {/* Notes & Terms */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-[#111111] mb-4">Notes & Terms</h2>
+          <div className="mb-4">
+            <label className={labelCls}>Project Name</label>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="e.g. Smith Farm — Fall Spray 2025"
+              className={inputCls}
+            />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Notes</label>

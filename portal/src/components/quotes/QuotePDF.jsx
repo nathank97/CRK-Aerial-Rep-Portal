@@ -83,6 +83,12 @@ export default function QuotePDF({ quote, logoSrc }) {
                 <Text style={s.metaLabel}>Quote #</Text>
                 <Text style={[s.metaValue, { fontFamily: 'Helvetica-Bold' }]}>{quote.quoteNumber}</Text>
               </View>
+              {quote.projectName ? (
+                <View style={s.metaRow}>
+                  <Text style={s.metaLabel}>Project</Text>
+                  <Text style={[s.metaValue, { fontFamily: 'Helvetica-Bold' }]}>{quote.projectName}</Text>
+                </View>
+              ) : null}
               <View style={s.metaRow}>
                 <Text style={s.metaLabel}>Date</Text>
                 <Text style={s.metaValue}>{formatDate(quote.createdAt)}</Text>

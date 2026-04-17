@@ -40,7 +40,8 @@ export default function InvoiceNew() {
   const [dueDate, setDueDate] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
 
-  // Notes
+  // Project & Notes
+  const [projectName, setProjectName] = useState('')
   const [notes, setNotes] = useState('')
   const [internalNotes, setInternalNotes] = useState('')
 
@@ -171,6 +172,7 @@ export default function InvoiceNew() {
         balanceDue: total - paid,
         paymentTerms,
         dueDate: dueDate ? new Date(dueDate) : null,
+        projectName: projectName.trim() || null,
         notes,
         internalNotes,
         linkedOrderId: linkedOrderId || null,
@@ -406,6 +408,16 @@ export default function InvoiceNew() {
         {/* Notes */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-[#111111] mb-4">Notes</h2>
+          <div className="mb-4">
+            <label className={labelCls}>Project Name</label>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="e.g. Smith Farm — Fall Spray 2025"
+              className={inputCls}
+            />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Notes (visible on PDF)</label>

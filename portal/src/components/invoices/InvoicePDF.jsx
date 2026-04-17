@@ -73,6 +73,12 @@ export default function InvoicePDF({ invoice, logoSrc }) {
                 <Text style={s.metaLabel}>Invoice #</Text>
                 <Text style={[s.metaValue, { fontFamily: 'Helvetica-Bold' }]}>{invoice.invoiceNumber}</Text>
               </View>
+              {invoice.projectName ? (
+                <View style={s.metaRow}>
+                  <Text style={s.metaLabel}>Project</Text>
+                  <Text style={[s.metaValue, { fontFamily: 'Helvetica-Bold' }]}>{invoice.projectName}</Text>
+                </View>
+              ) : null}
               <View style={s.metaRow}>
                 <Text style={s.metaLabel}>Date</Text>
                 <Text style={s.metaValue}>{formatDate(invoice.createdAt)}</Text>

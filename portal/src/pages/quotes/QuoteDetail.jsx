@@ -186,6 +186,9 @@ export default function QuoteDetail() {
               <span className="font-mono text-lg font-bold text-[#8B6914]">{quote.quoteNumber}</span>
               <StatusBadge status={quote.status ?? 'Draft'} size="sm" />
             </div>
+            {quote.projectName && (
+              <p className="text-xs font-semibold text-[#8B6914] uppercase tracking-wider mt-1">{quote.projectName}</p>
+            )}
             <p className="text-[#111111] font-semibold mt-1 text-lg">
               {quote.linkedCustomerName || quote.linkedLeadName || '—'}
             </p>

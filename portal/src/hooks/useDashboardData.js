@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { query, where, onSnapshot } from 'firebase/firestore'
 import { leadsCol, ordersCol, quotesCol, serviceTicketsCol, usersCol } from '../firebase/firestore'
+import { useAuth } from '../context/AuthContext'
 
 function getLast6Months() {
   const months = []
@@ -26,6 +27,7 @@ const STATUS_COLORS = {
 }
 
 export function useDashboardData() {
+  const { user, isAdmin } = useAuth()
   const [leads, setLeads] = useState([])
   const [orders, setOrders] = useState([])
   const [quotes, setQuotes] = useState([])
@@ -37,31 +39,24 @@ export function useDashboardData() {
   const loading = loadedCount < TOTAL_COLLECTIONS
 
   useEffect(() => {
+    if (!user) return
+    setLoadedCount(0)
     const mark = () => setLoadedCount((c) => c + 1)
 
-    const u1 = onSnapshot(leadsCol, (snap) => {
-      setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      mark()
-    })
-    const u2 = onSnapshot(ordersCol, (snap) => {
-      setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      mark()
-    })
-    const u3 = onSnapshot(quotesCol, (snap) => {
-      setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      mark()
-    })
-    const u4 = onSnapshot(serviceTicketsCol, (snap) => {
-      setServiceTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      mark()
-    })
-    const u5 = onSnapshot(query(usersCol, where('role', '==', 'dealer')), (snap) => {
-      setDealers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-      mark()
-    })
+    // Dealers can only read their own docs — filter to avoid permission errors
+    const leadsQ = isAdmin ? leadsCol : query(leadsCol, where('assignedDealerId', '==', user.uid))
+    const ordersQ = isAdmin ? ordersCol : query(ordersCol, where('dealerId', '==', user.uid))
+    const quotesQ = isAdmin ? quotesCol : query(quotesCol, where('dealerId', '==', user.uid))
+    const ticketsQ = isAdmin ? serviceTicketsCol : query(serviceTicketsCol, where('dealerId', '==', user.uid))
+
+    const u1 = onSnapshot(leadsQ, (snap) => { setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
+    const u2 = onSnapshot(ordersQ, (snap) => { setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
+    const u3 = onSnapshot(quotesQ, (snap) => { setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
+    const u4 = onSnapshot(ticketsQ, (snap) => { setServiceTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
+    const u5 = onSnapshot(query(usersCol, where('role', '==', 'dealer')), (snap) => { setDealers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
 
     return () => { u1(); u2(); u3(); u4(); u5() }
-  }, [])
+  }, [user, isAdmin])
 
   // --- KPIs ---
   const now = new Date()

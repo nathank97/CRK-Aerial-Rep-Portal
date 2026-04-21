@@ -102,7 +102,11 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
               <label className={lbl}>Location</label>
               <select value={form.dealerId} onChange={set('dealerId')} className={cls}>
                 <option value="">Unassigned</option>
-                {dealers.map((d) => <option key={d.id} value={d.id}>{d.displayName || d.email}</option>)}
+                {dealers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.location ? `${d.location} — ${d.displayName || d.email}` : (d.displayName || d.email)}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -223,7 +227,11 @@ function TransferModal({ item, dealers, onClose }) {
             <select value={toDealerId} onChange={(e) => setToDealerId(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]">
               <option value="">Select location…</option>
-              {otherDealers.map((d) => <option key={d.id} value={d.id}>{d.displayName || d.email}</option>)}
+              {otherDealers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.location ? `${d.location} — ${d.displayName || d.email}` : (d.displayName || d.email)}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -323,7 +331,11 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
               <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Location *</label>
               <select value={dealerId} onChange={(e) => setDealerId(e.target.value)} className={cls}>
                 <option value="">Select location…</option>
-                {dealers.map((d) => <option key={d.id} value={d.id}>{d.displayName || d.email}</option>)}
+                {dealers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.location ? `${d.location} — ${d.displayName || d.email}` : (d.displayName || d.email)}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -426,18 +438,26 @@ export default function InventoryMaster() {
   const [transferItem, setTransferItem] = useState(null)
   const [editItem, setEditItem] = useState(null)
 
+  // Maps dealerId → location name (falls back to displayName if no location set)
   const dealerMap = useMemo(() => {
     const m = {}
-    dealers.forEach((d) => { m[d.id] = d.displayName || d.email || d.id })
+    dealers.forEach((d) => { m[d.id] = d.location || d.displayName || d.email || d.id })
     return m
+  }, [dealers])
+
+  // Unique location names for filter dropdown
+  const locationOptions = useMemo(() => {
+    const locs = [...new Set(dealers.map((d) => d.location || d.displayName || d.email).filter(Boolean))]
+    return locs.sort()
   }, [dealers])
 
   const filtered = useMemo(() => {
     return items.filter((item) => {
       const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
-      const matchSearch = !search || [item.modelName, item.sku, item.serialNumber, dealerMap[item.dealerId]]
+      const itemLocation = dealerMap[item.dealerId] || 'Unassigned'
+      const matchSearch = !search || [item.modelName, item.sku, item.serialNumber, itemLocation]
         .some((v) => v?.toLowerCase().includes(search.toLowerCase()))
-      const matchDealer = !filterDealer || item.dealerId === filterDealer
+      const matchDealer = !filterDealer || itemLocation === filterDealer
       const matchCond = !filterCondition || item.condition === filterCondition
       const matchAvail = !filterAvail
         || (filterAvail === 'out' && available === 0)
@@ -472,15 +492,16 @@ export default function InventoryMaster() {
     return Object.values(groups).sort((a, b) => a.modelName.localeCompare(b.modelName))
   }, [filtered, dealerMap])
 
-  // By location grouping
-  const byDealer = useMemo(() => {
+  // By location grouping — keyed by location name so reps at the same location are combined
+  const byLocation = useMemo(() => {
     const groups = {}
     filtered.forEach((item) => {
-      if (!groups[item.dealerId]) groups[item.dealerId] = []
-      groups[item.dealerId].push(item)
+      const locName = dealerMap[item.dealerId] || 'Unassigned'
+      if (!groups[locName]) groups[locName] = []
+      groups[locName].push(item)
     })
     return groups
-  }, [filtered])
+  }, [filtered, dealerMap])
 
   // KPIs (across all items, not just filtered)
   const totalUnits = items.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
@@ -558,7 +579,7 @@ export default function InventoryMaster() {
           className={`${inputCls} col-span-2 md:col-span-1`} />
         <select value={filterDealer} onChange={(e) => setFilterDealer(e.target.value)} className={inputCls}>
           <option value="">All Locations</option>
-          {dealers.map((d) => <option key={d.id} value={d.id}>{d.displayName || d.email}</option>)}
+          {locationOptions.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
         </select>
         <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)} className={inputCls}>
           <option value="">All Conditions</option>
@@ -674,20 +695,20 @@ export default function InventoryMaster() {
                 </div>
               ))}
             </div>
-          ) : Object.keys(byDealer).length === 0 ? (
+          ) : Object.keys(byLocation).length === 0 ? (
             <div className="text-center py-12 text-[#9A9A9A] text-sm">No inventory found.</div>
-          ) : Object.entries(byDealer).map(([dealerId, dealerItems]) => {
-            const dealerTotalUnits = dealerItems.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
-            const dealerOutCount = dealerItems.filter((i) => (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0) <= 0).length
+          ) : Object.entries(byLocation).sort(([a], [b]) => a.localeCompare(b)).map(([locName, locItems]) => {
+            const locTotalUnits = locItems.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
+            const locOutCount = locItems.filter((i) => (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0) <= 0).length
             return (
-              <div key={dealerId} className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+              <div key={locName} className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 bg-[#F4F4F5] border-b border-gray-100">
                   <div>
-                    <p className="font-semibold text-[#1A1A1A]">{dealerMap[dealerId] || dealerId}</p>
-                    <p className="text-xs text-[#9A9A9A]">{dealerItems.length} entr{dealerItems.length !== 1 ? 'ies' : 'y'} · {dealerTotalUnits} total units</p>
+                    <p className="font-semibold text-[#1A1A1A]">{locName}</p>
+                    <p className="text-xs text-[#9A9A9A]">{locItems.length} entr{locItems.length !== 1 ? 'ies' : 'y'} · {locTotalUnits} total units</p>
                   </div>
-                  {dealerOutCount > 0 && (
-                    <span className="text-xs font-semibold bg-[#D95F5F]/15 text-[#D95F5F] px-2 py-0.5 rounded-full">{dealerOutCount} out</span>
+                  {locOutCount > 0 && (
+                    <span className="text-xs font-semibold bg-[#D95F5F]/15 text-[#D95F5F] px-2 py-0.5 rounded-full">{locOutCount} out</span>
                   )}
                 </div>
                 <table className="w-full text-sm hidden md:table">
@@ -699,7 +720,7 @@ export default function InventoryMaster() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {dealerItems.map((item) => {
+                    {locItems.map((item) => {
                       const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                       return (
                         <tr key={item.id} className="hover:bg-[#FAFAFA]">
@@ -728,7 +749,7 @@ export default function InventoryMaster() {
                   </tbody>
                 </table>
                 <div className="md:hidden divide-y divide-gray-50">
-                  {dealerItems.map((item) => {
+                  {locItems.map((item) => {
                     const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                     return (
                       <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-3">

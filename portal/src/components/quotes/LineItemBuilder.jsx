@@ -102,7 +102,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
 
   const addFromCatalog = (catalogItem) => {
     const dealerCost = getDealerPrice(catalogItem, profile)
-    const unitPrice = profile?.role === 'dealer' ? dealerCost : catalogItem.msrp
+    const unitPrice = catalogItem.msrp
 
     onChange([...items, {
       id: crypto.randomUUID(),

@@ -30,6 +30,9 @@ export default function LeadDetail() {
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [transferring, setTransferring] = useState(false)
+  const [transferDealerId, setTransferDealerId] = useState('')
+  const [transferSaving, setTransferSaving] = useState(false)
 
   const canEdit = isAdmin || lead?.assignedDealerId === user?.uid
   const canDelete = isAdmin
@@ -110,6 +113,35 @@ export default function LeadDetail() {
   const handleDelete = async () => {
     await deleteDoc(doc(db, 'leads', id))
     navigate('/leads')
+  }
+
+  const openTransfer = () => {
+    setTransferDealerId(lead.assignedDealerId ?? '')
+    setTransferring(true)
+  }
+
+  const handleTransfer = async () => {
+    setTransferSaving(true)
+    try {
+      const prevName = lead.assignedDealerName || 'Unassigned'
+      const dealer = dealers.find((d) => d.id === transferDealerId)
+      const newName = dealer?.displayName ?? 'Unassigned'
+      await updateDoc(doc(db, 'leads', id), {
+        assignedDealerId: transferDealerId || null,
+        assignedDealerName: newName,
+        updatedAt: serverTimestamp(),
+      })
+      await addDoc(leadActivityCol(id), {
+        type: 'Transfer',
+        details: `Rep transferred from ${prevName} to ${newName}`,
+        createdByName: profile?.displayName ?? 'Unknown',
+        createdById: user?.uid,
+        timestamp: serverTimestamp(),
+      })
+      setTransferring(false)
+    } finally {
+      setTransferSaving(false)
+    }
   }
 
   if (loading) {
@@ -340,6 +372,9 @@ export default function LeadDetail() {
             <InfoRow label="Last Updated" value={formatDate(lead.updatedAt)} />
             <InfoRow label="Created By" value={lead.createdByName || '—'} />
             {!isAdmin && <InfoRow label="Assigned Rep" value={lead.assignedDealerName || 'Unassigned'} />}
+            {lead.originatingDealerName && (
+              <InfoRow label="Originated With" value={lead.originatingDealerName} />
+            )}
             {lead.budget && <InfoRow label="Budget" value={formatCurrency(lead.budget)} />}
             {lead.nextFollowUp && (
               <InfoRow label="Follow-up" value={formatDate(lead.nextFollowUp)} highlight />
@@ -348,6 +383,43 @@ export default function LeadDetail() {
               <InfoRow label="Demo Date" value={formatDate(lead.demoDate)} highlight />
             )}
           </div>
+
+          {/* Assigned Rep (admin transfer) */}
+          {isAdmin && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-3">Assigned Rep</p>
+              {transferring ? (
+                <div className="space-y-2">
+                  <select
+                    value={transferDealerId}
+                    onChange={(e) => setTransferDealerId(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#1A1A1A] focus:outline-none focus:border-[#8B6914] bg-white"
+                  >
+                    <option value="">Unassigned</option>
+                    {dealers.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <button onClick={() => setTransferring(false)}
+                      className="flex-1 border border-gray-200 text-[#1A1A1A] text-xs font-medium py-1.5 rounded-lg hover:bg-[#F4F4F5] transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={handleTransfer} disabled={transferSaving}
+                      className="flex-1 bg-[#8B6914] hover:bg-[#7a5c11] text-white text-xs font-semibold py-1.5 rounded-lg disabled:opacity-60 transition-colors">
+                      {transferSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-[#1A1A1A]">{lead.assignedDealerName || 'Unassigned'}</span>
+                  <button onClick={openTransfer}
+                    className="text-xs text-[#8B6914] hover:underline font-medium shrink-0">
+                    Transfer
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quick actions */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-2">

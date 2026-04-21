@@ -37,6 +37,29 @@ export default function CustomerDetail() {
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [transferring, setTransferring] = useState(false)
+  const [transferDealerId, setTransferDealerId] = useState('')
+  const [transferSaving, setTransferSaving] = useState(false)
+
+  const openTransfer = () => {
+    setTransferDealerId(customer.assignedDealerId ?? '')
+    setTransferring(true)
+  }
+
+  const handleTransfer = async () => {
+    setTransferSaving(true)
+    try {
+      const dealer = dealers.find((d) => d.id === transferDealerId)
+      await updateDoc(doc(db, 'customers', id), {
+        assignedDealerId: transferDealerId || null,
+        assignedDealerName: dealer?.displayName ?? null,
+        updatedAt: serverTimestamp(),
+      })
+      setTransferring(false)
+    } finally {
+      setTransferSaving(false)
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -352,8 +375,48 @@ export default function CustomerDetail() {
               <InfoRow label="Revenue" value={formatCurrency(totalRevenue)} />
               <InfoRow label="Service Tickets" value={`${tickets.length} ticket${tickets.length !== 1 ? 's' : ''}`} />
               {!isAdmin && <InfoRow label="Assigned Rep" value={customer.assignedDealerName} />}
+              {customer.originatingDealerName && (
+                <InfoRow label="Originated With" value={customer.originatingDealerName} />
+              )}
             </div>
           </div>
+
+          {/* Assigned Rep (admin transfer) */}
+          {isAdmin && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-3">Assigned Rep</p>
+              {transferring ? (
+                <div className="space-y-2">
+                  <select
+                    value={transferDealerId}
+                    onChange={(e) => setTransferDealerId(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#1A1A1A] focus:outline-none focus:border-[#8B6914] bg-white"
+                  >
+                    <option value="">Unassigned</option>
+                    {dealers.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <button onClick={() => setTransferring(false)}
+                      className="flex-1 border border-gray-200 text-[#1A1A1A] text-xs font-medium py-1.5 rounded-lg hover:bg-[#F4F4F5] transition-colors">
+                      Cancel
+                    </button>
+                    <button onClick={handleTransfer} disabled={transferSaving}
+                      className="flex-1 bg-[#8B6914] hover:bg-[#7a5c11] text-white text-xs font-semibold py-1.5 rounded-lg disabled:opacity-60 transition-colors">
+                      {transferSaving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-[#1A1A1A]">{customer.assignedDealerName || 'Unassigned'}</span>
+                  <button onClick={openTransfer}
+                    className="text-xs text-[#8B6914] hover:underline font-medium shrink-0">
+                    Transfer
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quick actions */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">

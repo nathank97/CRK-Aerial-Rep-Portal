@@ -33,6 +33,8 @@ export async function convertLeadToCustomer(lead, actingUser) {
     // Dealer link
     assignedDealerId: lead.assignedDealerId ?? null,
     assignedDealerName: lead.assignedDealerName ?? null,
+    originatingDealerId: lead.originatingDealerId ?? lead.assignedDealerId ?? null,
+    originatingDealerName: lead.originatingDealerName ?? lead.assignedDealerName ?? null,
 
     // Source
     sourceLeadId: lead.id,

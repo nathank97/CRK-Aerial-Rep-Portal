@@ -92,6 +92,8 @@ export default function LeadNew() {
         budget: form.budget ? parseFloat(form.budget) : null,
         nextFollowUp: form.nextFollowUp ? new Date(form.nextFollowUp) : null,
         demoDate: form.demoDate ? new Date(form.demoDate) : null,
+        originatingDealerId: form.assignedDealerId || null,
+        originatingDealerName: form.assignedDealerName || null,
         createdById: user.uid,
         createdByName: profile?.displayName ?? 'Unknown',
         createdAt: now,

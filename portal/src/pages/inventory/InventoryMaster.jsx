@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { query, where, onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
+import { useAuth } from '../../context/AuthContext'
 import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -128,9 +129,9 @@ function TransferModal({ item, dealers, onClose }) {
   )
 }
 
-// Add Stock Modal (admin can add to any dealer)
-function AddStockModal({ dealers, catalog, onClose }) {
-  const [dealerId, setDealerId] = useState('')
+// Add Stock Modal — admin picks any dealer; dealers are locked to themselves
+function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
+  const [dealerId, setDealerId] = useState(fixedDealerId ?? '')
   const [catalogId, setCatalogId] = useState('')
   const [modelName, setModelName] = useState('')
   const [sku, setSku] = useState('')
@@ -186,16 +187,18 @@ function AddStockModal({ dealers, catalog, onClose }) {
           <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Dealer *</label>
-            <select value={dealerId} onChange={(e) => setDealerId(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]">
-              <option value="">Select dealer…</option>
-              {dealers.map((d) => (
-                <option key={d.id} value={d.id}>{d.displayName || d.email}</option>
-              ))}
-            </select>
-          </div>
+          {!fixedDealerId && (
+            <div>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Location *</label>
+              <select value={dealerId} onChange={(e) => setDealerId(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]">
+                <option value="">Select location…</option>
+                {dealers.map((d) => (
+                  <option key={d.id} value={d.id}>{d.displayName || d.email}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">From Catalog</label>
             <select value={catalogId} onChange={(e) => handleCatalogSelect(e.target.value)}
@@ -267,6 +270,7 @@ function AddStockModal({ dealers, catalog, onClose }) {
 }
 
 export default function InventoryMaster() {
+  const { user, isAdmin } = useAuth()
   const { items, loading } = useAllInventory()
   const { dealers, loading: dealersLoading } = useDealers()
   const { catalog } = useCatalog()
@@ -327,17 +331,22 @@ export default function InventoryMaster() {
   return (
     <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
       {showAdd && (
-        <AddStockModal dealers={dealers} catalog={catalog} onClose={() => setShowAdd(false)} />
+        <AddStockModal
+          dealers={dealers}
+          catalog={catalog}
+          onClose={() => setShowAdd(false)}
+          fixedDealerId={isAdmin ? undefined : user?.uid}
+        />
       )}
-      {transferItem && (
+      {transferItem && isAdmin && (
         <TransferModal item={transferItem} dealers={dealers} onClose={() => setTransferItem(null)} />
       )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#1A1A1A]">Master Inventory</h1>
-          <p className="text-sm text-[#9A9A9A] mt-0.5">All dealer stock — real-time</p>
+          <h1 className="text-2xl font-bold text-[#1A1A1A]">Inventory</h1>
+          <p className="text-sm text-[#9A9A9A] mt-0.5">All locations — real-time</p>
         </div>
         <button onClick={() => setShowAdd(true)}
           className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
@@ -369,7 +378,7 @@ export default function InventoryMaster() {
                 ? 'border-[#8B6914] text-[#8B6914]'
                 : 'border-transparent text-[#9A9A9A] hover:text-[#1A1A1A]'
             }`}>
-            {tab === 'list' ? 'All Items' : 'By Dealer'}
+            {tab === 'list' ? 'All Items' : 'By Location'}
           </button>
         ))}
       </div>
@@ -380,7 +389,7 @@ export default function InventoryMaster() {
           placeholder="Search model, SKU, serial, dealer…"
           className={`${inputCls} col-span-2 md:col-span-1`} />
         <select value={filterDealer} onChange={(e) => setFilterDealer(e.target.value)} className={inputCls}>
-          <option value="">All Dealers</option>
+          <option value="">All Locations</option>
           {dealers.map((d) => <option key={d.id} value={d.id}>{d.displayName || d.email}</option>)}
         </select>
         <select value={filterCondition} onChange={(e) => setFilterCondition(e.target.value)} className={inputCls}>
@@ -403,16 +412,16 @@ export default function InventoryMaster() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Model', 'Dealer', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'Cost', 'Updated', ''].map((h) => (
+                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['Cost', 'Updated', ''] : ['Updated'])].map((h) => (
                     <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={9} />)
+                  Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 10 : 8} />)
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
+                  <tr><td colSpan={isAdmin ? 10 : 8} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
                 ) : filtered.map((item) => {
                   const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                   return (
@@ -433,12 +442,16 @@ export default function InventoryMaster() {
                       <td className="py-3 px-4 text-center">
                         <AvailBadge available={available} threshold={item.lowStockThreshold} />
                       </td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>
+                      {isAdmin && (
+                        <td className="py-3 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>
+                      )}
                       <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(item.updatedAt)}</td>
-                      <td className="py-3 px-4">
-                        <button onClick={() => setTransferItem(item)}
-                          className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
-                      </td>
+                      {isAdmin && (
+                        <td className="py-3 px-4">
+                          <button onClick={() => setTransferItem(item)}
+                            className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -489,10 +502,12 @@ export default function InventoryMaster() {
                       <p className="font-bold text-[#1A1A1A]">{available}</p>
                     </div>
                   </div>
-                  <button onClick={() => setTransferItem(item)}
-                    className="w-full text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
-                    Transfer Stock
-                  </button>
+                  {isAdmin && (
+                    <button onClick={() => setTransferItem(item)}
+                      className="w-full text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
+                      Transfer Stock
+                    </button>
+                  )}
                 </div>
               )
             })}
@@ -535,7 +550,7 @@ export default function InventoryMaster() {
                 <table className="w-full text-sm hidden md:table">
                   <thead>
                     <tr className="border-b border-gray-50">
-                      {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'Cost', ''].map((h) => (
+                      {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['Cost', ''] : [])].map((h) => (
                         <th key={h} className="text-left py-2 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -560,11 +575,15 @@ export default function InventoryMaster() {
                           <td className="py-2 px-4 text-center">
                             <AvailBadge available={available} threshold={item.lowStockThreshold} />
                           </td>
-                          <td className="py-2 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>
-                          <td className="py-2 px-4">
-                            <button onClick={() => setTransferItem(item)}
-                              className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
-                          </td>
+                          {isAdmin && (
+                            <td className="py-2 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>
+                          )}
+                          {isAdmin && (
+                            <td className="py-2 px-4">
+                              <button onClick={() => setTransferItem(item)}
+                                className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
+                            </td>
+                          )}
                         </tr>
                       )
                     })}

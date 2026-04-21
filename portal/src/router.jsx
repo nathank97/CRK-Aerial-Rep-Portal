@@ -128,11 +128,11 @@ export const router = createBrowserRouter([
       },
       {
         path: '/inventory',
-        element: <RequireModule module="inventory"><InventoryDealer /></RequireModule>,
+        element: <RequireModule module="inventory"><InventoryMaster /></RequireModule>,
       },
       {
         path: '/inventory/master',
-        element: <RequireAdmin><InventoryMaster /></RequireAdmin>,
+        element: <RequireModule module="inventory"><InventoryMaster /></RequireModule>,
       },
       {
         path: '/service',

@@ -27,6 +27,7 @@ export const leadChatCol = (leadId) =>
 export const feedbackCommentsCol = (feedbackId) =>
   collection(db, 'feedback', feedbackId, 'comments')
 export const eventsCol = collection(db, 'events')
+export const emailTemplatesDoc = doc(db, 'settings', 'emailTemplates')
 
 // Doc refs
 export const userDoc = (uid) => doc(db, 'users', uid)

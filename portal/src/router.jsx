@@ -59,6 +59,7 @@ import RepDetail from './pages/admin/reps/RepDetail'
 import RepPipeline from './pages/admin/reps/RepPipeline'
 import TerritoryList from './pages/admin/territories/TerritoryList'
 import TerritoryMap from './pages/admin/territories/TerritoryMap'
+import EmailTemplates from './pages/admin/EmailTemplates'
 
 // Route guards
 function RequireAuth({ children }) {
@@ -204,6 +205,10 @@ export const router = createBrowserRouter([
       {
         path: '/admin/territories/map',
         element: <RequireAdmin><TerritoryMap /></RequireAdmin>,
+      },
+      {
+        path: '/admin/email-templates',
+        element: <RequireAdmin><EmailTemplates /></RequireAdmin>,
       },
     ],
   },

@@ -145,6 +145,12 @@ service cloud.firestore {
         (resource.data.createdBy == request.auth.uid || isAdmin());
     }
 
+    // ── settings ─────────────────────────────────────────────────────────────
+    match /settings/{settingId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // ── global chat ───────────────────────────────────────────────────────────
     match /globalChat/{messageId} {
       allow read, write: if isAuth();

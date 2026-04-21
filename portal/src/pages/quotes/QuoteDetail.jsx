@@ -12,7 +12,7 @@ import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatte
 import { nextOrderNumber } from '../../utils/numbering'
 import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
 import QuotePDF from '../../components/quotes/QuotePDF'
-import { emailService } from '../../services/emailService'
+import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import crkLogoUrl from '../../assets/logo.png'
 
 export default function QuoteDetail() {
@@ -21,6 +21,7 @@ export default function QuoteDetail() {
   const { user, profile } = useAuth()
   const { quote, loading } = useQuote(id)
 
+  const { template: emailTemplate } = useEmailTemplate()
   const [editMode, setEditMode] = useState(false)
   const [editItems, setEditItems] = useState([])
   const [editNotes, setEditNotes] = useState('')
@@ -77,23 +78,19 @@ export default function QuoteDetail() {
   }
 
   const handleSendQuote = async () => {
-    setSaving(true)
-    try {
-      await emailService.sendQuote({
-        quoteNumber: quote.quoteNumber,
-        customerName: quote.linkedCustomerName || quote.linkedLeadName,
-        customerEmail: quote.customerEmail,
-        total: formatCurrency(quote.total),
-        dealerName: quote.dealerName,
-      })
-      await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
-      flash('Quote sent!')
-    } catch (err) {
-      console.error(err)
-      flash('Failed to send email.')
-    } finally {
-      setSaving(false)
+    const vars = {
+      quoteNumber: quote.quoteNumber ?? '',
+      customerName: quote.linkedCustomerName || quote.linkedLeadName || '',
+      projectName: quote.projectName || '',
+      total: formatCurrency(quote.total),
+      dealerName: quote.dealerName || profile?.displayName || '',
     }
+    const subject = fillTemplate(emailTemplate.quoteSubject, vars)
+    const body = fillTemplate(emailTemplate.quoteBody, vars)
+    const to = quote.customerEmail || ''
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
+    flash('Email client opened — attach the PDF and send.')
   }
 
   const handleConvertToOrder = async () => {

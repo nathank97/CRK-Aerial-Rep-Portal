@@ -28,6 +28,7 @@ const ADMIN_ONLY_NAV = [
   { to: '/admin/reps', label: 'Rep Manager', icon: '🎯' },
   { to: '/admin/territories', label: 'Territories', icon: '🗾' },
   { to: '/admin/feedback', label: 'Feedback Inbox', icon: '📥' },
+  { to: '/admin/email-templates', label: 'Email Templates', icon: '✉️' },
 ]
 
 export default function Sidebar({ onClose }) {

@@ -53,10 +53,6 @@ import DealerManagement from './pages/admin/DealerManagement'
 import Catalog from './pages/admin/Catalog'
 import TaxRates from './pages/admin/TaxRates'
 import PresetQuotes from './pages/admin/PresetQuotes'
-import RepList from './pages/admin/reps/RepList'
-import RepNew from './pages/admin/reps/RepNew'
-import RepDetail from './pages/admin/reps/RepDetail'
-import RepPipeline from './pages/admin/reps/RepPipeline'
 import TerritoryList from './pages/admin/territories/TerritoryList'
 import TerritoryMap from './pages/admin/territories/TerritoryMap'
 import EmailTemplates from './pages/admin/EmailTemplates'
@@ -181,22 +177,6 @@ export const router = createBrowserRouter([
       {
         path: '/admin/tax-rates',
         element: <RequireAdmin><TaxRates /></RequireAdmin>,
-      },
-      {
-        path: '/admin/reps',
-        element: <RequireAdmin><RepList /></RequireAdmin>,
-      },
-      {
-        path: '/admin/reps/new',
-        element: <RequireAdmin><RepNew /></RequireAdmin>,
-      },
-      {
-        path: '/admin/reps/pipeline',
-        element: <RequireAdmin><RepPipeline /></RequireAdmin>,
-      },
-      {
-        path: '/admin/reps/:id',
-        element: <RequireAdmin><RepDetail /></RequireAdmin>,
       },
       {
         path: '/admin/territories',

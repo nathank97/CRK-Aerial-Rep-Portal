@@ -16,7 +16,7 @@ export const resetPassword = (email) => sendPasswordResetEmail(auth, email)
 // Admin creates dealer accounts via Firebase Auth REST API so the admin
 // session is never interrupted (avoids createUserWithEmailAndPassword
 // which signs in as the new user on the primary auth instance).
-export const createDealerAccount = async ({ email, tempPassword, displayName, marginPercent, pricingTier }) => {
+export const createDealerAccount = async ({ email, tempPassword, displayName, marginPercent, pricingTier, location = '' }) => {
   const API_KEY = 'AIzaSyBgh4DelRBgPigdyZaYSigUXoxzOVMbp94'
 
   // Create the user via REST — does not affect current auth session
@@ -38,12 +38,13 @@ export const createDealerAccount = async ({ email, tempPassword, displayName, ma
 
   const uid = data.localId
 
-  // Write dealer profile to Firestore (using admin's authenticated db connection)
+  // Write territory rep profile to Firestore (using admin's authenticated db connection)
   await setDoc(doc(db, 'users', uid), {
     uid,
     email,
     displayName,
     role: 'dealer',
+    location,
     marginPercent: marginPercent ?? 0,
     pricingTier: pricingTier ?? 'margin',
     dashboardVisibility: {

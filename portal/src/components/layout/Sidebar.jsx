@@ -21,11 +21,10 @@ const ADMIN_NAV = [
 ]
 
 const ADMIN_ONLY_NAV = [
-  { to: '/admin/dealers', label: 'Dealers', icon: '🏢' },
+  { to: '/admin/dealers', label: 'Territory Reps', icon: '🏢' },
   { to: '/admin/catalog', label: 'Catalog', icon: '📂' },
   { to: '/admin/preset-quotes', label: 'Preset Quotes', icon: '📑' },
   { to: '/admin/tax-rates', label: 'Tax Rates', icon: '💲' },
-  { to: '/admin/reps', label: 'Rep Manager', icon: '🎯' },
   { to: '/admin/territories', label: 'Territories', icon: '🗾' },
   { to: '/admin/feedback', label: 'Feedback Inbox', icon: '📥' },
   { to: '/admin/email-templates', label: 'Email Templates', icon: '✉️' },
@@ -121,7 +120,7 @@ export default function Sidebar({ onClose }) {
           </div>
           <div className="min-w-0">
             <p className="text-[#F0F0F0] text-sm font-medium truncate">{profile?.displayName ?? 'User'}</p>
-            <p className="text-[#9A9A9A] text-xs truncate">{profile?.role === 'admin' ? 'Admin' : 'Dealer'}</p>
+            <p className="text-[#9A9A9A] text-xs truncate">{profile?.role === 'admin' ? 'Admin' : 'Territory Rep'}</p>
           </div>
         </NavLink>
         <button

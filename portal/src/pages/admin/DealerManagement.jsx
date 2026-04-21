@@ -17,14 +17,14 @@ const DASHBOARD_WIDGETS = [
   { key: 'kpiPipelineValue', label: 'KPI: Pipeline Value' },
   { key: 'kpiRevenueClosed', label: 'KPI: Revenue Closed' },
   { key: 'chartLeadsByStatus', label: 'Chart: Leads by Status' },
-  { key: 'chartLeadsByDealer', label: 'Chart: Leads by Dealer' },
+  { key: 'chartLeadsByDealer', label: 'Chart: Leads by Territory Rep' },
   { key: 'chartWonVsLost', label: 'Chart: Won vs Lost' },
   { key: 'chartLeadsOverTime', label: 'Chart: Leads Over Time' },
   { key: 'chartRevenueOverTime', label: 'Chart: Revenue Over Time' },
   { key: 'chartTopModels', label: 'Chart: Top Drone Models' },
   { key: 'chartInventoryLevels', label: 'Chart: Inventory Levels' },
   { key: 'chartServiceTickets', label: 'Chart: Service Tickets' },
-  { key: 'leaderboard', label: 'Dealer Leaderboard' },
+  { key: 'leaderboard', label: 'Territory Rep Leaderboard' },
 ]
 
 const MODULE_ACCESS = [
@@ -57,14 +57,15 @@ function Toggle({ checked, onChange, disabled = false }) {
   )
 }
 
-// ─── New Dealer Modal ────────────────────────────────────────────────────────
+// ─── New Territory Rep Modal ─────────────────────────────────────────────────
 
-function NewDealerModal({ onClose, onCreated }) {
+function NewRepModal({ onClose, onCreated }) {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [tempPassword, setTempPassword] = useState('')
   const [marginPercent, setMarginPercent] = useState('20')
   const [pricingTier, setPricingTier] = useState('margin')
+  const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -84,11 +85,12 @@ function NewDealerModal({ onClose, onCreated }) {
         displayName: displayName.trim(),
         marginPercent: parseFloat(marginPercent) || 0,
         pricingTier,
+        location: location.trim(),
       })
       onCreated()
     } catch (e) {
       console.error(e)
-      setError(e.message ?? 'Failed to create dealer account.')
+      setError(e.message ?? 'Failed to create territory rep account.')
       setSaving(false)
     }
   }
@@ -97,7 +99,7 @@ function NewDealerModal({ onClose, onCreated }) {
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="p-6 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-[#1A1A1A]">Create Dealer Account</h2>
+          <h2 className="text-lg font-bold text-[#1A1A1A]">Create Territory Rep Account</h2>
           <p className="text-xs text-[#9A9A9A] mt-0.5">A password reset email will be sent after creation.</p>
         </div>
         <div className="p-6 space-y-4">
@@ -107,11 +109,15 @@ function NewDealerModal({ onClose, onCreated }) {
           </div>
           <div>
             <label className={labelCls}>Email Address *</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="dealer@example.com" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="rep@example.com" />
           </div>
           <div>
             <label className={labelCls}>Temporary Password *</label>
             <input type="password" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} className={inputCls} placeholder="Min. 6 characters" />
+          </div>
+          <div>
+            <label className={labelCls}>Location</label>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputCls} placeholder="e.g. Slinden Bros Location" />
           </div>
           <div>
             <label className={labelCls}>Pricing Method</label>
@@ -130,7 +136,7 @@ function NewDealerModal({ onClose, onCreated }) {
                   onChange={(e) => setMarginPercent(e.target.value)} className={inputCls + ' pr-8'} />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
               </div>
-              <p className="text-xs text-[#9A9A9A] mt-1">Dealer Price = MSRP × (1 − Margin%). Example: 20% → $2,000 MSRP = $1,600 dealer price.</p>
+              <p className="text-xs text-[#9A9A9A] mt-1">Rep Price = MSRP × (1 − Margin%). Example: 20% → $2,000 MSRP = $1,600 rep price.</p>
             </div>
           )}
           {error && <p className="text-sm text-[#D95F5F]">{error}</p>}
@@ -141,7 +147,7 @@ function NewDealerModal({ onClose, onCreated }) {
           </button>
           <button onClick={handleCreate} disabled={saving}
             className="flex-1 bg-[#8B6914] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
-            {saving ? 'Creating…' : 'Create Dealer'}
+            {saving ? 'Creating…' : 'Create Territory Rep'}
           </button>
         </div>
       </div>
@@ -149,11 +155,12 @@ function NewDealerModal({ onClose, onCreated }) {
   )
 }
 
-// ─── Dealer Detail Panel ─────────────────────────────────────────────────────
+// ─── Territory Rep Detail Panel ──────────────────────────────────────────────
 
-function DealerPanel({ dealer, onClose }) {
+function RepPanel({ dealer, onClose }) {
   const [marginPercent, setMarginPercent] = useState(dealer.marginPercent ?? 0)
   const [pricingTier, setPricingTier] = useState(dealer.pricingTier ?? 'margin')
+  const [location, setLocation] = useState(dealer.location ?? '')
   const [dashVis, setDashVis] = useState(dealer.dashboardVisibility ?? DEFAULT_DASHBOARD_VISIBILITY)
   const [modAccess, setModAccess] = useState(dealer.moduleAccess ?? DEFAULT_MODULE_ACCESS)
   const [saving, setSaving] = useState(false)
@@ -185,6 +192,7 @@ function DealerPanel({ dealer, onClose }) {
       await updateDoc(doc(db, 'users', dealer.id), {
         marginPercent: parseFloat(marginPercent) || 0,
         pricingTier,
+        location: location.trim(),
         dashboardVisibility: dashVis,
         moduleAccess: modAccess,
         updatedAt: serverTimestamp(),
@@ -211,6 +219,17 @@ function DealerPanel({ dealer, onClose }) {
 
         {/* Body */}
         <div className="overflow-y-auto flex-1 p-5 space-y-6">
+          {/* Location */}
+          <div>
+            <h3 className="text-sm font-semibold text-[#1A1A1A] mb-3">Location</h3>
+            <input
+              value={location}
+              onChange={(e) => { setLocation(e.target.value); setSaved(false) }}
+              placeholder="e.g. Slinden Bros Location"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]"
+            />
+          </div>
+
           {/* Pricing */}
           <div>
             <h3 className="text-sm font-semibold text-[#1A1A1A] mb-3">Pricing Method</h3>
@@ -230,11 +249,11 @@ function DealerPanel({ dealer, onClose }) {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:border-[#8B6914]" />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
                 </div>
-                <p className="text-xs text-[#9A9A9A]">Dealer Price = MSRP × (1 − {marginPercent || 0}%)</p>
+                <p className="text-xs text-[#9A9A9A]">Rep Price = MSRP × (1 − {marginPercent || 0}%)</p>
               </div>
             )}
             {pricingTier !== 'margin' && (
-              <p className="text-xs text-[#9A9A9A]">Dealer will see the fixed {pricingTier.toUpperCase()} price from each catalog item. Falls back to MSRP if no {pricingTier.toUpperCase()} is set on the item.</p>
+              <p className="text-xs text-[#9A9A9A]">Rep will see the fixed {pricingTier.toUpperCase()} price from each catalog item. Falls back to MSRP if no {pricingTier.toUpperCase()} is set on the item.</p>
             )}
           </div>
 
@@ -303,6 +322,7 @@ export default function DealerManagement() {
   const [resendingId, setResendingId] = useState(null)
   const [resentId, setResentId] = useState(null)
   const [search, setSearch] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
 
   async function handleResendInvite(dealer) {
     setResendingId(dealer.id)
@@ -328,11 +348,21 @@ export default function DealerManagement() {
     }
   }
 
-  const dealers = useMemo(() =>
+  const allReps = useMemo(() =>
     users.filter((u) => u.role === 'dealer')
-      .filter((u) => !search || u.displayName?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''))
-  , [users, search])
+  , [users])
+
+  const locations = useMemo(() => {
+    const locs = [...new Set(allReps.map((r) => r.location).filter(Boolean))]
+    return locs.sort()
+  }, [allReps])
+
+  const reps = useMemo(() =>
+    allReps
+      .filter((u) => !search || u.displayName?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase()))
+      .filter((u) => !locationFilter || u.location === locationFilter)
+  , [allReps, search, locationFilter])
 
   const admins = useMemo(() => users.filter((u) => u.role === 'admin'), [users])
 
@@ -341,26 +371,37 @@ export default function DealerManagement() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#1A1A1A]">Dealer Management</h1>
-          <p className="text-sm text-[#9A9A9A] mt-0.5">{dealers.length} dealer{dealers.length !== 1 ? 's' : ''} · {admins.length} admin{admins.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-2xl font-bold text-[#1A1A1A]">Territory Rep Management</h1>
+          <p className="text-sm text-[#9A9A9A] mt-0.5">{allReps.length} territory rep{allReps.length !== 1 ? 's' : ''} · {admins.length} admin{admins.length !== 1 ? 's' : ''}</p>
         </div>
         <button onClick={() => setShowNewModal(true)}
           className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
-          + Add Dealer
+          + Add Territory Rep
         </button>
       </div>
 
-      {/* Search */}
-      <input value={search} onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search dealers by name or email…"
-        className="w-full max-w-sm border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] mb-5 bg-white" />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <input value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search reps by name or email…"
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white w-full max-w-sm" />
+        {locations.length > 0 && (
+          <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white">
+            <option value="">All Locations</option>
+            {locations.map((loc) => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+        )}
+      </div>
 
-      {/* Dealers Table */}
+      {/* Territory Reps Table */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden mb-8">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-              {['Dealer', 'Email', 'Pricing', 'Modules', 'Joined', 'Actions'].map((h) => (
+              {['Territory Rep', 'Location', 'Email', 'Pricing', 'Modules', 'Joined', 'Actions'].map((h) => (
                 <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
@@ -369,14 +410,14 @@ export default function DealerManagement() {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 7 }).map((__, j) => (
                     <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
-            ) : dealers.length === 0 ? (
-              <tr><td colSpan={6} className="py-12 text-center text-[#9A9A9A] text-sm">No dealers yet. Create the first one above.</td></tr>
-            ) : dealers.map((dealer) => {
+            ) : reps.length === 0 ? (
+              <tr><td colSpan={7} className="py-12 text-center text-[#9A9A9A] text-sm">No territory reps found.</td></tr>
+            ) : reps.map((dealer) => {
               const mods = dealer.moduleAccess ?? DEFAULT_MODULE_ACCESS
               const enabledCount = MODULE_ACCESS.filter((m) => mods[m.key] !== false).length
               return (
@@ -388,6 +429,13 @@ export default function DealerManagement() {
                       </div>
                       <span className="font-medium text-[#1A1A1A]">{dealer.displayName ?? '—'}</span>
                     </div>
+                  </td>
+                  <td className="py-3 px-4 text-[#9A9A9A] text-xs">
+                    {dealer.location ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#4A90B8]/10 text-[#4A90B8]">
+                        {dealer.location}
+                      </span>
+                    ) : '—'}
                   </td>
                   <td className="py-3 px-4 text-[#9A9A9A]">{dealer.email}</td>
                   <td className="py-3 px-4">
@@ -462,13 +510,13 @@ export default function DealerManagement() {
 
       {/* Modals */}
       {showNewModal && (
-        <NewDealerModal
+        <NewRepModal
           onClose={() => setShowNewModal(false)}
           onCreated={() => setShowNewModal(false)}
         />
       )}
       {selectedDealer && (
-        <DealerPanel
+        <RepPanel
           dealer={selectedDealer}
           onClose={() => setSelectedDealer(null)}
         />
@@ -478,7 +526,7 @@ export default function DealerManagement() {
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-bold text-[#1A1A1A] mb-1">Delete Dealer?</h3>
+            <h3 className="text-lg font-bold text-[#1A1A1A] mb-1">Remove Territory Rep?</h3>
             <p className="text-sm text-[#9A9A9A] mb-1">
               You are about to remove <span className="font-semibold text-[#1A1A1A]">{deleteTarget.displayName}</span> ({deleteTarget.email}).
             </p>
@@ -492,7 +540,7 @@ export default function DealerManagement() {
               </button>
               <button onClick={handleDelete} disabled={deleting}
                 className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#c44f4f] transition-colors disabled:opacity-50">
-                {deleting ? 'Deleting…' : 'Delete Dealer'}
+                {deleting ? 'Removing…' : 'Remove Rep'}
               </button>
             </div>
           </div>

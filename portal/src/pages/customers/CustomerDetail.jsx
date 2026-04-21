@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { useCustomer, useCustomerOrders, useCustomerServiceTickets } from '../../hooks/useCustomers'
 import { useDealers } from '../../hooks/useUsers'
@@ -35,6 +35,18 @@ export default function CustomerDetail() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await deleteDoc(doc(db, 'customers', id))
+      navigate('/customers')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const startEdit = () => { setForm({ ...customer }); setEditing(true) }
   const cancelEdit = () => { setForm(null); setEditing(false) }
@@ -128,6 +140,12 @@ export default function CustomerDetail() {
               className="border border-gray-200 text-[#9A9A9A] text-sm px-3 py-1.5 rounded-lg hover:bg-[#F4F4F5] transition-colors">
               View Original Lead
             </Link>
+          )}
+          {isAdmin && !editing && (
+            <button onClick={() => setConfirmDelete(true)}
+              className="border border-red-200 text-red-500 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+              Delete
+            </button>
           )}
         </div>
       </div>
@@ -364,6 +382,28 @@ export default function CustomerDetail() {
           </div>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-1">Delete Customer?</h2>
+            <p className="text-sm text-[#9A9A9A] mb-5">
+              This will permanently delete <span className="font-medium text-[#1A1A1A]">{customer.fullName}</span> and cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDelete(false)}
+                className="border border-gray-200 text-[#1A1A1A] text-sm font-medium px-4 py-2 rounded-lg hover:bg-[#F4F4F5] transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-60 transition-colors">
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

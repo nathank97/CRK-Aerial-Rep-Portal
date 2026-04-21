@@ -11,13 +11,14 @@ import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatte
 import { nextInvoiceNumber } from '../../utils/numbering'
 import InvoicePDF from '../../components/invoices/InvoicePDF'
 import crkLogoUrl from '../../assets/logo.png'
-import { emailService } from '../../services/emailService'
+import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, profile } = useAuth()
   const { invoice, loading } = useInvoice(id)
+  const { template: emailTemplate } = useEmailTemplate()
 
   const [saving, setSaving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
@@ -152,25 +153,21 @@ export default function InvoiceDetail() {
   }
 
   const handleSendInvoice = async () => {
-    setSaving(true)
-    try {
-      await emailService.sendInvoice({
-        invoiceNumber: invoice.invoiceNumber,
-        customerName: invoice.customerName,
-        customerEmail: invoice.customerEmail,
-        total: formatCurrency(invoice.total),
-        balanceDue: formatCurrency(invoice.balanceDue ?? invoice.total),
-        dueDate: formatDate(invoice.dueDate),
-        dealerName: invoice.dealerName,
-      })
-      await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
-      flash('Invoice sent!')
-    } catch (err) {
-      console.error(err)
-      flash('Failed to send email.', true)
-    } finally {
-      setSaving(false)
+    const vars = {
+      invoiceNumber: invoice.invoiceNumber ?? '',
+      customerName: invoice.customerName ?? '',
+      total: formatCurrency(invoice.total),
+      balanceDue: formatCurrency(invoice.balanceDue ?? invoice.total),
+      paymentTerms: invoice.paymentTerms ?? 'Net 30',
+      dueDate: formatDate(invoice.dueDate),
+      dealerName: invoice.dealerName || profile?.displayName || '',
     }
+    const subject = fillTemplate(emailTemplate.invoiceSubject, vars)
+    const body = fillTemplate(emailTemplate.invoiceBody, vars)
+    const to = invoice.customerEmail || ''
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
+    flash('Email client opened — attach the PDF and send.')
   }
 
   const handleDuplicate = async () => {

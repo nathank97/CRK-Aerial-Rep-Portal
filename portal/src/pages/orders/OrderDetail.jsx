@@ -4,6 +4,7 @@ import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../hooks/useOrders'
 import { orderDoc, invoicesCol } from '../../firebase/firestore'
+import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -18,6 +19,7 @@ export default function OrderDetail() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
   const { order, loading } = useOrder(id)
+  const { template: emailTemplate } = useEmailTemplate()
 
   const [saving, setSaving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
@@ -87,6 +89,24 @@ export default function OrderDetail() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSendToWarehouse = async () => {
+    const vars = {
+      orderNumber: order.orderNumber ?? '',
+      customerName: order.customerName ?? '',
+      customerAddress: order.customerAddress ?? '',
+      lineItems: formatOrderLineItems(order.lineItems),
+      total: (order.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      notes: order.notes || 'None',
+      dealerName: order.dealerName || profile?.displayName || '',
+    }
+    const subject = fillTemplate(emailTemplate.orderSubject, vars)
+    const body = fillTemplate(emailTemplate.orderBody, vars)
+    const to = emailTemplate.warehouseEmail || ''
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    await updateDoc(orderDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
+    flash('Email client opened — confirm and send to warehouse.')
   }
 
   const handleCreateInvoice = async () => {
@@ -213,6 +233,13 @@ export default function OrderDetail() {
               ))}
             </select>
 
+            <button
+              onClick={handleSendToWarehouse}
+              disabled={saving}
+              className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            >
+              {order.sentAt ? 'Resend to Warehouse' : 'Send to Warehouse'}
+            </button>
             {!order.linkedInvoiceId && (
               <button
                 onClick={handleCreateInvoice}

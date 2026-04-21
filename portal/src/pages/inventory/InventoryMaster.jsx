@@ -133,6 +133,8 @@ function TransferModal({ item, dealers, onClose }) {
 function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   const [dealerId, setDealerId] = useState(fixedDealerId ?? '')
   const [catalogId, setCatalogId] = useState('')
+  const [catalogSearch, setCatalogSearch] = useState('')
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [modelName, setModelName] = useState('')
   const [sku, setSku] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
@@ -143,13 +145,25 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function handleCatalogSelect(id) {
-    setCatalogId(id)
-    const item = catalog.find((c) => c.id === id)
-    if (item) {
-      setModelName(item.name)
-      setSku(item.sku ?? '')
-    }
+  const catalogMatches = useMemo(() => {
+    if (!catalogSearch.trim()) return catalog
+    const q = catalogSearch.toLowerCase()
+    return catalog.filter((c) => c.name?.toLowerCase().includes(q) || c.sku?.toLowerCase().includes(q))
+  }, [catalog, catalogSearch])
+
+  function handleCatalogSelect(item) {
+    setCatalogId(item.id)
+    setCatalogSearch(item.name + (item.sku ? ` (${item.sku})` : ''))
+    setModelName(item.name)
+    setSku(item.sku ?? '')
+    setCatalogOpen(false)
+  }
+
+  function clearCatalog() {
+    setCatalogId('')
+    setCatalogSearch('')
+    setModelName('')
+    setSku('')
   }
 
   async function handleSave() {
@@ -199,15 +213,41 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
               </select>
             </div>
           )}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">From Catalog</label>
-            <select value={catalogId} onChange={(e) => handleCatalogSelect(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]">
-              <option value="">— Custom / not in catalog —</option>
-              {catalog.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}{c.sku ? ` (${c.sku})` : ''}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                value={catalogSearch}
+                onChange={(e) => { setCatalogSearch(e.target.value); setCatalogOpen(true); if (!e.target.value) clearCatalog() }}
+                onFocus={() => setCatalogOpen(true)}
+                onBlur={() => setTimeout(() => setCatalogOpen(false), 150)}
+                placeholder="Search by name or SKU… (optional)"
+                className="w-full border border-gray-200 rounded-lg pl-3 pr-8 py-2 text-sm focus:outline-none focus:border-[#8B6914]"
+              />
+              {catalogId && (
+                <button onClick={clearCatalog} type="button"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9A9A9A] hover:text-[#1A1A1A] text-base leading-none">
+                  ×
+                </button>
+              )}
+            </div>
+            {catalogOpen && catalogMatches.length > 0 && (
+              <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto text-sm">
+                {catalogMatches.map((c) => (
+                  <li key={c.id}
+                    onMouseDown={() => handleCatalogSelect(c)}
+                    className="px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer">
+                    <span className="font-medium text-[#1A1A1A]">{c.name}</span>
+                    {c.sku && <span className="ml-2 text-xs text-[#9A9A9A]">{c.sku}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {catalogOpen && catalogSearch.trim() && catalogMatches.length === 0 && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-sm text-[#9A9A9A]">
+                No catalog items match "{catalogSearch}"
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Model Name *</label>

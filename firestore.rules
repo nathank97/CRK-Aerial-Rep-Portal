@@ -113,6 +113,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── preset quotes ────────────────────────────────────────────────────────
+    // All authenticated users can read (dealers load them when making quotes);
+    // only admins can create, update, or delete.
+    match /presetQuotes/{presetId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // ── feedback ─────────────────────────────────────────────────────────────
     // Any authenticated user can submit and read their own feedback;
     // admins can read and write all feedback.

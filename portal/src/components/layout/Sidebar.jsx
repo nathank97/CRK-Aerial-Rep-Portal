@@ -23,6 +23,7 @@ const ADMIN_NAV = [
 const ADMIN_ONLY_NAV = [
   { to: '/admin/dealers', label: 'Dealers', icon: '🏢' },
   { to: '/admin/catalog', label: 'Catalog', icon: '📂' },
+  { to: '/admin/preset-quotes', label: 'Preset Quotes', icon: '📑' },
   { to: '/admin/tax-rates', label: 'Tax Rates', icon: '💲' },
   { to: '/admin/reps', label: 'Rep Manager', icon: '🎯' },
   { to: '/admin/territories', label: 'Territories', icon: '🗾' },

@@ -17,6 +17,7 @@ export const repsCol = collection(db, 'reps')
 export const territoriesCol = collection(db, 'territories')
 export const globalChatCol = collection(db, 'globalChat')
 export const feedbackCol = collection(db, 'feedback')
+export const presetQuotesCol = collection(db, 'presetQuotes')
 
 // Subcollection helpers
 export const leadActivityCol = (leadId) =>

@@ -52,6 +52,7 @@ import FeedbackAdmin from './pages/admin/FeedbackAdmin'
 import DealerManagement from './pages/admin/DealerManagement'
 import Catalog from './pages/admin/Catalog'
 import TaxRates from './pages/admin/TaxRates'
+import PresetQuotes from './pages/admin/PresetQuotes'
 import RepList from './pages/admin/reps/RepList'
 import RepNew from './pages/admin/reps/RepNew'
 import RepDetail from './pages/admin/reps/RepDetail'
@@ -160,6 +161,10 @@ export const router = createBrowserRouter([
       { path: '/profile', element: <ProfilePage /> },
 
       // Admin routes
+      {
+        path: '/admin/preset-quotes',
+        element: <RequireAdmin><PresetQuotes /></RequireAdmin>,
+      },
       {
         path: '/admin/feedback',
         element: <RequireAdmin><FeedbackAdmin /></RequireAdmin>,

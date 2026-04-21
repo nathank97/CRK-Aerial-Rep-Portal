@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { useCustomers } from '../../hooks/useCustomers'
+import { usePresetQuotes } from '../../hooks/usePresetQuotes'
 import { quotesCol } from '../../firebase/firestore'
 import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
 import { formatCurrency } from '../../utils/formatters'
@@ -26,6 +27,7 @@ export default function QuoteNew() {
   const [taxExempt, setTaxExempt] = useState(false)
   const [lineItems, setLineItems] = useState([])
   const [logoChoice, setLogoChoice] = useState('crk')
+  const { presets } = usePresetQuotes()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -143,7 +145,31 @@ export default function QuoteNew() {
 
         {/* Line items */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-[#111111] mb-4">Line Items</h2>
+          <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+            <h2 className="text-sm font-semibold text-[#111111]">Line Items</h2>
+            {presets.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-[#9A9A9A] font-medium whitespace-nowrap">Load preset:</label>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const preset = presets.find((p) => p.id === e.target.value)
+                    if (!preset) return
+                    setLineItems(preset.lineItems ?? [])
+                    if (preset.notes) setNotes(preset.notes)
+                    if (preset.terms) setTerms(preset.terms)
+                    e.target.value = ''
+                  }}
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white"
+                >
+                  <option value="">— Select a preset —</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
           <LineItemBuilder items={lineItems} onChange={setLineItems} />
 
           {/* Totals */}

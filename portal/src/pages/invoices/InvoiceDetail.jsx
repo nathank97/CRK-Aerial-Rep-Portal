@@ -165,7 +165,11 @@ export default function InvoiceDetail() {
     const subject = fillTemplate(emailTemplate.invoiceSubject, vars)
     const body = fillTemplate(emailTemplate.invoiceBody, vars)
     const to = invoice.customerEmail || ''
-    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    const a = document.createElement('a')
+    a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
     flash('Email client opened — attach the PDF and send.')
   }

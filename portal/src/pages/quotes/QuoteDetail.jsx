@@ -88,7 +88,11 @@ export default function QuoteDetail() {
     const subject = fillTemplate(emailTemplate.quoteSubject, vars)
     const body = fillTemplate(emailTemplate.quoteBody, vars)
     const to = quote.customerEmail || ''
-    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    const a = document.createElement('a')
+    a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
     flash('Email client opened — attach the PDF and send.')
   }

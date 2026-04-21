@@ -104,7 +104,11 @@ export default function OrderDetail() {
     const subject = fillTemplate(emailTemplate.orderSubject, vars)
     const body = fillTemplate(emailTemplate.orderBody, vars)
     const to = emailTemplate.warehouseEmail || ''
-    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    const a = document.createElement('a')
+    a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     await updateDoc(orderDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
     flash('Email client opened — confirm and send to warehouse.')
   }

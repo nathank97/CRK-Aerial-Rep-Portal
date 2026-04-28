@@ -10,6 +10,34 @@ import { SkeletonRow } from '../../components/common/SkeletonCard'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
 
+function SortTh({ label, sortKey, sort, onSort, className = '' }) {
+  const active = sort.key === sortKey
+  return (
+    <th onClick={() => onSort(sortKey)}
+      className={`text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider cursor-pointer select-none hover:text-[#1A1A1A] transition-colors ${className}`}>
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className={`text-[10px] leading-none ${active ? 'text-[#8B6914]' : 'opacity-25'}`}>
+          {active && sort.dir === 'desc' ? '↓' : '↑'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
+function applySort(arr, key, dir, getVal) {
+  if (!key) return arr
+  return [...arr].sort((a, b) => {
+    let av = getVal ? getVal(a, key) : a[key]
+    let bv = getVal ? getVal(b, key) : b[key]
+    if (av == null && bv == null) return 0
+    if (av == null) return dir === 'asc' ? 1 : -1
+    if (bv == null) return dir === 'asc' ? -1 : 1
+    if (typeof av === 'string') return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    return dir === 'asc' ? av - bv : bv - av
+  })
+}
+
 const conditionColor = {
   New: 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
   Demo: 'bg-[#E6A817]/15 text-[#E6A817]',
@@ -465,6 +493,12 @@ export default function InventoryMaster() {
   const [editItem, setEditItem] = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [summarySort, setSummarySort] = useState({ key: '', dir: 'asc' })
+  const [logSort, setLogSort] = useState({ key: '', dir: 'asc' })
+  const [locationSort, setLocationSort] = useState({ key: '', dir: 'asc' })
+
+  const toggleSort = (setter) => (key) =>
+    setter((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
 
   async function handleDelete() {
     if (!deleteItem) return
@@ -545,6 +579,23 @@ export default function InventoryMaster() {
     })
     return groups
   }, [filtered, dealerMap])
+
+  const sortedSummary = useMemo(() => applySort(summaryGroups, summarySort.key, summarySort.dir, (g, k) => {
+    if (k === 'totalAvail') return g.totalOnHand - g.totalReserved
+    return g[k]
+  }), [summaryGroups, summarySort])
+
+  const sortedLog = useMemo(() => applySort(filtered, logSort.key, logSort.dir, (item, k) => {
+    if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
+    if (k === 'locationName') return dealerMap[item.dealerId] || ''
+    if (k === 'createdAt') return item.createdAt?.toDate?.()?.getTime() ?? item.updatedAt?.toDate?.()?.getTime() ?? 0
+    return item[k]
+  }), [filtered, logSort, dealerMap])
+
+  const sortLocItems = (locItems) => applySort(locItems, locationSort.key, locationSort.dir, (item, k) => {
+    if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
+    return item[k]
+  })
 
   // KPIs (across all items, not just filtered)
   const totalUnits = items.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
@@ -666,9 +717,15 @@ export default function InventoryMaster() {
           <table className="w-full text-sm hidden md:table">
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                {['Model', 'Condition', 'MSRP / Unit', 'Rep Price / Unit', 'Total On Hand', 'Total Reserved', 'Total Available', 'Locations'].map((h) => (
-                  <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
-                ))}
+                {[
+                  ['Model', 'modelName'], ['Condition', 'condition'],
+                  ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
+                  ['Total On Hand', 'totalOnHand'], ['Total Reserved', 'totalReserved'],
+                  ['Total Available', 'totalAvail'], ['Locations', ''],
+                ].map(([label, key]) => key
+                  ? <SortTh key={label} label={label} sortKey={key} sort={summarySort} onSort={toggleSort(setSummarySort)} />
+                  : <th key={label} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{label}</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -676,7 +733,7 @@ export default function InventoryMaster() {
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
               ) : summaryGroups.length === 0 ? (
                 <tr><td colSpan={8} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
-              ) : summaryGroups.map((g, i) => {
+              ) : sortedSummary.map((g, i) => {
                 const totalAvail = g.totalOnHand - g.totalReserved
                 return (
                   <tr key={i} className="hover:bg-[#FAFAFA] transition-colors">
@@ -718,7 +775,7 @@ export default function InventoryMaster() {
               ))
             ) : summaryGroups.length === 0 ? (
               <div className="text-center py-12 text-[#9A9A9A] text-sm">No inventory found.</div>
-            ) : summaryGroups.map((g, i) => {
+            ) : sortedSummary.map((g, i) => {
               const totalAvail = g.totalOnHand - g.totalReserved
               return (
                 <div key={i} className="p-4">
@@ -789,13 +846,19 @@ export default function InventoryMaster() {
                 <table className="w-full text-sm hidden md:table">
                   <thead>
                     <tr className="border-b border-gray-50">
-                      {['Model', 'SKU / Serial', 'Condition', 'MSRP / Unit', 'Rep Price / Unit', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['CRK Cost / Unit', ''] : [])].map((h) => (
-                        <th key={h} className="text-left py-2 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
-                      ))}
+                      {[
+                        ['Model', 'modelName'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
+                        ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
+                        ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'], ['Available', 'available'],
+                        ...(isAdmin ? [['CRK Cost / Unit', 'costPrice'], ['', '']] : []),
+                      ].map(([label, key]) => key
+                        ? <SortTh key={label} label={label} sortKey={key} sort={locationSort} onSort={toggleSort(setLocationSort)} className="py-2" />
+                        : <th key={`empty-${label}`} className="py-2 px-4" />
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {locItems.map((item) => {
+                    {sortLocItems(locItems).map((item) => {
                       const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                       return (
                         <tr key={item.id} className="hover:bg-[#FAFAFA]">
@@ -826,7 +889,7 @@ export default function InventoryMaster() {
                   </tbody>
                 </table>
                 <div className="md:hidden divide-y divide-gray-50">
-                  {locItems.map((item) => {
+                  {sortLocItems(locItems).map((item) => {
                     const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                     return (
                       <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-3">
@@ -859,9 +922,16 @@ export default function InventoryMaster() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP / Unit', 'Rep Price / Unit', ...(isAdmin ? ['CRK Cost / Unit'] : []), 'Added', ''].map((h) => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
-                  ))}
+                  {[
+                    ['Model', 'modelName'], ['Location', 'locationName'], ['SKU / Serial', 'sku'],
+                    ['Condition', 'condition'], ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'],
+                    ['Available', 'available'], ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
+                    ...(isAdmin ? [['CRK Cost / Unit', 'costPrice']] : []),
+                    ['Added', 'createdAt'], ['', ''],
+                  ].map(([label, key]) => key
+                    ? <SortTh key={label} label={label} sortKey={key} sort={logSort} onSort={toggleSort(setLogSort)} />
+                    : <th key="actions" className="py-3 px-4" />
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -869,7 +939,7 @@ export default function InventoryMaster() {
                   Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 10 : 9} />)
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={isAdmin ? 12 : 11} className="py-12 text-center text-[#9A9A9A] text-sm">No entries found.</td></tr>
-                ) : filtered.map((item) => {
+                ) : sortedLog.map((item) => {
                   const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                   return (
                     <tr key={item.id} className="hover:bg-[#FAFAFA] transition-colors">
@@ -920,7 +990,7 @@ export default function InventoryMaster() {
               ))
             ) : filtered.length === 0 ? (
               <div className="text-center py-12 text-[#9A9A9A] text-sm">No entries found.</div>
-            ) : filtered.map((item) => {
+            ) : sortedLog.map((item) => {
               const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
               return (
                 <div key={item.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">

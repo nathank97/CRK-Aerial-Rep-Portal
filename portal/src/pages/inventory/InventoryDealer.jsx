@@ -11,6 +11,21 @@ import { SkeletonRow } from '../../components/common/SkeletonCard'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
 
+function SortTh({ label, sortKey, sort, onSort }) {
+  const active = sort.key === sortKey
+  return (
+    <th onClick={() => onSort(sortKey)}
+      className="text-left px-4 py-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-[#1A1A1A] transition-colors">
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className={`text-[10px] leading-none ${active ? 'text-[#8B6914]' : 'opacity-25'}`}>
+          {active && sort.dir === 'desc' ? '↓' : '↑'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
 const conditionColor = {
   New: 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
   Demo: 'bg-[#E6A817]/15 text-[#E6A817]',
@@ -146,6 +161,33 @@ export default function InventoryDealer() {
   const [filterAvail, setFilterAvail] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [adjustItem, setAdjustItem] = useState(null)
+  const [sort, setSort] = useState({ key: '', dir: 'asc' })
+
+  const toggleSort = (key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+
+  const sortedFiltered = useMemo(() => {
+    if (!sort.key) return filtered
+    return [...filtered].sort((a, b) => {
+      let av, bv
+      if (sort.key === 'available') {
+        av = (a.quantityAvailable ?? (a.quantityOnHand ?? 0) - (a.quantityReserved ?? 0))
+        bv = (b.quantityAvailable ?? (b.quantityOnHand ?? 0) - (b.quantityReserved ?? 0))
+      } else if (sort.key === 'repPrice') {
+        av = getDealerPrice(a, profile)
+        bv = getDealerPrice(b, profile)
+      } else if (sort.key === 'lastUpdated') {
+        av = a.lastUpdated?.toDate?.()?.getTime() ?? 0
+        bv = b.lastUpdated?.toDate?.()?.getTime() ?? 0
+      } else {
+        av = a[sort.key]; bv = b[sort.key]
+      }
+      if (av == null && bv == null) return 0
+      if (av == null) return sort.dir === 'asc' ? 1 : -1
+      if (bv == null) return sort.dir === 'asc' ? -1 : 1
+      if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      return sort.dir === 'asc' ? av - bv : bv - av
+    })
+  }, [filtered, sort, profile])
 
   const filtered = useMemo(() => {
     let r = items
@@ -267,9 +309,14 @@ export default function InventoryDealer() {
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-[#F4F4F5]">
             <tr>
-              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP / Unit', 'Rep Price / Unit', 'Last Updated', ''].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
-              ))}
+              {[
+                ['Model', 'modelName'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
+                ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'], ['Available', 'available'],
+                ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'], ['Last Updated', 'lastUpdated'], ['', ''],
+              ].map(([label, key]) => key
+                ? <SortTh key={label} label={label} sortKey={key} sort={sort} onSort={toggleSort} />
+                : <th key="actions" className="px-4 py-3" />
+              )}
             </tr>
           </thead>
           <tbody>
@@ -279,7 +326,7 @@ export default function InventoryDealer() {
                 ? <tr><td colSpan={10} className="text-center py-12 text-[#9A9A9A] text-sm">
                     No inventory yet. Click "Add Stock" to get started.
                   </td></tr>
-                : filtered.map((item) => {
+                : sortedFiltered.map((item) => {
                     const avail = item.quantityAvailable ?? Math.max(0, (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0))
                     return (
                       <tr key={item.id} className="border-b border-gray-50 hover:bg-[#F4F4F5] transition-colors">
@@ -323,7 +370,7 @@ export default function InventoryDealer() {
             ))
           : filtered.length === 0
             ? <div className="text-center py-12 text-[#9A9A9A] text-sm">No inventory found.</div>
-            : filtered.map((item) => {
+            : sortedFiltered.map((item) => {
                 const avail = item.quantityAvailable ?? Math.max(0, (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0))
                 return (
                   <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">

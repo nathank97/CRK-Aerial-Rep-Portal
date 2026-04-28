@@ -3,6 +3,7 @@ import { onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from '
 import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
+import { getDealerPrice } from '../../utils/pricing'
 import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -80,7 +81,6 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
     quantityOnHand: item.quantityOnHand ?? 0,
     quantityReserved: item.quantityReserved ?? 0,
     msrp: item.msrp ?? '',
-    dealerPrice: item.dealerPrice ?? '',
     costPrice: item.costPrice ?? '',
     lowStockThreshold: item.lowStockThreshold ?? '',
     notes: item.notes ?? '',
@@ -104,7 +104,6 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
         quantityReserved: parseInt(form.quantityReserved) || 0,
         quantityAvailable: Math.max(0, (parseInt(form.quantityOnHand) || 0) - (parseInt(form.quantityReserved) || 0)),
         msrp: form.msrp !== '' ? parseFloat(form.msrp) : null,
-        dealerPrice: form.dealerPrice !== '' ? parseFloat(form.dealerPrice) : null,
         costPrice: form.costPrice !== '' ? parseFloat(form.costPrice) : null,
         lowStockThreshold: form.lowStockThreshold !== '' ? parseInt(form.lowStockThreshold) : null,
         notes: form.notes.trim() || null,
@@ -185,7 +184,11 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
             </div>
             <div>
               <label className={lbl}>Rep Price / Unit</label>
-              <input type="number" min="0" step="0.01" value={form.dealerPrice} onChange={set('dealerPrice')} placeholder="0.00" className={cls} />
+              <div className={`${cls} bg-[#F4F4F5] text-[#4CAF7D] font-medium`}>
+                {form.msrp !== '' && dealers.find((d) => d.id === form.dealerId)
+                  ? formatCurrency(getDealerPrice({ msrp: parseFloat(form.msrp) }, dealers.find((d) => d.id === form.dealerId)))
+                  : <span className="text-[#9A9A9A] font-normal">Auto-calculated from rep's margin</span>}
+              </div>
             </div>
             {isAdmin && (
               <div>
@@ -309,8 +312,12 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   const [quantity, setQuantity] = useState(1)
   const [costPrice, setCostPrice] = useState('')
   const [msrp, setMsrp] = useState('')
-  const [dealerPrice, setDealerPrice] = useState('')
   const [lowStockThreshold, setLowStockThreshold] = useState('')
+
+  const selectedDealer = dealers.find((d) => d.id === dealerId)
+  const computedRepPrice = msrp !== '' && selectedDealer
+    ? getDealerPrice({ msrp: parseFloat(msrp) }, selectedDealer)
+    : null
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -349,7 +356,6 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
         quantityReserved: 0,
         quantityAvailable: quantity,
         msrp: msrp !== '' ? parseFloat(msrp) : null,
-        dealerPrice: dealerPrice !== '' ? parseFloat(dealerPrice) : null,
         costPrice: costPrice !== '' ? parseFloat(costPrice) : null,
         lowStockThreshold: lowStockThreshold !== '' ? parseInt(lowStockThreshold) : null,
         createdAt: serverTimestamp(),
@@ -451,7 +457,9 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Rep Price / Unit</label>
-              <input type="number" min="0" step="0.01" value={dealerPrice} onChange={(e) => setDealerPrice(e.target.value)} placeholder="0.00" className={cls} />
+              <div className={`${cls} bg-[#F4F4F5] text-[#4CAF7D] font-medium`}>
+                {computedRepPrice != null ? formatCurrency(computedRepPrice) : <span className="text-[#9A9A9A]">Select location + enter MSRP</span>}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">CRK Cost / Unit</label>
@@ -518,6 +526,13 @@ export default function InventoryMaster() {
     return m
   }, [dealers])
 
+  // Maps dealerId → full dealer profile (for margin/tier-based rep price calculation)
+  const dealerProfileMap = useMemo(() => {
+    const m = {}
+    dealers.forEach((d) => { m[d.id] = d })
+    return m
+  }, [dealers])
+
   // Unique location names for filter dropdown
   const locationOptions = useMemo(() => {
     const locs = [...new Set(dealers.map((d) => d.location || d.displayName || d.email).filter(Boolean))]
@@ -553,21 +568,23 @@ export default function InventoryMaster() {
           totalReserved: 0,
           locations: [],
           msrp: item.msrp ?? null,
-          repPrice: item.dealerPrice ?? null,
+          repPrice: item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null,
         }
       }
       const qty = item.quantityOnHand ?? 0
       groups[key].totalOnHand += qty
       groups[key].totalReserved += item.quantityReserved ?? 0
       if (groups[key].msrp == null && item.msrp != null) groups[key].msrp = item.msrp
-      if (groups[key].repPrice == null && item.dealerPrice != null) groups[key].repPrice = item.dealerPrice
+      if (groups[key].repPrice == null && item.msrp != null) {
+        groups[key].repPrice = getDealerPrice(item, dealerProfileMap[item.dealerId])
+      }
       const locName = dealerMap[item.dealerId] || 'Unassigned'
       const existing = groups[key].locations.find((l) => l.name === locName)
       if (existing) existing.qty += qty
       else groups[key].locations.push({ name: locName, qty })
     })
     return Object.values(groups).sort((a, b) => a.modelName.localeCompare(b.modelName))
-  }, [filtered, dealerMap])
+  }, [filtered, dealerMap, dealerProfileMap])
 
   // By location grouping — keyed by location name so reps at the same location are combined
   const byLocation = useMemo(() => {
@@ -588,12 +605,14 @@ export default function InventoryMaster() {
   const sortedLog = useMemo(() => applySort(filtered, logSort.key, logSort.dir, (item, k) => {
     if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
     if (k === 'locationName') return dealerMap[item.dealerId] || ''
+    if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
     if (k === 'createdAt') return item.createdAt?.toDate?.()?.getTime() ?? item.updatedAt?.toDate?.()?.getTime() ?? 0
     return item[k]
-  }), [filtered, logSort, dealerMap])
+  }), [filtered, logSort, dealerMap, dealerProfileMap])
 
   const sortLocItems = (locItems) => applySort(locItems, locationSort.key, locationSort.dir, (item, k) => {
     if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
+    if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
     return item[k]
   })
 
@@ -873,7 +892,7 @@ export default function InventoryMaster() {
                             </span>
                           </td>
                           <td className="py-2 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
-                          <td className="py-2 px-4 font-medium text-[#4CAF7D]">{item.dealerPrice != null ? formatCurrency(item.dealerPrice) : '—'}</td>
+                          <td className="py-2 px-4 font-medium text-[#4CAF7D]">{item.msrp != null ? formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId])) : '—'}</td>
                           <td className="py-2 px-4 text-center font-semibold">{item.quantityOnHand ?? 0}</td>
                           <td className="py-2 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                           <td className="py-2 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
@@ -898,7 +917,7 @@ export default function InventoryMaster() {
                           <p className="text-xs text-[#9A9A9A]">{item.sku || 'No SKU'} · {item.condition}</p>
                           <div className="flex gap-3 text-xs mt-0.5">
                             {item.msrp != null && <span className="text-[#9A9A9A]">MSRP: {formatCurrency(item.msrp)}</span>}
-                            {item.dealerPrice != null && <span className="text-[#4CAF7D] font-medium">Rep: {formatCurrency(item.dealerPrice)}</span>}
+                            {item.msrp != null && <span className="text-[#4CAF7D] font-medium">Rep: {formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId]))}</span>}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -958,7 +977,7 @@ export default function InventoryMaster() {
                       <td className="py-3 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                       <td className="py-3 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
                       <td className="py-3 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{item.dealerPrice != null ? formatCurrency(item.dealerPrice) : '—'}</td>
+                      <td className="py-3 px-4 text-[#4CAF7D] font-medium">{item.msrp != null ? formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId])) : '—'}</td>
                       {isAdmin && <td className="py-3 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
                       <td className="py-3 px-4 text-xs text-[#9A9A9A] whitespace-nowrap">{formatDate(item.createdAt ?? item.updatedAt)}</td>
                       <td className="py-3 px-4">
@@ -1006,7 +1025,7 @@ export default function InventoryMaster() {
                     {item.serialNumber && <span>S/N: {item.serialNumber}</span>}
                     {item.condition && <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>{item.condition}</span>}
                     {item.msrp != null && <span>MSRP: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.msrp)}</span></span>}
-                    {item.dealerPrice != null && <span>Dealer: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.dealerPrice)}</span></span>}
+                    {item.msrp != null && <span>Rep: <span className="font-medium text-[#4CAF7D]">{formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId]))}</span></span>}
                     {isAdmin && item.costPrice != null && <span>CRK Cost: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.costPrice)}</span></span>}
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center mb-3">

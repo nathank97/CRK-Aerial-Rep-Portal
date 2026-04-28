@@ -3,6 +3,7 @@ import { addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useInventory } from '../../hooks/useInventory'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
+import { getDealerPrice } from '../../utils/pricing'
 import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -266,7 +267,7 @@ export default function InventoryDealer() {
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-[#F4F4F5]">
             <tr>
-              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Your Price', 'Last Updated', ''].map((h) => (
+              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Rep Price', 'Last Updated', ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -297,7 +298,7 @@ export default function InventoryDealer() {
                         <td className="px-4 py-3 text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                         <td className="px-4 py-3"><AvailBadge available={avail} threshold={item.lowStockThreshold} /></td>
                         <td className="px-4 py-3 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
-                        <td className="px-4 py-3 text-[#4CAF7D] font-medium">{item.dealerPrice != null ? formatCurrency(item.dealerPrice) : '—'}</td>
+                        <td className="px-4 py-3 text-[#4CAF7D] font-medium">{item.msrp != null ? formatCurrency(getDealerPrice(item, profile)) : '—'}</td>
                         <td className="px-4 py-3 text-[#9A9A9A] whitespace-nowrap">{formatDate(item.lastUpdated)}</td>
                         <td className="px-4 py-3">
                           <button onClick={() => setAdjustItem(item)}
@@ -340,7 +341,7 @@ export default function InventoryDealer() {
                       <span>Reserved: <b className="text-[#1A1A1A]">{item.quantityReserved ?? 0}</b></span>
                       <span>Available: <b><AvailBadge available={avail} threshold={item.lowStockThreshold} /></b></span>
                       {item.msrp != null && <span>MSRP: {formatCurrency(item.msrp)}</span>}
-                      {item.dealerPrice != null && <span className="text-[#4CAF7D] font-medium">Your Price: {formatCurrency(item.dealerPrice)}</span>}
+                      {item.msrp != null && <span className="text-[#4CAF7D] font-medium">Rep Price: {formatCurrency(getDealerPrice(item, profile))}</span>}
                     </div>
                     <button onClick={() => setAdjustItem(item)}
                       className="mt-3 text-xs text-[#8B6914] hover:underline font-medium">Adjust Stock</button>

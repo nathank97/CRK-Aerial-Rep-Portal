@@ -518,11 +518,15 @@ export default function InventoryMaster() {
           totalOnHand: 0,
           totalReserved: 0,
           locations: [],
+          msrp: item.msrp ?? null,
+          repPrice: item.dealerPrice ?? null,
         }
       }
       const qty = item.quantityOnHand ?? 0
       groups[key].totalOnHand += qty
       groups[key].totalReserved += item.quantityReserved ?? 0
+      if (groups[key].msrp == null && item.msrp != null) groups[key].msrp = item.msrp
+      if (groups[key].repPrice == null && item.dealerPrice != null) groups[key].repPrice = item.dealerPrice
       const locName = dealerMap[item.dealerId] || 'Unassigned'
       const existing = groups[key].locations.find((l) => l.name === locName)
       if (existing) existing.qty += qty
@@ -662,16 +666,16 @@ export default function InventoryMaster() {
           <table className="w-full text-sm hidden md:table">
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                {['Model', 'Condition', 'Total On Hand', 'Total Reserved', 'Total Available', 'Locations'].map((h) => (
+                {['Model', 'Condition', 'MSRP', 'Rep Price', 'Total On Hand', 'Total Reserved', 'Total Available', 'Locations'].map((h) => (
                   <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={6} />)
+                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
               ) : summaryGroups.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
+                <tr><td colSpan={8} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
               ) : summaryGroups.map((g, i) => {
                 const totalAvail = g.totalOnHand - g.totalReserved
                 return (
@@ -682,6 +686,8 @@ export default function InventoryMaster() {
                         ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>
                         : '—'}
                     </td>
+                    <td className="py-3 px-4 text-[#9A9A9A]">{g.msrp != null ? formatCurrency(g.msrp) : '—'}</td>
+                    <td className="py-3 px-4 font-medium text-[#4CAF7D]">{g.repPrice != null ? formatCurrency(g.repPrice) : '—'}</td>
                     <td className="py-3 px-4 text-center font-semibold text-[#1A1A1A]">{g.totalOnHand}</td>
                     <td className="py-3 px-4 text-center text-[#9A9A9A]">{g.totalReserved}</td>
                     <td className="py-3 px-4 text-center">
@@ -720,6 +726,12 @@ export default function InventoryMaster() {
                     <p className="font-semibold text-[#1A1A1A]">{g.modelName}</p>
                     {g.condition && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>}
                   </div>
+                  {(g.msrp != null || g.repPrice != null) && (
+                    <div className="flex gap-4 text-xs mb-2">
+                      {g.msrp != null && <span className="text-[#9A9A9A]">MSRP: <span className="font-medium text-[#1A1A1A]">{formatCurrency(g.msrp)}</span></span>}
+                      {g.repPrice != null && <span className="text-[#9A9A9A]">Rep Price: <span className="font-medium text-[#4CAF7D]">{formatCurrency(g.repPrice)}</span></span>}
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-2 text-center mb-2">
                     <div className="bg-[#F4F4F5] rounded-lg py-1.5">
                       <p className="text-xs text-[#9A9A9A]">On Hand</p>
@@ -777,7 +789,7 @@ export default function InventoryMaster() {
                 <table className="w-full text-sm hidden md:table">
                   <thead>
                     <tr className="border-b border-gray-50">
-                      {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['Cost', ''] : [])].map((h) => (
+                      {['Model', 'SKU / Serial', 'Condition', 'MSRP', 'Rep Price', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['CRK Cost', ''] : [])].map((h) => (
                         <th key={h} className="text-left py-2 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -797,6 +809,8 @@ export default function InventoryMaster() {
                               {item.condition ?? '—'}
                             </span>
                           </td>
+                          <td className="py-2 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
+                          <td className="py-2 px-4 font-medium text-[#4CAF7D]">{item.dealerPrice != null ? formatCurrency(item.dealerPrice) : '—'}</td>
                           <td className="py-2 px-4 text-center font-semibold">{item.quantityOnHand ?? 0}</td>
                           <td className="py-2 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                           <td className="py-2 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
@@ -819,6 +833,10 @@ export default function InventoryMaster() {
                         <div className="min-w-0">
                           <p className="font-medium text-[#1A1A1A] truncate">{item.modelName}</p>
                           <p className="text-xs text-[#9A9A9A]">{item.sku || 'No SKU'} · {item.condition}</p>
+                          <div className="flex gap-3 text-xs mt-0.5">
+                            {item.msrp != null && <span className="text-[#9A9A9A]">MSRP: {formatCurrency(item.msrp)}</span>}
+                            {item.dealerPrice != null && <span className="text-[#4CAF7D] font-medium">Rep: {formatCurrency(item.dealerPrice)}</span>}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-sm font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</span>
@@ -841,7 +859,7 @@ export default function InventoryMaster() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Dealer Price', ...(isAdmin ? ['CRK Cost'] : []), 'Added', ''].map((h) => (
+                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Rep Price', ...(isAdmin ? ['CRK Cost'] : []), 'Added', ''].map((h) => (
                     <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>

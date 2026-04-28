@@ -152,16 +152,16 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className={lbl}>MSRP</label>
+              <label className={lbl}>MSRP / Unit</label>
               <input type="number" min="0" step="0.01" value={form.msrp} onChange={set('msrp')} placeholder="0.00" className={cls} />
             </div>
             <div>
-              <label className={lbl}>Dealer Price</label>
+              <label className={lbl}>Rep Price / Unit</label>
               <input type="number" min="0" step="0.01" value={form.dealerPrice} onChange={set('dealerPrice')} placeholder="0.00" className={cls} />
             </div>
             {isAdmin && (
               <div>
-                <label className={lbl}>CRK Cost</label>
+                <label className={lbl}>CRK Cost / Unit</label>
                 <input type="number" min="0" step="0.01" value={form.costPrice} onChange={set('costPrice')} placeholder="0.00" className={cls} />
               </div>
             )}
@@ -418,15 +418,15 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">MSRP</label>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">MSRP / Unit</label>
               <input type="number" min="0" step="0.01" value={msrp} onChange={(e) => setMsrp(e.target.value)} placeholder="0.00" className={cls} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Dealer Price</label>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Rep Price / Unit</label>
               <input type="number" min="0" step="0.01" value={dealerPrice} onChange={(e) => setDealerPrice(e.target.value)} placeholder="0.00" className={cls} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">CRK Cost</label>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">CRK Cost / Unit</label>
               <input type="number" min="0" step="0.01" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="0.00" className={cls} />
             </div>
           </div>
@@ -666,7 +666,7 @@ export default function InventoryMaster() {
           <table className="w-full text-sm hidden md:table">
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                {['Model', 'Condition', 'MSRP', 'Rep Price', 'Total On Hand', 'Total Reserved', 'Total Available', 'Locations'].map((h) => (
+                {['Model', 'Condition', 'MSRP / Unit', 'Rep Price / Unit', 'Total On Hand', 'Total Reserved', 'Total Available', 'Locations'].map((h) => (
                   <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -728,8 +728,8 @@ export default function InventoryMaster() {
                   </div>
                   {(g.msrp != null || g.repPrice != null) && (
                     <div className="flex gap-4 text-xs mb-2">
-                      {g.msrp != null && <span className="text-[#9A9A9A]">MSRP: <span className="font-medium text-[#1A1A1A]">{formatCurrency(g.msrp)}</span></span>}
-                      {g.repPrice != null && <span className="text-[#9A9A9A]">Rep Price: <span className="font-medium text-[#4CAF7D]">{formatCurrency(g.repPrice)}</span></span>}
+                      {g.msrp != null && <span className="text-[#9A9A9A]">MSRP/unit: <span className="font-medium text-[#1A1A1A]">{formatCurrency(g.msrp)}</span></span>}
+                      {g.repPrice != null && <span className="text-[#9A9A9A]">Rep Price/unit: <span className="font-medium text-[#4CAF7D]">{formatCurrency(g.repPrice)}</span></span>}
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-2 text-center mb-2">
@@ -789,7 +789,7 @@ export default function InventoryMaster() {
                 <table className="w-full text-sm hidden md:table">
                   <thead>
                     <tr className="border-b border-gray-50">
-                      {['Model', 'SKU / Serial', 'Condition', 'MSRP', 'Rep Price', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['CRK Cost', ''] : [])].map((h) => (
+                      {['Model', 'SKU / Serial', 'Condition', 'MSRP / Unit', 'Rep Price / Unit', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['CRK Cost / Unit', ''] : [])].map((h) => (
                         <th key={h} className="text-left py-2 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -859,7 +859,7 @@ export default function InventoryMaster() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Rep Price', ...(isAdmin ? ['CRK Cost'] : []), 'Added', ''].map((h) => (
+                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP / Unit', 'Rep Price / Unit', ...(isAdmin ? ['CRK Cost / Unit'] : []), 'Added', ''].map((h) => (
                     <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>

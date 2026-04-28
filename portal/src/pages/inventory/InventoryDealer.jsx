@@ -267,7 +267,7 @@ export default function InventoryDealer() {
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-[#F4F4F5]">
             <tr>
-              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Rep Price', 'Last Updated', ''].map((h) => (
+              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP / Unit', 'Rep Price / Unit', 'Last Updated', ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -340,8 +340,8 @@ export default function InventoryDealer() {
                       <span>On Hand: <b className="text-[#1A1A1A]">{item.quantityOnHand ?? 0}</b></span>
                       <span>Reserved: <b className="text-[#1A1A1A]">{item.quantityReserved ?? 0}</b></span>
                       <span>Available: <b><AvailBadge available={avail} threshold={item.lowStockThreshold} /></b></span>
-                      {item.msrp != null && <span>MSRP: {formatCurrency(item.msrp)}</span>}
-                      {item.msrp != null && <span className="text-[#4CAF7D] font-medium">Rep Price: {formatCurrency(getDealerPrice(item, profile))}</span>}
+                      {item.msrp != null && <span>MSRP/unit: {formatCurrency(item.msrp)}</span>}
+                      {item.msrp != null && <span className="text-[#4CAF7D] font-medium">Rep Price/unit: {formatCurrency(getDealerPrice(item, profile))}</span>}
                     </div>
                     <button onClick={() => setAdjustItem(item)}
                       className="mt-3 text-xs text-[#8B6914] hover:underline font-medium">Adjust Stock</button>

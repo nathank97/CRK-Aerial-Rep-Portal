@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { deleteDoc, doc } from 'firebase/firestore'
 import { useInvoices, computePaymentStatus } from '../../hooks/useInvoices'
+import { useAuth } from '../../context/AuthContext'
+import { db } from '../../firebase/config'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -9,9 +12,12 @@ const STATUSES = ['All', 'Unpaid', 'Partial', 'Paid', 'Overdue']
 
 export default function InvoiceList() {
   const { invoices, loading } = useInvoices()
+  const { isAdmin } = useAuth()
   const navigate = useNavigate()
   const [statusFilter, setStatusFilter] = useState('All')
   const [search, setSearch] = useState('')
+  const [deleteItem, setDeleteItem] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const enriched = invoices.map((inv) => ({
     ...inv,
@@ -34,8 +40,46 @@ export default function InvoiceList() {
     return due < new Date() && inv.paymentStatus !== 'Paid'
   }
 
+  async function handleDelete() {
+    if (!deleteItem) return
+    setDeleting(true)
+    try {
+      await deleteDoc(doc(db, 'invoices', deleteItem.id))
+      setDeleteItem(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const colSpan = isAdmin ? 7 : 6
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      {deleteItem && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#111111]">Delete Invoice</h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-[#111111]">
+                Are you sure you want to delete invoice <span className="font-semibold">{deleteItem.invoiceNumber}</span>? This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setDeleteItem(null)} disabled={deleting}
+                className="flex-1 border border-gray-200 text-[#111111] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#c44f4f] disabled:opacity-50">
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -80,20 +124,21 @@ export default function InvoiceList() {
               <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
               <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Balance Due</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Due Date</th>
+              {isAdmin && <th className="py-3 px-4" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={6} className="p-0">
+                  <td colSpan={colSpan} className="p-0">
                     <SkeletonRow />
                   </td>
                 </tr>
               ))
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-16 text-center text-[#9A9A9A] text-sm">
+                <td colSpan={colSpan} className="py-16 text-center text-[#9A9A9A] text-sm">
                   {invoices.length === 0 ? 'No invoices yet. Create your first invoice.' : 'No invoices match your filters.'}
                 </td>
               </tr>
@@ -119,6 +164,14 @@ export default function InvoiceList() {
                     <td className={`py-3 px-4 ${overdue ? 'text-[#D95F5F] font-semibold' : 'text-[#9A9A9A]'}`}>
                       {formatDate(inv.dueDate)}
                     </td>
+                    {isAdmin && (
+                      <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => setDeleteItem(inv)}
+                          className="text-xs text-[#D95F5F] hover:underline font-medium">
+                          Delete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 )
               })
@@ -169,6 +222,14 @@ export default function InvoiceList() {
                     )}
                   </div>
                 </div>
+                {isAdmin && (
+                  <div className="mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setDeleteItem(inv)}
+                      className="text-xs text-[#D95F5F] font-medium hover:underline">
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })

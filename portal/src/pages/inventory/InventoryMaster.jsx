@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { onSnapshot, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
@@ -437,6 +437,19 @@ export default function InventoryMaster() {
   const [showAdd, setShowAdd] = useState(false)
   const [transferItem, setTransferItem] = useState(null)
   const [editItem, setEditItem] = useState(null)
+  const [deleteItem, setDeleteItem] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    if (!deleteItem) return
+    setDeleting(true)
+    try {
+      await deleteDoc(doc(db, 'inventory', deleteItem.id))
+      setDeleteItem(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   // Maps dealerId → location name (falls back to displayName if no location set)
   const dealerMap = useMemo(() => {
@@ -531,6 +544,30 @@ export default function InventoryMaster() {
       )}
       {editItem && (
         <EditItemModal item={editItem} dealers={dealers} isAdmin={isAdmin} onClose={() => setEditItem(null)} />
+      )}
+      {deleteItem && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Delete Entry</h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-[#1A1A1A]">
+                Are you sure you want to delete <span className="font-semibold">{deleteItem.modelName}</span>? This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setDeleteItem(null)} disabled={deleting}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#c44f4f] disabled:opacity-50">
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -814,6 +851,9 @@ export default function InventoryMaster() {
                           {isAdmin && (
                             <button onClick={() => setTransferItem(item)} className="text-xs text-[#9A9A9A] hover:underline font-medium">Transfer</button>
                           )}
+                          {isAdmin && (
+                            <button onClick={() => setDeleteItem(item)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -873,6 +913,12 @@ export default function InventoryMaster() {
                       <button onClick={() => setTransferItem(item)}
                         className="flex-1 text-sm border border-gray-200 text-[#9A9A9A] rounded-lg py-1.5 hover:bg-[#F4F4F5] transition-colors">
                         Transfer
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button onClick={() => setDeleteItem(item)}
+                        className="flex-1 text-sm border border-[#D95F5F] text-[#D95F5F] rounded-lg py-1.5 hover:bg-[#D95F5F]/5 transition-colors">
+                        Delete
                       </button>
                     )}
                   </div>

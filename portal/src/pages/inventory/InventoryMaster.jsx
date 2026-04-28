@@ -51,6 +51,8 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
     condition: item.condition ?? 'New',
     quantityOnHand: item.quantityOnHand ?? 0,
     quantityReserved: item.quantityReserved ?? 0,
+    msrp: item.msrp ?? '',
+    dealerPrice: item.dealerPrice ?? '',
     costPrice: item.costPrice ?? '',
     lowStockThreshold: item.lowStockThreshold ?? '',
     notes: item.notes ?? '',
@@ -73,6 +75,8 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
         quantityOnHand: parseInt(form.quantityOnHand) || 0,
         quantityReserved: parseInt(form.quantityReserved) || 0,
         quantityAvailable: Math.max(0, (parseInt(form.quantityOnHand) || 0) - (parseInt(form.quantityReserved) || 0)),
+        msrp: form.msrp !== '' ? parseFloat(form.msrp) : null,
+        dealerPrice: form.dealerPrice !== '' ? parseFloat(form.dealerPrice) : null,
         costPrice: form.costPrice !== '' ? parseFloat(form.costPrice) : null,
         lowStockThreshold: form.lowStockThreshold !== '' ? parseInt(form.lowStockThreshold) : null,
         notes: form.notes.trim() || null,
@@ -146,12 +150,22 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
               <input type="number" min="0" value={form.lowStockThreshold} onChange={set('lowStockThreshold')} placeholder="e.g. 2" className={cls} />
             </div>
           </div>
-          {isAdmin && (
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className={lbl}>Cost Price</label>
-              <input type="number" min="0" step="0.01" value={form.costPrice} onChange={set('costPrice')} placeholder="0.00" className={cls} />
+              <label className={lbl}>MSRP</label>
+              <input type="number" min="0" step="0.01" value={form.msrp} onChange={set('msrp')} placeholder="0.00" className={cls} />
             </div>
-          )}
+            <div>
+              <label className={lbl}>Dealer Price</label>
+              <input type="number" min="0" step="0.01" value={form.dealerPrice} onChange={set('dealerPrice')} placeholder="0.00" className={cls} />
+            </div>
+            {isAdmin && (
+              <div>
+                <label className={lbl}>CRK Cost</label>
+                <input type="number" min="0" step="0.01" value={form.costPrice} onChange={set('costPrice')} placeholder="0.00" className={cls} />
+              </div>
+            )}
+          </div>
           <div>
             <label className={lbl}>Notes</label>
             <textarea value={form.notes} onChange={set('notes')} rows={2} className={`${cls} resize-none`} />
@@ -266,6 +280,8 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   const [condition, setCondition] = useState('New')
   const [quantity, setQuantity] = useState(1)
   const [costPrice, setCostPrice] = useState('')
+  const [msrp, setMsrp] = useState('')
+  const [dealerPrice, setDealerPrice] = useState('')
   const [lowStockThreshold, setLowStockThreshold] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -304,6 +320,8 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
         quantityOnHand: quantity,
         quantityReserved: 0,
         quantityAvailable: quantity,
+        msrp: msrp !== '' ? parseFloat(msrp) : null,
+        dealerPrice: dealerPrice !== '' ? parseFloat(dealerPrice) : null,
         costPrice: costPrice !== '' ? parseFloat(costPrice) : null,
         lowStockThreshold: lowStockThreshold !== '' ? parseInt(lowStockThreshold) : null,
         createdAt: serverTimestamp(),
@@ -398,15 +416,23 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
               <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} className={cls} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Cost Price</label>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">MSRP</label>
+              <input type="number" min="0" step="0.01" value={msrp} onChange={(e) => setMsrp(e.target.value)} placeholder="0.00" className={cls} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Dealer Price</label>
+              <input type="number" min="0" step="0.01" value={dealerPrice} onChange={(e) => setDealerPrice(e.target.value)} placeholder="0.00" className={cls} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">CRK Cost</label>
               <input type="number" min="0" step="0.01" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="0.00" className={cls} />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Low Stock Alert</label>
-              <input type="number" min="0" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} placeholder="e.g. 2" className={cls} />
-            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Low Stock Alert</label>
+            <input type="number" min="0" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} placeholder="e.g. 2" className={cls} />
           </div>
           {error && <p className="text-xs text-[#D95F5F]">{error}</p>}
         </div>
@@ -815,7 +841,7 @@ export default function InventoryMaster() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', ...(isAdmin ? ['Cost'] : []), 'Added', ''].map((h) => (
+                  {['Model', 'Location', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Dealer Price', ...(isAdmin ? ['CRK Cost'] : []), 'Added', ''].map((h) => (
                     <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -824,7 +850,7 @@ export default function InventoryMaster() {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 10 : 9} />)
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={isAdmin ? 10 : 9} className="py-12 text-center text-[#9A9A9A] text-sm">No entries found.</td></tr>
+                  <tr><td colSpan={isAdmin ? 12 : 11} className="py-12 text-center text-[#9A9A9A] text-sm">No entries found.</td></tr>
                 ) : filtered.map((item) => {
                   const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                   return (
@@ -843,6 +869,8 @@ export default function InventoryMaster() {
                       <td className="py-3 px-4 text-center font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</td>
                       <td className="py-3 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                       <td className="py-3 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{item.dealerPrice != null ? formatCurrency(item.dealerPrice) : '—'}</td>
                       {isAdmin && <td className="py-3 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
                       <td className="py-3 px-4 text-xs text-[#9A9A9A] whitespace-nowrap">{formatDate(item.createdAt ?? item.updatedAt)}</td>
                       <td className="py-3 px-4">
@@ -889,6 +917,9 @@ export default function InventoryMaster() {
                     {item.sku && <span>SKU: {item.sku}</span>}
                     {item.serialNumber && <span>S/N: {item.serialNumber}</span>}
                     {item.condition && <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>{item.condition}</span>}
+                    {item.msrp != null && <span>MSRP: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.msrp)}</span></span>}
+                    {item.dealerPrice != null && <span>Dealer: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.dealerPrice)}</span></span>}
+                    {isAdmin && item.costPrice != null && <span>CRK Cost: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.costPrice)}</span></span>}
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center mb-3">
                     <div className="bg-[#F4F4F5] rounded-lg py-1.5">

@@ -266,16 +266,16 @@ export default function InventoryDealer() {
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-[#F4F4F5]">
             <tr>
-              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'Cost', 'Last Updated', ''].map((h) => (
+              {['Model', 'SKU / Serial', 'Condition', 'On Hand', 'Reserved', 'Available', 'MSRP', 'Your Price', 'Last Updated', ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading
-              ? [...Array(5)].map((_, i) => <tr key={i}><td colSpan={9}><SkeletonRow /></td></tr>)
+              ? [...Array(5)].map((_, i) => <tr key={i}><td colSpan={10}><SkeletonRow /></td></tr>)
               : filtered.length === 0
-                ? <tr><td colSpan={9} className="text-center py-12 text-[#9A9A9A] text-sm">
+                ? <tr><td colSpan={10} className="text-center py-12 text-[#9A9A9A] text-sm">
                     No inventory yet. Click "Add Stock" to get started.
                   </td></tr>
                 : filtered.map((item) => {
@@ -296,7 +296,8 @@ export default function InventoryDealer() {
                         <td className="px-4 py-3 font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</td>
                         <td className="px-4 py-3 text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                         <td className="px-4 py-3"><AvailBadge available={avail} threshold={item.lowStockThreshold} /></td>
-                        <td className="px-4 py-3 text-[#9A9A9A]">{item.costPrice ? formatCurrency(item.costPrice) : '—'}</td>
+                        <td className="px-4 py-3 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
+                        <td className="px-4 py-3 text-[#4CAF7D] font-medium">{item.dealerPrice != null ? formatCurrency(item.dealerPrice) : '—'}</td>
                         <td className="px-4 py-3 text-[#9A9A9A] whitespace-nowrap">{formatDate(item.lastUpdated)}</td>
                         <td className="px-4 py-3">
                           <button onClick={() => setAdjustItem(item)}
@@ -338,7 +339,8 @@ export default function InventoryDealer() {
                       <span>On Hand: <b className="text-[#1A1A1A]">{item.quantityOnHand ?? 0}</b></span>
                       <span>Reserved: <b className="text-[#1A1A1A]">{item.quantityReserved ?? 0}</b></span>
                       <span>Available: <b><AvailBadge available={avail} threshold={item.lowStockThreshold} /></b></span>
-                      {item.costPrice && <span>Cost: {formatCurrency(item.costPrice)}</span>}
+                      {item.msrp != null && <span>MSRP: {formatCurrency(item.msrp)}</span>}
+                      {item.dealerPrice != null && <span className="text-[#4CAF7D] font-medium">Your Price: {formatCurrency(item.dealerPrice)}</span>}
                     </div>
                     <button onClick={() => setAdjustItem(item)}
                       className="mt-3 text-xs text-[#8B6914] hover:underline font-medium">Adjust Stock</button>

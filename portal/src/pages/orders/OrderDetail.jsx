@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
+import { updateDoc, addDoc, getDocs, getDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../hooks/useOrders'
-import { orderDoc, invoicesCol } from '../../firebase/firestore'
+import { orderDoc, invoicesCol, inventoryCol } from '../../firebase/firestore'
 import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
 import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
 import StatusBadge from '../../components/common/StatusBadge'
@@ -14,6 +15,156 @@ import { getTaxRate } from '../../utils/taxService'
 import { computePaymentStatus } from '../../hooks/useInvoices'
 
 const ORDER_STATUSES = ['Processing', 'Fulfilled', 'Shipped', 'Delivered', 'Cancelled']
+
+function FulfillModal({ order, onClose, onConfirm, saving }) {
+  const [inventory, setInventory] = useState([])
+  const [loadingInv, setLoadingInv] = useState(true)
+  const [rows, setRows] = useState([])
+  const [acknowledged, setAcknowledged] = useState(false)
+
+  useEffect(() => {
+    getDocs(inventoryCol).then((snap) => {
+      const inv = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      setInventory(inv)
+      const reserved = order.reservedItems ?? []
+      const initialRows = (order.lineItems ?? []).map((li) => {
+        const match = reserved.find((r) => r.matched && r.description === li.description)
+        return { lineItem: li, inventoryId: match?.inventoryId ?? '', oemDirect: false }
+      })
+      setRows(initialRows)
+      setLoadingInv(false)
+    })
+  }, [])
+
+  const updateRow = (i, patch) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
+
+  const applyToAll = (inventoryId) =>
+    setRows((prev) => prev.map((r) => (r.oemDirect ? r : { ...r, inventoryId })))
+
+  const negativeRows = rows.filter((r) => {
+    if (r.oemDirect || !r.inventoryId) return false
+    const inv = inventory.find((i) => i.id === r.inventoryId)
+    return inv && (inv.quantityOnHand ?? 0) - (r.lineItem.quantity ?? 1) < 0
+  })
+  const hasWarnings = negativeRows.length > 0
+  const canConfirm = !hasWarnings || acknowledged
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-[#111111]">Fulfill from Warehouse</h2>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#111111] text-xl leading-none">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+          {loadingInv ? (
+            <p className="text-sm text-[#9A9A9A] text-center py-8 animate-pulse">Loading inventory…</p>
+          ) : (
+            <>
+              <p className="text-xs text-[#9A9A9A] mb-1">
+                Select the inventory source for each line item, or mark as OEM Direct (ships from manufacturer).
+              </p>
+
+              {rows.map((row, i) => {
+                const qty = row.lineItem.quantity ?? 1
+                const selInv = row.inventoryId ? inventory.find((inv) => inv.id === row.inventoryId) : null
+                const wouldGoNegative = selInv && !row.oemDirect && (selInv.quantityOnHand ?? 0) - qty < 0
+
+                return (
+                  <div
+                    key={i}
+                    className={`border rounded-lg p-3 space-y-2 ${
+                      wouldGoNegative ? 'border-[#D95F5F]/40 bg-[#D95F5F]/5' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[#111111] truncate">{row.lineItem.description}</p>
+                        <p className="text-xs text-[#9A9A9A]">Qty: {qty}</p>
+                      </div>
+                      <label className="flex items-center gap-1.5 text-xs text-[#9A9A9A] font-medium cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={row.oemDirect}
+                          onChange={(e) => updateRow(i, { oemDirect: e.target.checked, inventoryId: '' })}
+                          className="accent-[#8B6914]"
+                        />
+                        OEM Direct
+                      </label>
+                    </div>
+
+                    {!row.oemDirect && (
+                      <div className="flex gap-2 items-center">
+                        <select
+                          value={row.inventoryId}
+                          onChange={(e) => updateRow(i, { inventoryId: e.target.value })}
+                          className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white"
+                        >
+                          <option value="">— Select inventory item —</option>
+                          {inventory.map((inv) => (
+                            <option key={inv.id} value={inv.id}>
+                              {inv.modelName || inv.sku || inv.id} · On Hand: {inv.quantityOnHand ?? 0}
+                            </option>
+                          ))}
+                        </select>
+                        {row.inventoryId && (
+                          <button
+                            onClick={() => applyToAll(row.inventoryId)}
+                            className="text-xs text-[#8B6914] hover:underline whitespace-nowrap font-medium"
+                          >
+                            Apply to all
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {wouldGoNegative && (
+                      <p className="text-xs font-semibold text-[#D95F5F]">
+                        Warning: deducting {qty} from {selInv.quantityOnHand ?? 0} on hand will result in{' '}
+                        {(selInv.quantityOnHand ?? 0) - qty} (negative stock).
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+
+              {hasWarnings && (
+                <label className="flex items-start gap-2 text-sm text-[#D95F5F] font-medium cursor-pointer mt-2 p-3 border border-[#D95F5F]/30 rounded-lg bg-[#D95F5F]/5">
+                  <input
+                    type="checkbox"
+                    checked={acknowledged}
+                    onChange={(e) => setAcknowledged(e.target.checked)}
+                    className="mt-0.5 accent-[#D95F5F]"
+                  />
+                  I acknowledge this fulfillment will result in negative stock for one or more items.
+                </label>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="px-5 py-4 border-t border-gray-100 flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 border border-gray-200 text-[#111111] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(rows)}
+            disabled={saving || loadingInv || !canConfirm}
+            className="flex-1 bg-[#4CAF7D] hover:bg-[#3da86e] text-white rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {saving ? 'Fulfilling…' : 'Confirm Fulfillment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function OrderDetail() {
   const { id } = useParams()
@@ -30,6 +181,7 @@ export default function OrderDetail() {
   const [editingTracking, setEditingTracking] = useState(false)
   const [notesEdit, setNotesEdit] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
+  const [showFulfill, setShowFulfill] = useState(false)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -134,7 +286,6 @@ export default function OrderDetail() {
   const handleSendToWarehouse = async () => {
     setSaving(true)
     try {
-      // Open email client if warehouse email is configured
       const vars = {
         orderNumber: order.orderNumber ?? '',
         customerName: order.customerName ?? '',
@@ -185,12 +336,75 @@ export default function OrderDetail() {
     }
   }
 
+  const handleFulfill = async (rows) => {
+    setSaving(true)
+    try {
+      const details = []
+
+      for (const row of rows) {
+        const qty = row.lineItem.quantity ?? 1
+
+        if (row.oemDirect) {
+          details.push({ description: row.lineItem.description, qty, source: 'OEM Direct', inventoryId: null, model: null, sku: null })
+          continue
+        }
+
+        if (!row.inventoryId) {
+          details.push({ description: row.lineItem.description, qty, source: 'Unassigned', inventoryId: null, model: null, sku: null })
+          continue
+        }
+
+        const invRef = doc(db, 'inventory', row.inventoryId)
+        const invSnap = await getDoc(invRef)
+        if (invSnap.exists()) {
+          const data = invSnap.data()
+          const newOnHand = (data.quantityOnHand ?? 0) - qty
+          const wasReserved = (order.reservedItems ?? []).some(
+            (r) => r.matched && r.inventoryId === row.inventoryId
+          )
+          const newReserved = wasReserved
+            ? Math.max(0, (data.quantityReserved ?? 0) - qty)
+            : (data.quantityReserved ?? 0)
+          await updateDoc(invRef, {
+            quantityOnHand: newOnHand,
+            quantityReserved: newReserved,
+            updatedAt: serverTimestamp(),
+          })
+          details.push({
+            description: row.lineItem.description,
+            qty,
+            source: 'Warehouse',
+            inventoryId: row.inventoryId,
+            model: data.modelName ?? '',
+            sku: data.sku ?? '',
+          })
+        }
+      }
+
+      await updateDoc(orderDoc(id), {
+        status: 'Fulfilled',
+        sentToWarehouse: false,
+        inventoryReserved: false,
+        reservedItems: [],
+        fulfilledAt: serverTimestamp(),
+        fulfillmentDetails: details,
+        updatedAt: serverTimestamp(),
+      })
+      setShowFulfill(false)
+      flash('Order fulfilled successfully.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to fulfill order.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleCreateInvoice = async () => {
     if (!window.confirm('Create an invoice from this order?')) return
     setSaving(true)
     try {
       const invoiceNumber = await nextInvoiceNumber()
-      // Try to get tax rate from customer state if available
       const taxRate = order.customerState ? await getTaxRate(order.customerState) : (order.taxRate ?? 0)
       const taxExempt = order.taxExempt ?? false
       const subtotal = order.subtotal ?? 0
@@ -231,7 +445,6 @@ export default function OrderDetail() {
         updatedAt: serverTimestamp(),
       })
 
-      // Link invoice back to order
       await updateDoc(orderDoc(id), {
         linkedInvoiceId: invoiceRef.id,
         updatedAt: serverTimestamp(),
@@ -269,6 +482,15 @@ export default function OrderDetail() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      {showFulfill && (
+        <FulfillModal
+          order={order}
+          onClose={() => setShowFulfill(false)}
+          onConfirm={handleFulfill}
+          saving={saving}
+        />
+      )}
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm mb-5">
         <Link to="/orders" className="text-[#9A9A9A] hover:text-[#111111] transition-colors">Orders</Link>
@@ -302,7 +524,6 @@ export default function OrderDetail() {
           </div>
 
           <div className="flex flex-wrap gap-2 items-start">
-            {/* Status selector */}
             <select
               value={order.status ?? 'Processing'}
               onChange={handleStatusChange}
@@ -313,6 +534,16 @@ export default function OrderDetail() {
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
+
+            {(isAdmin || isWarehouseManager) && order.status !== 'Fulfilled' && order.sentToWarehouse && (
+              <button
+                onClick={() => setShowFulfill(true)}
+                disabled={saving}
+                className="text-sm bg-[#4CAF7D] hover:bg-[#3da86e] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium"
+              >
+                Fulfill from Warehouse
+              </button>
+            )}
 
             {!order.sentToWarehouse ? (
               <button
@@ -459,9 +690,7 @@ export default function OrderDetail() {
           <div className="space-y-2">
             {(order.reservedItems ?? []).map((r, i) => (
               <div key={i} className={`flex items-start justify-between gap-3 text-sm py-2.5 px-3 rounded-lg border ${
-                r.matched
-                  ? 'bg-[#4CAF7D]/5 border-[#4CAF7D]/20'
-                  : 'bg-[#D95F5F]/5 border-[#D95F5F]/20'
+                r.matched ? 'bg-[#4CAF7D]/5 border-[#4CAF7D]/20' : 'bg-[#D95F5F]/5 border-[#D95F5F]/20'
               }`}>
                 <div className="min-w-0">
                   <p className="font-medium text-[#111111] truncate">{r.description}</p>
@@ -488,6 +717,44 @@ export default function OrderDetail() {
           </p>
         )}
       </div>
+
+      {/* Fulfillment Details */}
+      {(order.fulfillmentDetails ?? []).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-5">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <h2 className="text-sm font-semibold text-[#111111]">Fulfillment Details</h2>
+            {order.fulfilledAt && (
+              <span className="text-xs text-[#9A9A9A]">· {formatDate(order.fulfilledAt)}</span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {order.fulfillmentDetails.map((d, i) => (
+              <div key={i} className="flex items-start justify-between gap-3 text-sm py-2.5 px-3 rounded-lg border border-gray-100 bg-[#F4F4F5]">
+                <div className="min-w-0">
+                  <p className="font-medium text-[#111111] truncate">{d.description}</p>
+                  <p className="text-xs text-[#9A9A9A] mt-0.5">
+                    {d.source === 'OEM Direct'
+                      ? 'OEM Direct'
+                      : d.source === 'Unassigned'
+                      ? 'Not assigned'
+                      : `${d.model || 'Warehouse'}${d.sku ? ` · SKU: ${d.sku}` : ''}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-[#9A9A9A]">×{d.qty}</span>
+                  <span className={`text-xs font-semibold ${
+                    d.source === 'OEM Direct' ? 'text-[#4A90B8]'
+                    : d.source === 'Unassigned' ? 'text-[#9A9A9A]'
+                    : 'text-[#4CAF7D]'
+                  }`}>
+                    {d.source === 'OEM Direct' ? 'OEM Direct' : d.source === 'Unassigned' ? 'Unassigned' : '✓ Fulfilled'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tracking & Fulfillment */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-5">

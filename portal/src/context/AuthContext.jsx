@@ -1,60 +1,125 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '../firebase/config'
 
+const IMPERSONATE_KEY = 'crk_impersonate_v1'
+
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)       // Firebase Auth user
-  const [profile, setProfile] = useState(null) // Firestore user doc
+  const [user, setUser] = useState(null)
+  const [realProfile, setRealProfile] = useState(null)
+  const [impersonatedProfile, setImpersonatedProfile] = useState(null)
+  const [impersonating, setImpersonating] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(IMPERSONATE_KEY)) ?? null } catch { return null }
+  })
   const [loading, setLoading] = useState(true)
+  const impersonateUnsubRef = useRef(() => {})
 
+  // Subscribe to real user profile
   useEffect(() => {
     let unsubProfile = () => {}
 
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser)
-        // Subscribe to their Firestore profile for real-time permission updates
         unsubProfile = onSnapshot(
           doc(db, 'users', firebaseUser.uid),
           (snap) => {
             if (snap.exists()) {
-              setProfile({ id: snap.id, ...snap.data() })
+              setRealProfile({ id: snap.id, ...snap.data() })
             } else {
-              // Profile document deleted (dealer removed by admin) — sign out
-              setProfile(null)
+              setRealProfile(null)
               signOut(auth)
             }
             setLoading(false)
           },
-          () => {
-            // Firestore read failed (rules issue) — still unblock the app
-            setLoading(false)
-          }
+          () => { setLoading(false) }
         )
-        // Safety fallback: never hang on black screen for more than 5s
         setTimeout(() => setLoading(false), 5000)
       } else {
         setUser(null)
-        setProfile(null)
+        setRealProfile(null)
+        setImpersonating(null)
+        setImpersonatedProfile(null)
+        localStorage.removeItem(IMPERSONATE_KEY)
         unsubProfile()
         setLoading(false)
       }
     })
 
-    return () => {
-      unsubAuth()
-      unsubProfile()
-    }
+    return () => { unsubAuth(); unsubProfile() }
   }, [])
 
-  const isAdmin = profile?.role === 'admin'
-  const isDealer = profile?.role === 'dealer'
+  // Subscribe to impersonated user profile in real-time
+  useEffect(() => {
+    impersonateUnsubRef.current()
+    impersonateUnsubRef.current = () => {}
+
+    if (!impersonating?.uid) {
+      setImpersonatedProfile(null)
+      return
+    }
+
+    const unsub = onSnapshot(
+      doc(db, 'users', impersonating.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setImpersonatedProfile({ id: snap.id, ...snap.data() })
+        } else {
+          // Target user deleted — exit impersonation
+          setImpersonating(null)
+          setImpersonatedProfile(null)
+          localStorage.removeItem(IMPERSONATE_KEY)
+        }
+      },
+      () => {
+        setImpersonating(null)
+        setImpersonatedProfile(null)
+        localStorage.removeItem(IMPERSONATE_KEY)
+      }
+    )
+
+    impersonateUnsubRef.current = unsub
+    return () => unsub()
+  }, [impersonating?.uid])
+
+  function startImpersonating(targetUser) {
+    const val = { uid: targetUser.id ?? targetUser.uid }
+    localStorage.setItem(IMPERSONATE_KEY, JSON.stringify(val))
+    setImpersonating(val)
+  }
+
+  function stopImpersonating() {
+    localStorage.removeItem(IMPERSONATE_KEY)
+    setImpersonating(null)
+    setImpersonatedProfile(null)
+  }
+
+  const isRealAdmin = realProfile?.role === 'admin'
+  const activeProfile = (isRealAdmin && impersonating && impersonatedProfile)
+    ? impersonatedProfile
+    : realProfile
+
+  const isAdmin = activeProfile?.role === 'admin'
+  const isDealer = activeProfile?.role === 'dealer'
+  const isWarehouseManager = activeProfile?.role === 'warehouse_manager'
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isDealer }}>
+    <AuthContext.Provider value={{
+      user,
+      profile: activeProfile,
+      realProfile,
+      loading,
+      isAdmin,
+      isDealer,
+      isWarehouseManager,
+      isRealAdmin,
+      impersonating: isRealAdmin && !!impersonating && !!impersonatedProfile,
+      startImpersonating,
+      stopImpersonating,
+    }}>
       {children}
     </AuthContext.Provider>
   )

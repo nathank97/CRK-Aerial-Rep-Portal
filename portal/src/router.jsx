@@ -57,6 +57,9 @@ import TerritoryList from './pages/admin/territories/TerritoryList'
 import TerritoryMap from './pages/admin/territories/TerritoryMap'
 import EmailTemplates from './pages/admin/EmailTemplates'
 
+// Warehouse
+import WarehouseDashboard from './pages/warehouse/WarehouseDashboard'
+
 // Route guards
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
@@ -72,12 +75,27 @@ function RequireAdmin({ children }) {
   return children
 }
 
-function RequireModule({ module, children }) {
-  const { profile, isAdmin, loading } = useAuth()
+function RequireWarehouseOrAdmin({ children }) {
+  const { isAdmin, isWarehouseManager, loading } = useAuth()
   if (loading) return <div className="min-h-screen bg-[#111111]" />
-  if (isAdmin) return children
+  if (!isAdmin && !isWarehouseManager) return <Navigate to="/dashboard" replace />
+  return children
+}
+
+function RequireModule({ module, children }) {
+  const { profile, isAdmin, isWarehouseManager, loading } = useAuth()
+  if (loading) return <div className="min-h-screen bg-[#111111]" />
+  if (isAdmin || isWarehouseManager) return children
   if (profile?.moduleAccess?.[module] === false) return <Navigate to="/dashboard" replace />
   return children
+}
+
+// Redirects warehouse managers to their dashboard
+function DashboardRouter() {
+  const { isWarehouseManager, loading } = useAuth()
+  if (loading) return <div className="min-h-screen bg-[#111111]" />
+  if (isWarehouseManager) return <Navigate to="/warehouse" replace />
+  return <Dashboard />
 }
 
 export const router = createBrowserRouter([
@@ -85,7 +103,8 @@ export const router = createBrowserRouter([
   {
     element: <RequireAuth><AppLayout /></RequireAuth>,
     children: [
-      { path: '/dashboard', element: <Dashboard /> },
+      { path: '/dashboard', element: <DashboardRouter /> },
+      { path: '/warehouse', element: <RequireWarehouseOrAdmin><WarehouseDashboard /></RequireWarehouseOrAdmin> },
       { path: '/leads', element: <LeadList /> },
       { path: '/leads/new', element: <LeadNew /> },
       { path: '/leads/:id', element: <LeadDetail /> },
@@ -172,7 +191,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/admin/catalog',
-        element: <RequireAdmin><Catalog /></RequireAdmin>,
+        element: <RequireWarehouseOrAdmin><Catalog /></RequireWarehouseOrAdmin>,
       },
       {
         path: '/admin/tax-rates',

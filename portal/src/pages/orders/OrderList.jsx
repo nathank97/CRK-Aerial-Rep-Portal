@@ -136,7 +136,12 @@ export default function OrderList() {
                     {o.customerName || <span className="text-[#9A9A9A]">—</span>}
                   </td>
                   <td className="py-3 px-4">
-                    <StatusBadge status={o.status ?? 'Processing'} />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <StatusBadge status={o.status ?? 'Processing'} />
+                      {o.sentToWarehouse && (
+                        <span className="text-[10px] font-bold bg-[#4A90B8]/15 text-[#4A90B8] px-1.5 py-0.5 rounded-full whitespace-nowrap">Warehouse</span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-4 text-right font-semibold text-[#111111]">{formatCurrency(o.total)}</td>
                   <td className="py-3 px-4 text-[#9A9A9A]">{formatDate(o.createdAt)}</td>
@@ -181,7 +186,12 @@ export default function OrderList() {
                   <p className="font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</p>
                   <p className="font-semibold text-[#111111] mt-0.5 truncate">{o.customerName || '—'}</p>
                 </div>
-                <StatusBadge status={o.status ?? 'Processing'} />
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <StatusBadge status={o.status ?? 'Processing'} />
+                  {o.sentToWarehouse && (
+                    <span className="text-[10px] font-bold bg-[#4A90B8]/15 text-[#4A90B8] px-1.5 py-0.5 rounded-full">Warehouse</span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between mt-3">
                 <span className="text-[#9A9A9A] text-xs">{formatDate(o.createdAt)}</span>

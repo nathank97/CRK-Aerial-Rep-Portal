@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { onSnapshot, query, where } from 'firebase/firestore'
+import { onSnapshot, updateDoc, query, where, serverTimestamp } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
-import { inventoryCol, ordersCol } from '../../firebase/firestore'
+import { inventoryCol, ordersCol, orderDoc } from '../../firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import StatusBadge from '../../components/common/StatusBadge'
-import { formatDate } from '../../utils/formatters'
+import { formatDate, formatCurrency } from '../../utils/formatters'
 
 export default function WarehouseDashboard() {
   const { profile } = useAuth()
@@ -65,47 +65,88 @@ export default function WarehouseDashboard() {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold text-[#111111]">Pending Fulfillment Queue</h2>
-          <button
-            onClick={() => navigate('/orders')}
-            className="text-xs text-[#8B6914] hover:underline font-medium"
-          >
+          <button onClick={() => navigate('/orders')} className="text-xs text-[#8B6914] hover:underline font-medium">
             View all orders →
           </button>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          {loadingOrders ? (
-            <div className="py-10 text-center text-[#9A9A9A] text-sm animate-pulse">Loading…</div>
-          ) : pendingOrders.length === 0 ? (
-            <div className="py-10 text-center text-[#9A9A9A] text-sm">
-              No orders pending fulfillment.
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Order #</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {pendingOrders.map((o) => (
-                  <tr
-                    key={o.id}
-                    onClick={() => navigate(`/orders/${o.id}`)}
-                    className="hover:bg-[#F4F4F5] cursor-pointer transition-colors"
-                  >
-                    <td className="py-3 px-4 font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</td>
-                    <td className="py-3 px-4 font-medium text-[#111111]">{o.customerName || '—'}</td>
-                    <td className="py-3 px-4"><StatusBadge status={o.status ?? 'Processing'} /></td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{formatDate(o.createdAt)}</td>
+
+        {loadingOrders ? (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm py-10 text-center text-[#9A9A9A] text-sm animate-pulse">Loading…</div>
+        ) : pendingOrders.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm py-10 text-center text-[#9A9A9A] text-sm">
+            No orders pending fulfillment.
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden sm:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-[#F4F4F5]">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Order #</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Reserved</th>
+                    <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Queued</th>
                   </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {[...pendingOrders]
+                    .sort((a, b) => {
+                      const at = a.sentToWarehouseAt?.toDate?.()?.getTime() ?? 0
+                      const bt = b.sentToWarehouseAt?.toDate?.()?.getTime() ?? 0
+                      return bt - at
+                    })
+                    .map((o) => (
+                      <tr key={o.id} onClick={() => navigate(`/orders/${o.id}`)}
+                        className="hover:bg-[#F4F4F5] cursor-pointer transition-colors">
+                        <td className="py-3 px-4 font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</td>
+                        <td className="py-3 px-4 font-medium text-[#111111]">{o.customerName || '—'}</td>
+                        <td className="py-3 px-4"><StatusBadge status={o.status ?? 'Processing'} /></td>
+                        <td className="py-3 px-4">
+                          {o.inventoryReserved
+                            ? <span className="text-xs font-semibold text-[#4CAF7D]">✓ Reserved</span>
+                            : <span className="text-xs text-[#9A9A9A]">Not reserved</span>}
+                        </td>
+                        <td className="py-3 px-4 text-right font-semibold text-[#111111]">{formatCurrency(o.total)}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A] text-xs">{formatDate(o.sentToWarehouseAt ?? o.createdAt)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="sm:hidden space-y-3">
+              {[...pendingOrders]
+                .sort((a, b) => {
+                  const at = a.sentToWarehouseAt?.toDate?.()?.getTime() ?? 0
+                  const bt = b.sentToWarehouseAt?.toDate?.()?.getTime() ?? 0
+                  return bt - at
+                })
+                .map((o) => (
+                  <div key={o.id} onClick={() => navigate(`/orders/${o.id}`)}
+                    className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 cursor-pointer hover:border-[#8B6914]/40 transition-colors">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</p>
+                        <p className="font-semibold text-[#111111] mt-0.5 truncate">{o.customerName || '—'}</p>
+                      </div>
+                      <StatusBadge status={o.status ?? 'Processing'} />
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-2">
+                      <span className="text-[#9A9A9A]">Queued {formatDate(o.sentToWarehouseAt ?? o.createdAt)}</span>
+                      <div className="flex items-center gap-2">
+                        {o.inventoryReserved && <span className="text-[#4CAF7D] font-semibold">✓ Reserved</span>}
+                        <span className="font-semibold text-[#111111]">{formatCurrency(o.total)}</span>
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Negative Stock Alerts */}
@@ -113,10 +154,7 @@ export default function WarehouseDashboard() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-[#D95F5F]">Negative Stock Alerts</h2>
-            <button
-              onClick={() => navigate('/inventory')}
-              className="text-xs text-[#8B6914] hover:underline font-medium"
-            >
+            <button onClick={() => navigate('/inventory')} className="text-xs text-[#8B6914] hover:underline font-medium">
               View inventory →
             </button>
           </div>
@@ -125,17 +163,16 @@ export default function WarehouseDashboard() {
               <thead>
                 <tr className="border-b border-gray-100 bg-[#D95F5F]/5">
                   <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU / Serial</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Location</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
                   <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">On Hand</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {negativeStock.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#F4F4F5] cursor-pointer transition-colors" onClick={() => navigate('/inventory')}>
-                    <td className="py-3 px-4 font-medium text-[#111111]">{item.model || '—'}</td>
+                  <tr key={item.id} onClick={() => navigate('/inventory')}
+                    className="hover:bg-[#F4F4F5] cursor-pointer transition-colors">
+                    <td className="py-3 px-4 font-medium text-[#111111]">{item.modelName || '—'}</td>
                     <td className="py-3 px-4 font-mono text-xs text-[#9A9A9A]">{item.sku || item.serialNumber || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{item.locationName || '—'}</td>
                     <td className="py-3 px-4 text-right font-bold text-[#D95F5F]">{item.quantityOnHand}</td>
                   </tr>
                 ))}
@@ -150,10 +187,7 @@ export default function WarehouseDashboard() {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-semibold text-[#F0A500]">Low Stock</h2>
-            <button
-              onClick={() => navigate('/inventory')}
-              className="text-xs text-[#8B6914] hover:underline font-medium"
-            >
+            <button onClick={() => navigate('/inventory')} className="text-xs text-[#8B6914] hover:underline font-medium">
               View inventory →
             </button>
           </div>
@@ -162,17 +196,16 @@ export default function WarehouseDashboard() {
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F0A500]/5">
                   <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU / Serial</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Location</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
                   <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">On Hand</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {lowStock.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#F4F4F5] cursor-pointer transition-colors" onClick={() => navigate('/inventory')}>
-                    <td className="py-3 px-4 font-medium text-[#111111]">{item.model || '—'}</td>
+                  <tr key={item.id} onClick={() => navigate('/inventory')}
+                    className="hover:bg-[#F4F4F5] cursor-pointer transition-colors">
+                    <td className="py-3 px-4 font-medium text-[#111111]">{item.modelName || '—'}</td>
                     <td className="py-3 px-4 font-mono text-xs text-[#9A9A9A]">{item.sku || item.serialNumber || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{item.locationName || '—'}</td>
                     <td className="py-3 px-4 text-right font-bold text-[#F0A500]">{item.quantityOnHand}</td>
                   </tr>
                 ))}

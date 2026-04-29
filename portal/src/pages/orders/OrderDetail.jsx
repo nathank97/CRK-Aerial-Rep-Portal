@@ -18,7 +18,7 @@ const ORDER_STATUSES = ['Processing', 'Fulfilled', 'Shipped', 'Delivered', 'Canc
 export default function OrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, profile, isAdmin } = useAuth()
+  const { user, profile, isAdmin, isWarehouseManager } = useAuth()
   const { order, loading } = useOrder(id)
   const { template: emailTemplate } = useEmailTemplate()
 
@@ -132,25 +132,57 @@ export default function OrderDetail() {
   }
 
   const handleSendToWarehouse = async () => {
-    const vars = {
-      orderNumber: order.orderNumber ?? '',
-      customerName: order.customerName ?? '',
-      customerAddress: order.customerAddress ?? '',
-      lineItems: formatOrderLineItems(order.lineItems),
-      total: (order.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
-      notes: order.notes || 'None',
-      dealerName: order.dealerName || profile?.displayName || '',
+    setSaving(true)
+    try {
+      // Open email client if warehouse email is configured
+      const vars = {
+        orderNumber: order.orderNumber ?? '',
+        customerName: order.customerName ?? '',
+        customerAddress: order.customerAddress ?? '',
+        lineItems: formatOrderLineItems(order.lineItems),
+        total: (order.total ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+        notes: order.notes || 'None',
+        dealerName: order.dealerName || profile?.displayName || '',
+      }
+      const to = emailTemplate.warehouseEmail || ''
+      if (to) {
+        const subject = fillTemplate(emailTemplate.orderSubject, vars)
+        const body = fillTemplate(emailTemplate.orderBody, vars)
+        const a = document.createElement('a')
+        a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
+      await updateDoc(orderDoc(id), {
+        sentToWarehouse: true,
+        sentToWarehouseAt: serverTimestamp(),
+        sentAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      flash('Order added to warehouse queue.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to send to warehouse.')
+    } finally {
+      setSaving(false)
     }
-    const subject = fillTemplate(emailTemplate.orderSubject, vars)
-    const body = fillTemplate(emailTemplate.orderBody, vars)
-    const to = emailTemplate.warehouseEmail || ''
-    const a = document.createElement('a')
-    a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    await updateDoc(orderDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
-    flash('Email client opened — confirm and send to warehouse.')
+  }
+
+  const handleRemoveFromQueue = async () => {
+    setSaving(true)
+    try {
+      await updateDoc(orderDoc(id), {
+        sentToWarehouse: false,
+        updatedAt: serverTimestamp(),
+      })
+      flash('Order removed from warehouse queue.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to remove from queue.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleCreateInvoice = async () => {
@@ -255,9 +287,14 @@ export default function OrderDetail() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-5">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-lg font-bold text-[#8B6914]">{order.orderNumber}</span>
               <StatusBadge status={order.status ?? 'Processing'} />
+              {order.sentToWarehouse && (
+                <span className="text-xs font-semibold bg-[#4A90B8]/15 text-[#4A90B8] px-2 py-0.5 rounded-full">
+                  In Warehouse Queue
+                </span>
+              )}
             </div>
             <p className="text-[#111111] font-semibold mt-1 text-lg">{order.customerName || '—'}</p>
             {order.customerEmail && <p className="text-sm text-[#9A9A9A]">{order.customerEmail}</p>}
@@ -277,13 +314,32 @@ export default function OrderDetail() {
               ))}
             </select>
 
-            <button
-              onClick={handleSendToWarehouse}
-              disabled={saving}
-              className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            >
-              {order.sentAt ? 'Resend to Warehouse' : 'Send to Warehouse'}
-            </button>
+            {!order.sentToWarehouse ? (
+              <button
+                onClick={handleSendToWarehouse}
+                disabled={saving}
+                className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+              >
+                Send to Warehouse
+              </button>
+            ) : (
+              <button
+                onClick={handleSendToWarehouse}
+                disabled={saving}
+                className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 opacity-60"
+              >
+                Resend to Queue
+              </button>
+            )}
+            {order.sentToWarehouse && (isAdmin || isWarehouseManager) && (
+              <button
+                onClick={handleRemoveFromQueue}
+                disabled={saving}
+                className="text-sm border border-gray-200 text-[#9A9A9A] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+              >
+                Remove from Queue
+              </button>
+            )}
             {!order.linkedInvoiceId && (
               <button
                 onClick={handleCreateInvoice}

@@ -4,6 +4,7 @@ import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../hooks/useOrders'
 import { orderDoc, invoicesCol } from '../../firebase/firestore'
+import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
 import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
@@ -17,11 +18,12 @@ const ORDER_STATUSES = ['Processing', 'Fulfilled', 'Shipped', 'Delivered', 'Canc
 export default function OrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { order, loading } = useOrder(id)
   const { template: emailTemplate } = useEmailTemplate()
 
   const [saving, setSaving] = useState(false)
+  const [reserving, setReserving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
   const [trackingEdit, setTrackingEdit] = useState('')
   const [fulfillmentEdit, setFulfillmentEdit] = useState('')
@@ -88,6 +90,44 @@ export default function OrderDetail() {
       flash('Failed to save notes.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleReserveInventory = async () => {
+    setReserving(true)
+    try {
+      const results = await matchAndReserve(order.lineItems ?? [], order.dealerId ?? user.uid)
+      const anyMatched = results.some((r) => r.matched)
+      await updateDoc(orderDoc(id), {
+        inventoryReserved: anyMatched,
+        reservedItems: results,
+        updatedAt: serverTimestamp(),
+      })
+      flash(anyMatched ? 'Inventory reserved.' : 'No matching inventory found — items flagged.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to reserve inventory.')
+    } finally {
+      setReserving(false)
+    }
+  }
+
+  const handleReleaseReservation = async () => {
+    if (!window.confirm('Release all inventory reservations for this order?')) return
+    setReserving(true)
+    try {
+      await releaseReservation(order.reservedItems ?? [])
+      await updateDoc(orderDoc(id), {
+        inventoryReserved: false,
+        reservedItems: [],
+        updatedAt: serverTimestamp(),
+      })
+      flash('Inventory reservation released.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to release reservation.')
+    } finally {
+      setReserving(false)
     }
   }
 
@@ -324,6 +364,73 @@ export default function OrderDetail() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Inventory Reservation */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-sm font-semibold text-[#111111]">Inventory Reservation</h2>
+            {order.inventoryReserved ? (
+              <span className="text-xs font-semibold bg-[#4CAF7D]/15 text-[#4CAF7D] px-2 py-0.5 rounded-full">Reserved</span>
+            ) : (
+              <span className="text-xs font-semibold bg-[#9A9A9A]/15 text-[#9A9A9A] px-2 py-0.5 rounded-full">Not Reserved</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {!order.inventoryReserved && (
+              <button
+                onClick={handleReserveInventory}
+                disabled={reserving || saving}
+                className="text-sm border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+              >
+                {reserving ? 'Reserving…' : 'Reserve Inventory'}
+              </button>
+            )}
+            {order.inventoryReserved && isAdmin && (
+              <button
+                onClick={handleReleaseReservation}
+                disabled={reserving || saving}
+                className="text-sm border border-[#D95F5F] text-[#D95F5F] hover:bg-[#D95F5F]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+              >
+                {reserving ? 'Releasing…' : 'Release Reservation'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {order.inventoryReserved && (order.reservedItems ?? []).length > 0 ? (
+          <div className="space-y-2">
+            {(order.reservedItems ?? []).map((r, i) => (
+              <div key={i} className={`flex items-start justify-between gap-3 text-sm py-2.5 px-3 rounded-lg border ${
+                r.matched
+                  ? 'bg-[#4CAF7D]/5 border-[#4CAF7D]/20'
+                  : 'bg-[#D95F5F]/5 border-[#D95F5F]/20'
+              }`}>
+                <div className="min-w-0">
+                  <p className="font-medium text-[#111111] truncate">{r.description}</p>
+                  {r.matched
+                    ? <p className="text-xs text-[#9A9A9A] mt-0.5">Matched: {r.model}{r.sku ? ` · SKU: ${r.sku}` : ''}</p>
+                    : <p className="text-xs text-[#D95F5F] mt-0.5">No matching inventory found at your location</p>
+                  }
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-[#9A9A9A]">×{r.qty}</span>
+                  {r.matched
+                    ? <span className="text-xs font-semibold text-[#4CAF7D]">✓ Reserved</span>
+                    : <span className="text-xs font-semibold text-[#D95F5F]">✗ Unmatched</span>
+                  }
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-[#9A9A9A]">
+            {order.inventoryReserved
+              ? 'No reservation details recorded.'
+              : 'No inventory has been reserved. Click "Reserve Inventory" to automatically match items by SKU or model name.'}
+          </p>
+        )}
       </div>
 
       {/* Tracking & Fulfillment */}

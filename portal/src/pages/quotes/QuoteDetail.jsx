@@ -13,7 +13,50 @@ import { nextOrderNumber } from '../../utils/numbering'
 import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
 import QuotePDF from '../../components/quotes/QuotePDF'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
+import { matchAndReserve } from '../../utils/inventoryReservation'
 import crkLogoUrl from '../../assets/logo.png'
+
+function ConvertModal({ quote, onClose, onConfirm, saving }) {
+  const [reserve, setReserve] = useState(true)
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-[#111111]">Convert to Order</h2>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm text-[#111111]">
+            Create an order from <span className="font-semibold">{quote.quoteNumber}</span> and mark the quote as Accepted.
+          </p>
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={reserve}
+              onChange={(e) => setReserve(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[#8B6914]"
+            />
+            <div>
+              <p className="text-sm font-semibold text-[#111111]">Reserve Inventory</p>
+              <p className="text-xs text-[#9A9A9A] mt-0.5">
+                Automatically match and reserve inventory at your location using SKU or model name. Items that can't be matched will be flagged.
+              </p>
+            </div>
+          </label>
+        </div>
+        <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+          <button onClick={onClose} disabled={saving}
+            className="flex-1 border border-gray-200 text-[#111111] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => onConfirm(reserve)} disabled={saving}
+            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#7a5c12] disabled:opacity-50">
+            {saving ? 'Converting…' : 'Convert to Order'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function QuoteDetail() {
   const { id } = useParams()
@@ -30,6 +73,7 @@ export default function QuoteDetail() {
   const [editTaxExempt, setEditTaxExempt] = useState(false)
   const [saving, setSaving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
+  const [showConvertModal, setShowConvertModal] = useState(false)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -97,8 +141,7 @@ export default function QuoteDetail() {
     flash('Email client opened — attach the PDF and send.')
   }
 
-  const handleConvertToOrder = async () => {
-    if (!window.confirm('Convert this quote to an order? The quote will be marked Accepted.')) return
+  const handleConvertToOrder = async (reserve) => {
     setSaving(true)
     try {
       const orderNumber = await nextOrderNumber()
@@ -121,11 +164,24 @@ export default function QuoteDetail() {
         linkedInvoiceId: null,
         trackingNumber: '',
         fulfillmentDate: null,
+        inventoryReserved: false,
+        reservedItems: [],
         dealerId: user.uid,
         dealerName: profile?.displayName ?? '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
+
+      if (reserve && (quote.lineItems ?? []).length > 0) {
+        const results = await matchAndReserve(quote.lineItems, user.uid)
+        const anyMatched = results.some((r) => r.matched)
+        await updateDoc(orderDoc(orderRef.id), {
+          inventoryReserved: anyMatched,
+          reservedItems: results,
+          updatedAt: serverTimestamp(),
+        })
+      }
+
       await updateDoc(quoteDoc(id), {
         status: 'Accepted',
         convertedOrderId: orderRef.id,
@@ -165,6 +221,15 @@ export default function QuoteDetail() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      {showConvertModal && (
+        <ConvertModal
+          quote={quote}
+          saving={saving}
+          onClose={() => setShowConvertModal(false)}
+          onConfirm={(reserve) => { setShowConvertModal(false); handleConvertToOrder(reserve) }}
+        />
+      )}
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm mb-5">
         <Link to="/quotes" className="text-[#9A9A9A] hover:text-[#111111] transition-colors">Quotes</Link>
@@ -214,7 +279,7 @@ export default function QuoteDetail() {
             )}
             {quote.status !== 'Accepted' && quote.status !== 'Declined' && (
               <button
-                onClick={handleConvertToOrder}
+                onClick={() => setShowConvertModal(true)}
                 disabled={saving}
                 className="text-sm bg-[#8B6914] hover:bg-[#7a5c12] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
               >

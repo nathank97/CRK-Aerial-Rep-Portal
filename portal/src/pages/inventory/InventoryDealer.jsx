@@ -166,27 +166,32 @@ export default function InventoryDealer() {
   const toggleSort = (key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
 
   const sortedFiltered = useMemo(() => {
-    if (!sort.key) return filtered
-    return [...filtered].sort((a, b) => {
-      let av, bv
-      if (sort.key === 'available') {
-        av = (a.quantityAvailable ?? (a.quantityOnHand ?? 0) - (a.quantityReserved ?? 0))
-        bv = (b.quantityAvailable ?? (b.quantityOnHand ?? 0) - (b.quantityReserved ?? 0))
-      } else if (sort.key === 'repPrice') {
-        av = getDealerPrice(a, profile)
-        bv = getDealerPrice(b, profile)
-      } else if (sort.key === 'lastUpdated') {
-        av = a.lastUpdated?.toDate?.()?.getTime() ?? 0
-        bv = b.lastUpdated?.toDate?.()?.getTime() ?? 0
-      } else {
-        av = a[sort.key]; bv = b[sort.key]
-      }
-      if (av == null && bv == null) return 0
-      if (av == null) return sort.dir === 'asc' ? 1 : -1
-      if (bv == null) return sort.dir === 'asc' ? -1 : 1
-      if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return sort.dir === 'asc' ? av - bv : bv - av
-    })
+    const sortFn = (arr) => {
+      if (!sort.key) return arr
+      return [...arr].sort((a, b) => {
+        let av, bv
+        if (sort.key === 'available') {
+          av = (a.quantityAvailable ?? (a.quantityOnHand ?? 0) - (a.quantityReserved ?? 0))
+          bv = (b.quantityAvailable ?? (b.quantityOnHand ?? 0) - (b.quantityReserved ?? 0))
+        } else if (sort.key === 'repPrice') {
+          av = getDealerPrice(a, profile)
+          bv = getDealerPrice(b, profile)
+        } else if (sort.key === 'lastUpdated') {
+          av = a.lastUpdated?.toDate?.()?.getTime() ?? 0
+          bv = b.lastUpdated?.toDate?.()?.getTime() ?? 0
+        } else {
+          av = a[sort.key]; bv = b[sort.key]
+        }
+        if (av == null && bv == null) return 0
+        if (av == null) return sort.dir === 'asc' ? 1 : -1
+        if (bv == null) return sort.dir === 'asc' ? -1 : 1
+        if (typeof av === 'string') return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+        return sort.dir === 'asc' ? av - bv : bv - av
+      })
+    }
+    const neg = filtered.filter((i) => (i.quantityOnHand ?? 0) < 0)
+    const rest = filtered.filter((i) => (i.quantityOnHand ?? 0) >= 0)
+    return [...sortFn(neg), ...sortFn(rest)]
   }, [filtered, sort, profile])
 
   const filtered = useMemo(() => {
@@ -241,6 +246,7 @@ export default function InventoryDealer() {
     return i.lowStockThreshold != null && avail <= i.lowStockThreshold && avail > 0
   }).length
   const outCount = items.filter((i) => (i.quantityAvailable ?? i.quantityOnHand - (i.quantityReserved ?? 0)) === 0).length
+  const negativeCount = items.filter((i) => (i.quantityOnHand ?? 0) < 0).length
 
   return (
     <div className="p-4 sm:p-6 max-w-screen-xl mx-auto">
@@ -261,7 +267,7 @@ export default function InventoryDealer() {
 
       {/* KPI strip */}
       {!loading && (
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
             <p className="text-2xl font-bold text-[#1A1A1A]">{totalUnits}</p>
             <p className="text-xs text-[#9A9A9A] mt-1">Total Units</p>
@@ -273,6 +279,10 @@ export default function InventoryDealer() {
           <div className={`bg-white rounded-xl border p-4 text-center ${outCount > 0 ? 'border-[#D95F5F]' : 'border-gray-200'}`}>
             <p className={`text-2xl font-bold ${outCount > 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>{outCount}</p>
             <p className="text-xs text-[#9A9A9A] mt-1">Out of Stock</p>
+          </div>
+          <div className={`bg-white rounded-xl border p-4 text-center ${negativeCount > 0 ? 'border-[#D95F5F]' : 'border-gray-200'}`}>
+            <p className={`text-2xl font-bold ${negativeCount > 0 ? 'text-[#D95F5F]' : 'text-[#9A9A9A]'}`}>{negativeCount}</p>
+            <p className="text-xs text-[#9A9A9A] mt-1">Negative Stock</p>
           </div>
         </div>
       )}
@@ -329,7 +339,7 @@ export default function InventoryDealer() {
                 : sortedFiltered.map((item) => {
                     const avail = item.quantityAvailable ?? Math.max(0, (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0))
                     return (
-                      <tr key={item.id} className="border-b border-gray-50 hover:bg-[#F4F4F5] transition-colors">
+                      <tr key={item.id} className={`border-b border-gray-50 transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#F4F4F5]'}`}>
                         <td className="px-4 py-3 font-medium text-[#1A1A1A]">{item.modelName}</td>
                         <td className="px-4 py-3 text-[#9A9A9A] text-xs">
                           {item.sku && <div>SKU: {item.sku}</div>}
@@ -341,7 +351,10 @@ export default function InventoryDealer() {
                             {item.condition}
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</td>
+                        <td className={`px-4 py-3 font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                          {item.quantityOnHand ?? 0}
+                          {(item.quantityOnHand ?? 0) < 0 && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
+                        </td>
                         <td className="px-4 py-3 text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                         <td className="px-4 py-3"><AvailBadge available={avail} threshold={item.lowStockThreshold} /></td>
                         <td className="px-4 py-3 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
@@ -373,7 +386,7 @@ export default function InventoryDealer() {
             : sortedFiltered.map((item) => {
                 const avail = item.quantityAvailable ?? Math.max(0, (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0))
                 return (
-                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                  <div key={item.id} className={`rounded-xl p-4 shadow-sm border ${(item.quantityOnHand ?? 0) < 0 ? 'border-[#D95F5F]/40 bg-[#D95F5F]/5' : 'bg-white border-gray-200'}`}>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
                         <p className="font-semibold text-[#1A1A1A]">{item.modelName}</p>
@@ -384,7 +397,7 @@ export default function InventoryDealer() {
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-[#9A9A9A] flex-wrap">
-                      <span>On Hand: <b className="text-[#1A1A1A]">{item.quantityOnHand ?? 0}</b></span>
+                      <span>On Hand: <b className={`${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>{item.quantityOnHand ?? 0}{(item.quantityOnHand ?? 0) < 0 ? ' ⚠' : ''}</b></span>
                       <span>Reserved: <b className="text-[#1A1A1A]">{item.quantityReserved ?? 0}</b></span>
                       <span>Available: <b><AvailBadge available={avail} threshold={item.lowStockThreshold} /></b></span>
                       {item.msrp != null && <span>MSRP/unit: {formatCurrency(item.msrp)}</span>}

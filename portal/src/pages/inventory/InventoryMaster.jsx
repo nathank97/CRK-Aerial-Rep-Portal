@@ -597,24 +597,39 @@ export default function InventoryMaster() {
     return groups
   }, [filtered, dealerMap])
 
-  const sortedSummary = useMemo(() => applySort(summaryGroups, summarySort.key, summarySort.dir, (g, k) => {
-    if (k === 'totalAvail') return g.totalOnHand - g.totalReserved
-    return g[k]
-  }), [summaryGroups, summarySort])
+  const sortedSummary = useMemo(() => {
+    const getVal = (g, k) => {
+      if (k === 'totalAvail') return g.totalOnHand - g.totalReserved
+      return g[k]
+    }
+    const neg = summaryGroups.filter((g) => g.totalOnHand < 0)
+    const rest = summaryGroups.filter((g) => g.totalOnHand >= 0)
+    return [...applySort(neg, summarySort.key, summarySort.dir, getVal), ...applySort(rest, summarySort.key, summarySort.dir, getVal)]
+  }, [summaryGroups, summarySort])
 
-  const sortedLog = useMemo(() => applySort(filtered, logSort.key, logSort.dir, (item, k) => {
-    if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
-    if (k === 'locationName') return dealerMap[item.dealerId] || ''
-    if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
-    if (k === 'createdAt') return item.createdAt?.toDate?.()?.getTime() ?? item.updatedAt?.toDate?.()?.getTime() ?? 0
-    return item[k]
-  }), [filtered, logSort, dealerMap, dealerProfileMap])
+  const sortedLog = useMemo(() => {
+    const getVal = (item, k) => {
+      if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
+      if (k === 'locationName') return dealerMap[item.dealerId] || ''
+      if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
+      if (k === 'createdAt') return item.createdAt?.toDate?.()?.getTime() ?? item.updatedAt?.toDate?.()?.getTime() ?? 0
+      return item[k]
+    }
+    const neg = filtered.filter((i) => (i.quantityOnHand ?? 0) < 0)
+    const rest = filtered.filter((i) => (i.quantityOnHand ?? 0) >= 0)
+    return [...applySort(neg, logSort.key, logSort.dir, getVal), ...applySort(rest, logSort.key, logSort.dir, getVal)]
+  }, [filtered, logSort, dealerMap, dealerProfileMap])
 
-  const sortLocItems = (locItems) => applySort(locItems, locationSort.key, locationSort.dir, (item, k) => {
-    if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
-    if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
-    return item[k]
-  })
+  const sortLocItems = (locItems) => {
+    const getVal = (item, k) => {
+      if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
+      if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
+      return item[k]
+    }
+    const neg = locItems.filter((i) => (i.quantityOnHand ?? 0) < 0)
+    const rest = locItems.filter((i) => (i.quantityOnHand ?? 0) >= 0)
+    return [...applySort(neg, locationSort.key, locationSort.dir, getVal), ...applySort(rest, locationSort.key, locationSort.dir, getVal)]
+  }
 
   // KPIs (across all items, not just filtered)
   const totalUnits = items.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
@@ -624,6 +639,7 @@ export default function InventoryMaster() {
     return avail > 0 && i.lowStockThreshold != null && avail <= i.lowStockThreshold
   }).length
   const outOfStockCount = items.filter((i) => (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0) <= 0).length
+  const negativeStockCount = items.filter((i) => (i.quantityOnHand ?? 0) < 0).length
 
   const isLoading = loading || dealersLoading
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
@@ -683,12 +699,13 @@ export default function InventoryMaster() {
       </div>
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
           { label: 'Total Units', value: totalUnits, color: 'text-[#1A1A1A]' },
           { label: 'Available', value: totalAvailable, color: 'text-[#4CAF7D]' },
           { label: 'Low Stock', value: lowStockCount, color: 'text-[#E6A817]' },
           { label: 'Out of Stock', value: outOfStockCount, color: 'text-[#D95F5F]' },
+          { label: 'Negative Stock', value: negativeStockCount, color: negativeStockCount > 0 ? 'text-[#D95F5F]' : 'text-[#9A9A9A]' },
         ].map((k) => (
           <div key={k.label} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
             <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-1">{k.label}</p>
@@ -754,8 +771,9 @@ export default function InventoryMaster() {
                 <tr><td colSpan={8} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
               ) : sortedSummary.map((g, i) => {
                 const totalAvail = g.totalOnHand - g.totalReserved
+                const isNeg = g.totalOnHand < 0
                 return (
-                  <tr key={i} className="hover:bg-[#FAFAFA] transition-colors">
+                  <tr key={i} className={`transition-colors ${isNeg ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                     <td className="py-3 px-4 font-medium text-[#1A1A1A]">{g.modelName}</td>
                     <td className="py-3 px-4">
                       {g.condition
@@ -764,7 +782,10 @@ export default function InventoryMaster() {
                     </td>
                     <td className="py-3 px-4 text-[#9A9A9A]">{g.msrp != null ? formatCurrency(g.msrp) : '—'}</td>
                     <td className="py-3 px-4 font-medium text-[#4CAF7D]">{g.repPrice != null ? formatCurrency(g.repPrice) : '—'}</td>
-                    <td className="py-3 px-4 text-center font-semibold text-[#1A1A1A]">{g.totalOnHand}</td>
+                    <td className={`py-3 px-4 text-center font-semibold ${isNeg ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                      {g.totalOnHand}
+                      {isNeg && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
+                    </td>
                     <td className="py-3 px-4 text-center text-[#9A9A9A]">{g.totalReserved}</td>
                     <td className="py-3 px-4 text-center">
                       <AvailBadge available={totalAvail} threshold={null} />
@@ -880,7 +901,7 @@ export default function InventoryMaster() {
                     {sortLocItems(locItems).map((item) => {
                       const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                       return (
-                        <tr key={item.id} className="hover:bg-[#FAFAFA]">
+                        <tr key={item.id} className={`${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                           <td className="py-2 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
                           <td className="py-2 px-4">
                             <p className="text-[#1A1A1A]">{item.sku || '—'}</p>
@@ -893,7 +914,10 @@ export default function InventoryMaster() {
                           </td>
                           <td className="py-2 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
                           <td className="py-2 px-4 font-medium text-[#4CAF7D]">{item.msrp != null ? formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId])) : '—'}</td>
-                          <td className="py-2 px-4 text-center font-semibold">{item.quantityOnHand ?? 0}</td>
+                          <td className={`py-2 px-4 text-center font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                            {item.quantityOnHand ?? 0}
+                            {(item.quantityOnHand ?? 0) < 0 && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
+                          </td>
                           <td className="py-2 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                           <td className="py-2 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
                           {isAdmin && <td className="py-2 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
@@ -911,7 +935,7 @@ export default function InventoryMaster() {
                   {sortLocItems(locItems).map((item) => {
                     const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                     return (
-                      <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                      <div key={item.id} className={`px-4 py-3 flex items-center justify-between gap-3 ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 border-l-2 border-[#D95F5F]' : ''}`}>
                         <div className="min-w-0">
                           <p className="font-medium text-[#1A1A1A] truncate">{item.modelName}</p>
                           <p className="text-xs text-[#9A9A9A]">{item.sku || 'No SKU'} · {item.condition}</p>
@@ -921,7 +945,9 @@ export default function InventoryMaster() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</span>
+                          <span className={`text-sm font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                            {item.quantityOnHand ?? 0}{(item.quantityOnHand ?? 0) < 0 ? ' ⚠' : ''}
+                          </span>
                           <AvailBadge available={available} threshold={item.lowStockThreshold} />
                         </div>
                       </div>
@@ -961,7 +987,7 @@ export default function InventoryMaster() {
                 ) : sortedLog.map((item) => {
                   const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                   return (
-                    <tr key={item.id} className="hover:bg-[#FAFAFA] transition-colors">
+                    <tr key={item.id} className={`transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                       <td className="py-3 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
                       <td className="py-3 px-4 text-[#9A9A9A] text-xs">{dealerMap[item.dealerId] || '—'}</td>
                       <td className="py-3 px-4">
@@ -973,7 +999,10 @@ export default function InventoryMaster() {
                           {item.condition ?? '—'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</td>
+                      <td className={`py-3 px-4 text-center font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                        {item.quantityOnHand ?? 0}
+                        {(item.quantityOnHand ?? 0) < 0 && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
+                      </td>
                       <td className="py-3 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
                       <td className="py-3 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
                       <td className="py-3 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
@@ -1012,7 +1041,7 @@ export default function InventoryMaster() {
             ) : sortedLog.map((item) => {
               const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
               return (
-                <div key={item.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <div key={item.id} className={`rounded-xl p-4 shadow-sm border ${(item.quantityOnHand ?? 0) < 0 ? 'border-[#D95F5F]/40 bg-[#D95F5F]/5' : 'bg-white border-gray-100'}`}>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-semibold text-[#1A1A1A]">{item.modelName}</p>
@@ -1031,7 +1060,9 @@ export default function InventoryMaster() {
                   <div className="grid grid-cols-3 gap-2 text-center mb-3">
                     <div className="bg-[#F4F4F5] rounded-lg py-1.5">
                       <p className="text-xs text-[#9A9A9A]">On Hand</p>
-                      <p className="font-bold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</p>
+                      <p className={`font-bold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                        {item.quantityOnHand ?? 0}{(item.quantityOnHand ?? 0) < 0 ? ' ⚠' : ''}
+                      </p>
                     </div>
                     <div className="bg-[#F4F4F5] rounded-lg py-1.5">
                       <p className="text-xs text-[#9A9A9A]">Reserved</p>

@@ -56,6 +56,11 @@ import PresetQuotes from './pages/admin/PresetQuotes'
 import TerritoryList from './pages/admin/territories/TerritoryList'
 import TerritoryMap from './pages/admin/territories/TerritoryMap'
 import EmailTemplates from './pages/admin/EmailTemplates'
+import RepManagementHub from './pages/admin/reps/RepManagementHub'
+import RepList from './pages/admin/reps/RepList'
+import RepNew from './pages/admin/reps/RepNew'
+import RepDetail from './pages/admin/reps/RepDetail'
+import RepPipeline from './pages/admin/reps/RepPipeline'
 
 // Warehouse
 import WarehouseDashboard from './pages/warehouse/WarehouseDashboard'
@@ -177,6 +182,26 @@ export const router = createBrowserRouter([
       { path: '/profile', element: <ProfilePage /> },
 
       // Admin routes
+      {
+        path: '/admin/rep-management',
+        element: <RequireAdmin><RepManagementHub /></RequireAdmin>,
+      },
+      {
+        path: '/admin/reps',
+        element: <RequireAdmin><RepList /></RequireAdmin>,
+      },
+      {
+        path: '/admin/reps/new',
+        element: <RequireAdmin><RepNew /></RequireAdmin>,
+      },
+      {
+        path: '/admin/reps/pipeline',
+        element: <RequireAdmin><RepPipeline /></RequireAdmin>,
+      },
+      {
+        path: '/admin/reps/:id',
+        element: <RequireAdmin><RepDetail /></RequireAdmin>,
+      },
       {
         path: '/admin/preset-quotes',
         element: <RequireAdmin><PresetQuotes /></RequireAdmin>,

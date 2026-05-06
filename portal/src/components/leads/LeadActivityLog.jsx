@@ -23,20 +23,25 @@ export default function LeadActivityLog({ leadId }) {
   const [type, setType] = useState('Note')
   const [details, setDetails] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!details.trim()) return
     setSaving(true)
+    setError('')
     try {
       await addDoc(leadActivityCol(leadId), {
         type,
         details: details.trim(),
         createdByName: profile?.displayName ?? 'Unknown',
-        createdById: profile?.uid,
+        createdById: profile?.id ?? null,
         timestamp: serverTimestamp(),
       })
       setDetails('')
+    } catch (err) {
+      console.error('Failed to log activity:', err)
+      setError('Failed to save. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -70,11 +75,12 @@ export default function LeadActivityLog({ leadId }) {
           rows={2}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#1A1A1A] placeholder-[#9A9A9A] focus:outline-none focus:border-[#8B6914] resize-none bg-white transition-colors"
         />
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          {error && <p className="text-xs text-[#D95F5F]">{error}</p>}
           <button
             type="submit"
             disabled={saving || !details.trim()}
-            className="bg-[#8B6914] hover:bg-[#7a5c11] disabled:opacity-50 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors"
+            className="ml-auto bg-[#8B6914] hover:bg-[#7a5c11] disabled:opacity-50 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors"
           >
             {saving ? 'Saving…' : 'Log'}
           </button>

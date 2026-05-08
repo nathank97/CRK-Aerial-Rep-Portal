@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { addDoc, serverTimestamp } from 'firebase/firestore'
+import { addDoc, Timestamp } from 'firebase/firestore'
 import { useLeadActivity } from '../../hooks/useLeads'
 import { useAuth } from '../../context/AuthContext'
 import { leadActivityCol } from '../../firebase/firestore'
 import { formatDateTime } from '../../utils/formatters'
+
+const todayStr = () => new Date().toISOString().slice(0, 10)
 
 const ACTIVITY_TYPES = ['Call', 'Email Sent', 'Note', 'Meeting', 'Demo', 'Quote Sent']
 
@@ -22,6 +24,7 @@ export default function LeadActivityLog({ leadId }) {
   const { profile } = useAuth()
   const [type, setType] = useState('Note')
   const [details, setDetails] = useState('')
+  const [activityDate, setActivityDate] = useState(todayStr())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,14 +34,16 @@ export default function LeadActivityLog({ leadId }) {
     setSaving(true)
     setError('')
     try {
+      const ts = Timestamp.fromDate(new Date(activityDate + 'T12:00:00'))
       await addDoc(leadActivityCol(leadId), {
         type,
         details: details.trim(),
         createdByName: profile?.displayName ?? 'Unknown',
         createdById: profile?.id ?? null,
-        timestamp: serverTimestamp(),
+        timestamp: ts,
       })
       setDetails('')
+      setActivityDate(todayStr())
     } catch (err) {
       console.error('Failed to log activity:', err)
       setError('Failed to save. Please try again.')
@@ -76,6 +81,16 @@ export default function LeadActivityLog({ leadId }) {
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-[#1A1A1A] placeholder-[#9A9A9A] focus:outline-none focus:border-[#8B6914] resize-none bg-white transition-colors"
         />
         <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[#9A9A9A] whitespace-nowrap">Date:</label>
+            <input
+              type="date"
+              value={activityDate}
+              max={todayStr()}
+              onChange={(e) => setActivityDate(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-[#1A1A1A] focus:outline-none focus:border-[#8B6914] bg-white transition-colors"
+            />
+          </div>
           {error && <p className="text-xs text-[#D95F5F]">{error}</p>}
           <button
             type="submit"

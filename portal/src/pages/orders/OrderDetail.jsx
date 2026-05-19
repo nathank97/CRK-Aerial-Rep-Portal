@@ -8,6 +8,7 @@ import { orderDoc, invoicesCol, inventoryCol } from '../../firebase/firestore'
 import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
 import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
 import { emailService } from '../../services/emailService'
+import CCModal from '../../components/common/CCModal'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -183,6 +184,7 @@ export default function OrderDetail() {
   const [notesEdit, setNotesEdit] = useState('')
   const [editingNotes, setEditingNotes] = useState(false)
   const [showFulfill, setShowFulfill] = useState(false)
+  const [showCCModal, setShowCCModal] = useState(false)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -284,7 +286,10 @@ export default function OrderDetail() {
     }
   }
 
-  const handleSendToWarehouse = async () => {
+  const handleSendToWarehouse = () => setShowCCModal(true)
+
+  const handleSendToWarehouseConfirm = async (cc) => {
+    setShowCCModal(false)
     setSaving(true)
     try {
       const vars = {
@@ -300,7 +305,7 @@ export default function OrderDetail() {
       if (to) {
         const subject = fillTemplate(emailTemplate.orderSubject, vars)
         const body = fillTemplate(emailTemplate.orderBody, vars)
-        await emailService.send({ to, subject, body })
+        await emailService.send({ to, subject, body, cc })
       }
       await updateDoc(orderDoc(id), {
         sentToWarehouse: true,
@@ -485,6 +490,14 @@ export default function OrderDetail() {
           onClose={() => setShowFulfill(false)}
           onConfirm={handleFulfill}
           saving={saving}
+        />
+      )}
+      {showCCModal && (
+        <CCModal
+          presets={emailTemplate.ccPresets}
+          sending={saving}
+          onCancel={() => setShowCCModal(false)}
+          onSend={handleSendToWarehouseConfirm}
         />
       )}
 

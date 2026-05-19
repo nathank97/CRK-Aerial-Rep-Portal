@@ -79,6 +79,7 @@ export function useEmailTemplate() {
     warehouseEmail: '',
     invoiceSubject: DEFAULT_INVOICE_SUBJECT,
     invoiceBody: DEFAULT_INVOICE_BODY,
+    ccPresets: [],
   })
   const [loading, setLoading] = useState(true)
 
@@ -94,6 +95,7 @@ export function useEmailTemplate() {
           warehouseEmail: d.warehouseEmail || '',
           invoiceSubject: d.invoiceSubject || DEFAULT_INVOICE_SUBJECT,
           invoiceBody: d.invoiceBody || DEFAULT_INVOICE_BODY,
+          ccPresets: d.ccPresets || [],
         })
       }
       setLoading(false)

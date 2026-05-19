@@ -14,6 +14,7 @@ import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBui
 import QuotePDF from '../../components/quotes/QuotePDF'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
+import CCModal from '../../components/common/CCModal'
 import { matchAndReserve } from '../../utils/inventoryReservation'
 import crkLogoUrl from '../../assets/logo.png'
 
@@ -75,6 +76,7 @@ export default function QuoteDetail() {
   const [saving, setSaving] = useState(false)
   const [actionMsg, setActionMsg] = useState('')
   const [showConvertModal, setShowConvertModal] = useState(false)
+  const [showCCModal, setShowCCModal] = useState(false)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -122,11 +124,16 @@ export default function QuoteDetail() {
     flash(`Status set to ${status}.`)
   }
 
-  const handleSendQuote = async () => {
+  const handleSendQuote = () => {
     if (!quote.customerEmail) {
       flash('No customer email address on file.')
       return
     }
+    setShowCCModal(true)
+  }
+
+  const handleSendQuoteConfirm = async (cc) => {
+    setShowCCModal(false)
     setSaving(true)
     try {
       const vars = {
@@ -149,6 +156,7 @@ export default function QuoteDetail() {
         body,
         pdfBase64,
         pdfFilename: `${quote.quoteNumber}.pdf`,
+        cc,
       })
 
       await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
@@ -247,6 +255,14 @@ export default function QuoteDetail() {
           saving={saving}
           onClose={() => setShowConvertModal(false)}
           onConfirm={(reserve) => { setShowConvertModal(false); handleConvertToOrder(reserve) }}
+        />
+      )}
+      {showCCModal && (
+        <CCModal
+          presets={emailTemplate.ccPresets}
+          sending={saving}
+          onCancel={() => setShowCCModal(false)}
+          onSend={handleSendQuoteConfirm}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { setDoc, serverTimestamp } from 'firebase/firestore'
+import { setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { emailTemplatesDoc } from '../../firebase/firestore'
 import {
   useEmailTemplate,
@@ -74,6 +74,13 @@ export default function EmailTemplates() {
   const [invoiceSubject, setInvoiceSubject] = useState('')
   const [invoiceBody, setInvoiceBody] = useState('')
 
+  // CC Presets
+  const [ccPresets, setCcPresets] = useState([])
+  const [newLabel, setNewLabel] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [presetError, setPresetError] = useState('')
+  const [presetSaving, setPresetSaving] = useState(false)
+
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -87,6 +94,7 @@ export default function EmailTemplates() {
       setWarehouseEmail(template.warehouseEmail)
       setInvoiceSubject(template.invoiceSubject)
       setInvoiceBody(template.invoiceBody)
+      setCcPresets(template.ccPresets || [])
     }
   }, [loading, template])
 
@@ -103,6 +111,7 @@ export default function EmailTemplates() {
         warehouseEmail: warehouseEmail.trim(),
         invoiceSubject: invoiceSubject.trim() || DEFAULT_INVOICE_SUBJECT,
         invoiceBody: invoiceBody.trim() || DEFAULT_INVOICE_BODY,
+        ccPresets,
         updatedAt: serverTimestamp(),
       })
       setSaved(true)
@@ -121,10 +130,47 @@ export default function EmailTemplates() {
     if (activeTab === 'invoice') { setInvoiceSubject(DEFAULT_INVOICE_SUBJECT); setInvoiceBody(DEFAULT_INVOICE_BODY) }
   }
 
+  const handleAddPreset = async () => {
+    const label = newLabel.trim()
+    const email = newEmail.trim().toLowerCase()
+    if (!label) { setPresetError('Label is required.'); return }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setPresetError('Enter a valid email address.'); return }
+    if (ccPresets.some((p) => p.email === email)) { setPresetError('That email is already in the list.'); return }
+
+    const updated = [...ccPresets, { id: crypto.randomUUID(), label, email }]
+    setPresetSaving(true)
+    try {
+      await updateDoc(emailTemplatesDoc, { ccPresets: updated })
+      setCcPresets(updated)
+      setNewLabel('')
+      setNewEmail('')
+      setPresetError('')
+    } catch (err) {
+      console.error(err)
+      setPresetError('Failed to save preset.')
+    } finally {
+      setPresetSaving(false)
+    }
+  }
+
+  const handleRemovePreset = async (id) => {
+    const updated = ccPresets.filter((p) => p.id !== id)
+    setPresetSaving(true)
+    try {
+      await updateDoc(emailTemplatesDoc, { ccPresets: updated })
+      setCcPresets(updated)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setPresetSaving(false)
+    }
+  }
+
   const TABS = [
     { key: 'quote', label: 'Quote' },
     { key: 'order', label: 'Order (Warehouse)' },
     { key: 'invoice', label: 'Invoice' },
+    { key: 'cc', label: 'CC Presets' },
   ]
 
   if (loading) {
@@ -141,7 +187,7 @@ export default function EmailTemplates() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1A1A1A]">Email Templates</h1>
         <p className="text-sm text-[#9A9A9A] mt-0.5">
-          Customize the emails that pre-fill when reps click Send. They send from their own email client.
+          Customize email templates and manage CC presets for reps.
         </p>
       </div>
 
@@ -163,89 +209,157 @@ export default function EmailTemplates() {
         ))}
       </div>
 
-      <form onSubmit={handleSave} className="space-y-5">
-        {/* Quote tab */}
-        {activeTab === 'quote' && (
-          <>
-            <PlaceholderList items={QUOTE_PLACEHOLDERS} />
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-              <div>
-                <label className={labelCls}>Subject</label>
-                <input value={quoteSubject} onChange={(e) => setQuoteSubject(e.target.value)} className={inputCls} />
+      {/* CC Presets tab — managed independently, no Save All button needed */}
+      {activeTab === 'cc' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-[#111111] mb-1">CC Presets</h2>
+            <p className="text-xs text-[#9A9A9A] mb-4">
+              Reps can select these when sending quotes, invoices, or orders. Changes save immediately.
+            </p>
+
+            {/* Existing presets */}
+            {ccPresets.length === 0 ? (
+              <p className="text-sm text-[#9A9A9A] py-4 text-center">No presets yet. Add one below.</p>
+            ) : (
+              <div className="space-y-2 mb-4">
+                {ccPresets.map((preset) => (
+                  <div key={preset.id} className="flex items-center justify-between gap-3 bg-[#F4F4F5] rounded-lg px-3 py-2.5">
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium text-[#111111]">{preset.label}</span>
+                      <span className="text-xs text-[#9A9A9A] ml-2">{preset.email}</span>
+                    </div>
+                    <button
+                      onClick={() => handleRemovePreset(preset.id)}
+                      disabled={presetSaving}
+                      className="text-xs text-[#D95F5F] hover:text-[#b94848] font-medium shrink-0 disabled:opacity-50 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label className={labelCls}>Body</label>
-                <textarea value={quoteBody} onChange={(e) => setQuoteBody(e.target.value)} rows={12} className={`${inputCls} resize-y font-mono`} />
-                <p className="text-xs text-[#9A9A9A] mt-1.5">Opens pre-filled in the rep's email app. They attach the PDF before sending.</p>
+            )}
+
+            {/* Add new preset */}
+            <div className="border-t border-gray-100 pt-4 space-y-3">
+              <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Add Preset</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Label</label>
+                  <input
+                    type="text"
+                    value={newLabel}
+                    onChange={(e) => { setNewLabel(e.target.value); setPresetError('') }}
+                    placeholder="e.g. Accounting"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Email</label>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => { setNewEmail(e.target.value); setPresetError('') }}
+                    placeholder="accounting@crkgp.com"
+                    className={inputCls}
+                  />
+                </div>
               </div>
+              {presetError && <p className="text-xs text-[#D95F5F]">{presetError}</p>}
+              <button
+                type="button"
+                onClick={handleAddPreset}
+                disabled={presetSaving}
+                className="px-4 py-2 bg-[#8B6914] hover:bg-[#7a5c11] text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition-colors"
+              >
+                {presetSaving ? 'Saving…' : 'Add Preset'}
+              </button>
             </div>
-          </>
-        )}
-
-        {/* Order tab */}
-        {activeTab === 'order' && (
-          <>
-            <PlaceholderList items={ORDER_PLACEHOLDERS} />
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-              <div>
-                <label className={labelCls}>Warehouse Email</label>
-                <input
-                  type="email"
-                  value={warehouseEmail}
-                  onChange={(e) => setWarehouseEmail(e.target.value)}
-                  placeholder="warehouse@crkgp.com"
-                  className={inputCls}
-                />
-                <p className="text-xs text-[#9A9A9A] mt-1.5">Pre-fills the To field when a rep sends an order to the warehouse.</p>
-              </div>
-              <div>
-                <label className={labelCls}>Subject</label>
-                <input value={orderSubject} onChange={(e) => setOrderSubject(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Body</label>
-                <textarea value={orderBody} onChange={(e) => setOrderBody(e.target.value)} rows={14} className={`${inputCls} resize-y font-mono`} />
-                <p className="text-xs text-[#9A9A9A] mt-1.5">Sent to the warehouse with all order and shipping details.</p>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Invoice tab */}
-        {activeTab === 'invoice' && (
-          <>
-            <PlaceholderList items={INVOICE_PLACEHOLDERS} />
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-              <div>
-                <label className={labelCls}>Subject</label>
-                <input value={invoiceSubject} onChange={(e) => setInvoiceSubject(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className={labelCls}>Body</label>
-                <textarea value={invoiceBody} onChange={(e) => setInvoiceBody(e.target.value)} rows={12} className={`${inputCls} resize-y font-mono`} />
-                <p className="text-xs text-[#9A9A9A] mt-1.5">Opens pre-filled in the rep's email app. They attach the PDF before sending.</p>
-              </div>
-            </div>
-          </>
-        )}
-
-        {error && (
-          <div className="bg-[#D95F5F]/10 border border-[#D95F5F]/30 rounded-lg px-4 py-2 text-sm text-[#D95F5F]">{error}</div>
-        )}
-        {saved && (
-          <div className="bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-2 text-sm text-[#4CAF7D]">Template saved successfully.</div>
-        )}
-
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <button type="button" onClick={handleReset} className="text-sm text-[#9A9A9A] hover:text-[#1A1A1A] transition-colors">
-            Reset current tab to default
-          </button>
-          <button type="submit" disabled={saving}
-            className="px-5 py-2 bg-[#8B6914] hover:bg-[#7a5c11] text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition-colors">
-            {saving ? 'Saving…' : 'Save All Templates'}
-          </button>
+          </div>
         </div>
-      </form>
+      )}
+
+      {/* Template tabs — wrapped in form with Save All button */}
+      {activeTab !== 'cc' && (
+        <form onSubmit={handleSave} className="space-y-5">
+          {activeTab === 'quote' && (
+            <>
+              <PlaceholderList items={QUOTE_PLACEHOLDERS} />
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+                <div>
+                  <label className={labelCls}>Subject</label>
+                  <input value={quoteSubject} onChange={(e) => setQuoteSubject(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Body</label>
+                  <textarea value={quoteBody} onChange={(e) => setQuoteBody(e.target.value)} rows={12} className={`${inputCls} resize-y font-mono`} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'order' && (
+            <>
+              <PlaceholderList items={ORDER_PLACEHOLDERS} />
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+                <div>
+                  <label className={labelCls}>Warehouse Email</label>
+                  <input
+                    type="email"
+                    value={warehouseEmail}
+                    onChange={(e) => setWarehouseEmail(e.target.value)}
+                    placeholder="warehouse@crkgp.com"
+                    className={inputCls}
+                  />
+                  <p className="text-xs text-[#9A9A9A] mt-1.5">Pre-fills the To field when a rep sends an order to the warehouse.</p>
+                </div>
+                <div>
+                  <label className={labelCls}>Subject</label>
+                  <input value={orderSubject} onChange={(e) => setOrderSubject(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Body</label>
+                  <textarea value={orderBody} onChange={(e) => setOrderBody(e.target.value)} rows={14} className={`${inputCls} resize-y font-mono`} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'invoice' && (
+            <>
+              <PlaceholderList items={INVOICE_PLACEHOLDERS} />
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+                <div>
+                  <label className={labelCls}>Subject</label>
+                  <input value={invoiceSubject} onChange={(e) => setInvoiceSubject(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Body</label>
+                  <textarea value={invoiceBody} onChange={(e) => setInvoiceBody(e.target.value)} rows={12} className={`${inputCls} resize-y font-mono`} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {error && (
+            <div className="bg-[#D95F5F]/10 border border-[#D95F5F]/30 rounded-lg px-4 py-2 text-sm text-[#D95F5F]">{error}</div>
+          )}
+          {saved && (
+            <div className="bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-2 text-sm text-[#4CAF7D]">Template saved successfully.</div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <button type="button" onClick={handleReset} className="text-sm text-[#9A9A9A] hover:text-[#1A1A1A] transition-colors">
+              Reset current tab to default
+            </button>
+            <button type="submit" disabled={saving}
+              className="px-5 py-2 bg-[#8B6914] hover:bg-[#7a5c11] text-white text-sm font-semibold rounded-lg disabled:opacity-60 transition-colors">
+              {saving ? 'Saving…' : 'Save All Templates'}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }

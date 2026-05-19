@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { to, subject, body, pdfBase64, pdfFilename } = req.body
+  const { to, subject, body, pdfBase64, pdfFilename, cc } = req.body
 
   if (!to || !subject || !body) {
     return res.status(400).json({ error: 'Missing required fields: to, subject, body' })
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     const { data, error } = await resend.emails.send({
       from: FROM,
       to: [to],
+      ...(Array.isArray(cc) && cc.length > 0 ? { cc } : {}),
       subject,
       text: body,
       attachments,

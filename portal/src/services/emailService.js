@@ -8,11 +8,11 @@ export function blobToBase64(blob) {
 }
 
 export const emailService = {
-  async send({ to, subject, body, pdfBase64, pdfFilename }) {
+  async send({ to, subject, body, pdfBase64, pdfFilename, cc }) {
     const res = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, body, pdfBase64, pdfFilename }),
+      body: JSON.stringify({ to, subject, body, pdfBase64, pdfFilename, cc }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))

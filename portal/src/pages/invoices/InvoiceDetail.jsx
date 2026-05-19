@@ -13,6 +13,7 @@ import InvoicePDF from '../../components/invoices/InvoicePDF'
 import crkLogoUrl from '../../assets/logo.png'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
+import CCModal from '../../components/common/CCModal'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -36,6 +37,7 @@ export default function InvoiceDetail() {
 
   // Partial payment modal
   const [showPartialModal, setShowPartialModal] = useState(false)
+  const [showCCModal, setShowCCModal] = useState(false)
   const [partialAmount, setPartialAmount] = useState('')
   const [partialDate, setPartialDate] = useState('')
 
@@ -153,11 +155,16 @@ export default function InvoiceDetail() {
     }
   }
 
-  const handleSendInvoice = async () => {
+  const handleSendInvoice = () => {
     if (!invoice.customerEmail) {
       flash('No customer email address on file.', true)
       return
     }
+    setShowCCModal(true)
+  }
+
+  const handleSendInvoiceConfirm = async (cc) => {
+    setShowCCModal(false)
     setSaving(true)
     try {
       const vars = {
@@ -182,6 +189,7 @@ export default function InvoiceDetail() {
         body,
         pdfBase64,
         pdfFilename: `${invoice.invoiceNumber}.pdf`,
+        cc,
       })
 
       await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
@@ -248,6 +256,15 @@ export default function InvoiceDetail() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      {showCCModal && (
+        <CCModal
+          presets={emailTemplate.ccPresets}
+          sending={saving}
+          onCancel={() => setShowCCModal(false)}
+          onSend={handleSendInvoiceConfirm}
+        />
+      )}
+
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm mb-5">
         <Link to="/invoices" className="text-[#9A9A9A] hover:text-[#111111] transition-colors">Invoices</Link>

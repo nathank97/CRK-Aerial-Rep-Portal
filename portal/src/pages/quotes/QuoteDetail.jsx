@@ -125,15 +125,15 @@ export default function QuoteDetail() {
   }
 
   const handleSendQuote = () => {
-    if (!quote.customerEmail) {
-      flash('No customer email address on file.')
-      return
-    }
     setShowCCModal(true)
   }
 
   const handleSendQuoteConfirm = async (cc) => {
     setShowCCModal(false)
+    if (!quote.customerEmail) {
+      flash('No customer email address on file.', true)
+      return
+    }
     setSaving(true)
     try {
       const vars = {

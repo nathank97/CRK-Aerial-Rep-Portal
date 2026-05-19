@@ -156,15 +156,15 @@ export default function InvoiceDetail() {
   }
 
   const handleSendInvoice = () => {
-    if (!invoice.customerEmail) {
-      flash('No customer email address on file.', true)
-      return
-    }
     setShowCCModal(true)
   }
 
   const handleSendInvoiceConfirm = async (cc) => {
     setShowCCModal(false)
+    if (!invoice.customerEmail) {
+      flash('No customer email address on file.', true)
+      return
+    }
     setSaving(true)
     try {
       const vars = {

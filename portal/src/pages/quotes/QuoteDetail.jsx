@@ -1,7 +1,7 @@
 import { Suspense, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
-import { PDFDownloadLink } from '@react-pdf/renderer'
+import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
 import { useAuth } from '../../context/AuthContext'
 import { useQuote } from '../../hooks/useQuotes'
 import { quotesCol, ordersCol } from '../../firebase/firestore'
@@ -13,6 +13,7 @@ import { nextOrderNumber } from '../../utils/numbering'
 import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
 import QuotePDF from '../../components/quotes/QuotePDF'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
+import { emailService, blobToBase64 } from '../../services/emailService'
 import { matchAndReserve } from '../../utils/inventoryReservation'
 import crkLogoUrl from '../../assets/logo.png'
 
@@ -122,23 +123,42 @@ export default function QuoteDetail() {
   }
 
   const handleSendQuote = async () => {
-    const vars = {
-      quoteNumber: quote.quoteNumber ?? '',
-      customerName: quote.linkedCustomerName || quote.linkedLeadName || '',
-      projectName: quote.projectName || '',
-      total: formatCurrency(quote.total),
-      dealerName: quote.dealerName || profile?.displayName || '',
+    if (!quote.customerEmail) {
+      flash('No customer email address on file.')
+      return
     }
-    const subject = fillTemplate(emailTemplate.quoteSubject, vars)
-    const body = fillTemplate(emailTemplate.quoteBody, vars)
-    const to = quote.customerEmail || ''
-    const a = document.createElement('a')
-    a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
-    flash('Email client opened — attach the PDF and send.')
+    setSaving(true)
+    try {
+      const vars = {
+        quoteNumber: quote.quoteNumber ?? '',
+        customerName: quote.linkedCustomerName || quote.linkedLeadName || '',
+        projectName: quote.projectName || '',
+        total: formatCurrency(quote.total),
+        dealerName: quote.dealerName || profile?.displayName || '',
+      }
+      const subject = fillTemplate(emailTemplate.quoteSubject, vars)
+      const body = fillTemplate(emailTemplate.quoteBody, vars)
+
+      const logoSrc = quote.logoChoice === 'custom' && quote.customLogoUrl ? quote.customLogoUrl : crkLogoUrl
+      const blob = await pdf(<QuotePDF quote={quote} logoSrc={logoSrc} />).toBlob()
+      const pdfBase64 = await blobToBase64(blob)
+
+      await emailService.send({
+        to: quote.customerEmail,
+        subject,
+        body,
+        pdfBase64,
+        pdfFilename: `${quote.quoteNumber}.pdf`,
+      })
+
+      await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
+      flash('Quote emailed successfully.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to send quote. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleConvertToOrder = async (reserve) => {

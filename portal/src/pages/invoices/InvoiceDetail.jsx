@@ -1,7 +1,7 @@
 import { Suspense, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
-import { PDFDownloadLink } from '@react-pdf/renderer'
+import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
 import { useAuth } from '../../context/AuthContext'
 import { useInvoice, computePaymentStatus } from '../../hooks/useInvoices'
 import { invoiceDoc, invoicesCol } from '../../firebase/firestore'
@@ -12,6 +12,7 @@ import { nextInvoiceNumber } from '../../utils/numbering'
 import InvoicePDF from '../../components/invoices/InvoicePDF'
 import crkLogoUrl from '../../assets/logo.png'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
+import { emailService, blobToBase64 } from '../../services/emailService'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -153,25 +154,44 @@ export default function InvoiceDetail() {
   }
 
   const handleSendInvoice = async () => {
-    const vars = {
-      invoiceNumber: invoice.invoiceNumber ?? '',
-      customerName: invoice.customerName ?? '',
-      total: formatCurrency(invoice.total),
-      balanceDue: formatCurrency(invoice.balanceDue ?? invoice.total),
-      paymentTerms: invoice.paymentTerms ?? 'Net 30',
-      dueDate: formatDate(invoice.dueDate),
-      dealerName: invoice.dealerName || profile?.displayName || '',
+    if (!invoice.customerEmail) {
+      flash('No customer email address on file.', true)
+      return
     }
-    const subject = fillTemplate(emailTemplate.invoiceSubject, vars)
-    const body = fillTemplate(emailTemplate.invoiceBody, vars)
-    const to = invoice.customerEmail || ''
-    const a = document.createElement('a')
-    a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
-    flash('Email client opened — attach the PDF and send.')
+    setSaving(true)
+    try {
+      const vars = {
+        invoiceNumber: invoice.invoiceNumber ?? '',
+        customerName: invoice.customerName ?? '',
+        total: formatCurrency(invoice.total),
+        balanceDue: formatCurrency(invoice.balanceDue ?? invoice.total),
+        paymentTerms: invoice.paymentTerms ?? 'Net 30',
+        dueDate: formatDate(invoice.dueDate),
+        dealerName: invoice.dealerName || profile?.displayName || '',
+      }
+      const subject = fillTemplate(emailTemplate.invoiceSubject, vars)
+      const body = fillTemplate(emailTemplate.invoiceBody, vars)
+
+      const logoSrc = invoice.logoChoice === 'custom' && invoice.customLogoUrl ? invoice.customLogoUrl : crkLogoUrl
+      const blob = await pdf(<InvoicePDF invoice={invoice} logoSrc={logoSrc} />).toBlob()
+      const pdfBase64 = await blobToBase64(blob)
+
+      await emailService.send({
+        to: invoice.customerEmail,
+        subject,
+        body,
+        pdfBase64,
+        pdfFilename: `${invoice.invoiceNumber}.pdf`,
+      })
+
+      await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      flash('Invoice emailed successfully.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to send invoice. Please try again.', true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDuplicate = async () => {

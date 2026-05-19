@@ -7,6 +7,7 @@ import { useOrder } from '../../hooks/useOrders'
 import { orderDoc, invoicesCol, inventoryCol } from '../../firebase/firestore'
 import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
 import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
+import { emailService } from '../../services/emailService'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate } from '../../utils/formatters'
@@ -299,11 +300,7 @@ export default function OrderDetail() {
       if (to) {
         const subject = fillTemplate(emailTemplate.orderSubject, vars)
         const body = fillTemplate(emailTemplate.orderBody, vars)
-        const a = document.createElement('a')
-        a.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
+        await emailService.send({ to, subject, body })
       }
       await updateDoc(orderDoc(id), {
         sentToWarehouse: true,
@@ -311,7 +308,7 @@ export default function OrderDetail() {
         sentAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
-      flash('Order added to warehouse queue.')
+      flash(to ? 'Order sent to warehouse.' : 'Order added to warehouse queue.')
     } catch (err) {
       console.error(err)
       flash('Failed to send to warehouse.')

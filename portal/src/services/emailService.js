@@ -1,27 +1,23 @@
-/**
- * Email service — stubbed until EmailJS credentials are configured.
- * Replace EMAILJS_SERVICE_ID, EMAILJS_PUBLIC_KEY, and template IDs
- * with real values from your EmailJS dashboard.
- */
-
-const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID ?? ''
-const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY ?? ''
-const CONFIGURED = SERVICE_ID && PUBLIC_KEY
-
-async function send(templateId, params) {
-  if (!CONFIGURED) {
-    console.log('[EmailJS stub] Would send email:', { templateId, params })
-    return { status: 200, text: 'stub' }
-  }
-  const emailjs = await import('@emailjs/browser')
-  return emailjs.send(SERVICE_ID, templateId, params, PUBLIC_KEY)
+export function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result.split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
 }
 
 export const emailService = {
-  sendQuote: (params) => send('template_quote', params),
-  sendInvoice: (params) => send('template_invoice', params),
-  sendLeadAssigned: (params) => send('template_lead_assigned', params),
-  sendOrderUpdate: (params) => send('template_order_update', params),
-  sendLowStock: (params) => send('template_low_stock', params),
-  isConfigured: () => CONFIGURED,
+  async send({ to, subject, body, pdfBase64, pdfFilename }) {
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, body, pdfBase64, pdfFilename }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || `Email send failed (${res.status})`)
+    }
+    return res.json()
+  },
 }

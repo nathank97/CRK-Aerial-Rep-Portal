@@ -84,3 +84,38 @@ export const createDealerAccount = async ({ email, tempPassword, displayName, ma
 
   return { uid, email, displayName }
 }
+
+// Generic account creator for admin and warehouse_manager roles
+export const createUserAccount = async ({ email, tempPassword, displayName, role }) => {
+  const API_KEY = 'AIzaSyBgh4DelRBgPigdyZaYSigUXoxzOVMbp94'
+
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: tempPassword, returnSecureToken: true }),
+    }
+  )
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data?.error?.message ?? 'Failed to create account.'
+    throw new Error(msg === 'EMAIL_EXISTS' ? 'An account with that email already exists.' : msg)
+  }
+
+  const uid = data.localId
+
+  await setDoc(doc(db, 'users', uid), {
+    uid,
+    email,
+    displayName,
+    role,
+    createdAt: serverTimestamp(),
+  })
+
+  await sendPasswordResetEmail(auth, email, {
+    url: 'https://portal-umber-phi.vercel.app/',
+  })
+
+  return { uid, email, displayName }
+}

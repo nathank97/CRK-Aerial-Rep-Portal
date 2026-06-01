@@ -56,6 +56,7 @@ import PresetQuotes from './pages/admin/PresetQuotes'
 import TerritoryList from './pages/admin/territories/TerritoryList'
 import TerritoryMap from './pages/admin/territories/TerritoryMap'
 import EmailTemplates from './pages/admin/EmailTemplates'
+import UserManagement from './pages/admin/UserManagement'
 import RepManagementHub from './pages/admin/reps/RepManagementHub'
 import RepList from './pages/admin/reps/RepList'
 import RepNew from './pages/admin/reps/RepNew'
@@ -182,6 +183,10 @@ export const router = createBrowserRouter([
       { path: '/profile', element: <ProfilePage /> },
 
       // Admin routes
+      {
+        path: '/admin/users',
+        element: <RequireAdmin><UserManagement /></RequireAdmin>,
+      },
       {
         path: '/admin/rep-management',
         element: <RequireAdmin><RepManagementHub /></RequireAdmin>,

@@ -34,6 +34,7 @@ export default function InvoiceDetail() {
   const [editInternalNotes, setEditInternalNotes] = useState('')
   const [editAmountPaid, setEditAmountPaid] = useState(0)
   const [editPaidAt, setEditPaidAt] = useState('')
+  const [editLineItems, setEditLineItems] = useState([])
 
   // Partial payment modal
   const [showPartialModal, setShowPartialModal] = useState(false)
@@ -57,6 +58,24 @@ export default function InvoiceDetail() {
     return d.toISOString().split('T')[0]
   }
 
+  const calcLineTotal = (item) => {
+    const qty = parseFloat(item.quantity) || 0
+    const price = parseFloat(item.unitPrice) || 0
+    const base = qty * price
+    const disc = parseFloat(item.discount) || 0
+    if (disc <= 0) return base
+    return item.discountType === 'percent' ? base * (1 - disc / 100) : Math.max(0, base - disc)
+  }
+
+  const updateLineItem = (idx, field, val) =>
+    setEditLineItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item))
+
+  const addLineItem = () =>
+    setEditLineItems(prev => [...prev, { id: `new_${Date.now()}`, description: '', quantity: 1, unitPrice: '', discount: 0, discountType: 'dollar' }])
+
+  const removeLineItem = (idx) =>
+    setEditLineItems(prev => prev.filter((_, i) => i !== idx))
+
   const enterEdit = () => {
     setEditPaymentTerms(invoice.paymentTerms ?? 'Net 30')
     setEditDueDate(toDateString(invoice.dueDate))
@@ -64,6 +83,7 @@ export default function InvoiceDetail() {
     setEditInternalNotes(invoice.internalNotes ?? '')
     setEditAmountPaid(invoice.amountPaid ?? 0)
     setEditPaidAt(toDateString(invoice.paidAt))
+    setEditLineItems(invoice.lineItems ?? [])
     setEditMode(true)
   }
 
@@ -71,12 +91,23 @@ export default function InvoiceDetail() {
     setSaving(true)
     try {
       const paid = parseFloat(editAmountPaid) || 0
-      const total = invoice.total ?? 0
-      const balanceDue = total - paid
       const dueTs = editDueDate ? new Date(editDueDate) : null
       const paidTs = editPaidAt ? new Date(editPaidAt) : null
+      const subtotal = editLineItems.reduce((sum, item) => sum + calcLineTotal(item), 0)
+      const taxAmount = invoice.taxExempt ? 0 : subtotal * ((invoice.taxRate ?? 0) / 100)
+      const total = subtotal + taxAmount
+      const balanceDue = total - paid
       const paymentStatus = computePaymentStatus({ total, amountPaid: paid, dueDate: dueTs })
       await updateDoc(invoiceDoc(id), {
+        lineItems: editLineItems.map(item => ({
+          ...item,
+          quantity: parseFloat(item.quantity) || 1,
+          unitPrice: parseFloat(item.unitPrice) || 0,
+          discount: parseFloat(item.discount) || 0,
+        })),
+        subtotal,
+        taxAmount,
+        total,
         paymentTerms: editPaymentTerms,
         dueDate: dueTs,
         paidAt: paidTs,
@@ -406,6 +437,98 @@ export default function InvoiceDetail() {
               <textarea rows={3} value={editInternalNotes} onChange={(e) => setEditInternalNotes(e.target.value)} className={inputCls} />
             </div>
           </div>
+          {/* Line Items Editor */}
+          <div className="mt-5 pt-5 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Line Items</h3>
+              <button type="button" onClick={addLineItem}
+                className="text-xs text-[#8B6914] hover:text-[#7a5c12] font-semibold transition-colors">
+                + Add Row
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left py-2 pr-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
+                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-20">Qty</th>
+                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
+                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-36">Discount</th>
+                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
+                    <th className="w-8" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {editLineItems.map((item, idx) => (
+                    <tr key={item.id ?? idx}>
+                      <td className="py-1.5 pr-2">
+                        <input type="text" value={item.description}
+                          onChange={e => updateLineItem(idx, 'description', e.target.value)}
+                          className={inputCls} placeholder="Description" />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input type="number" min="0" step="1" value={item.quantity}
+                          onChange={e => updateLineItem(idx, 'quantity', e.target.value)}
+                          className={`${inputCls} text-right`} />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input type="number" min="0" step="0.01" value={item.unitPrice}
+                          onChange={e => updateLineItem(idx, 'unitPrice', e.target.value)}
+                          className={`${inputCls} text-right`} placeholder="0.00" />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <div className="flex gap-1">
+                          <input type="number" min="0" step="0.01" value={item.discount || ''}
+                            onChange={e => updateLineItem(idx, 'discount', e.target.value)}
+                            className={`${inputCls} text-right`} placeholder="0" />
+                          <select value={item.discountType || 'dollar'}
+                            onChange={e => updateLineItem(idx, 'discountType', e.target.value)}
+                            className="border border-gray-200 rounded-lg px-1 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white w-14">
+                            <option value="dollar">$</option>
+                            <option value="percent">%</option>
+                          </select>
+                        </div>
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-semibold text-[#111111]">
+                        {formatCurrency(calcLineTotal(item))}
+                      </td>
+                      <td className="py-1.5 pl-2">
+                        <button type="button" onClick={() => removeLineItem(idx)}
+                          className="text-[#D95F5F] hover:text-[#b84848] text-xl leading-none font-light">
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Live totals preview */}
+            {(() => {
+              const editSubtotal = editLineItems.reduce((sum, item) => sum + calcLineTotal(item), 0)
+              const editTaxAmount = invoice.taxExempt ? 0 : editSubtotal * ((invoice.taxRate ?? 0) / 100)
+              const editTotal = editSubtotal + editTaxAmount
+              return (
+                <div className="mt-3 pt-3 border-t border-gray-100 flex justify-end">
+                  <div className="w-64 space-y-1 text-sm">
+                    <div className="flex justify-between text-[#9A9A9A]">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(editSubtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-[#9A9A9A]">
+                      <span>Tax ({invoice.taxRate ?? 0}%){invoice.taxExempt ? ' — Exempt' : ''}</span>
+                      <span>{formatCurrency(editTaxAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t border-gray-200 pt-1.5">
+                      <span className="text-[#111111]">New Total</span>
+                      <span className="text-[#8B6914]">{formatCurrency(editTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
           <div className="flex gap-2 mt-4">
             <button onClick={() => setEditMode(false)}
               className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-4 py-2 rounded-lg transition-colors">

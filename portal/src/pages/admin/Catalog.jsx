@@ -695,9 +695,22 @@ export default function Catalog() {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [showInactive, setShowInactive] = useState(false)
-  const [editItem, setEditItem] = useState(null)   // null = closed, {} = new, item = edit
+  const [editItem, setEditItem] = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [sortCol, setSortCol] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
+  const [colFilters, setColFilters] = useState({ type: '', status: '' })
+
+  const toggleSort = (col) => {
+    if (sortCol === col) {
+      if (sortDir === 'asc') setSortDir('desc')
+      else { setSortCol(null); setSortDir('asc') }
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+  }
 
   const existingSkus = useMemo(
     () => new Set(catalog.map((i) => i.sku).filter(Boolean)),
@@ -705,14 +718,35 @@ export default function Catalog() {
   )
 
   const filtered = useMemo(() => {
-    return catalog.filter((item) => {
-      if (!showInactive && item.active === false) return false
+    let items = catalog.filter((item) => {
+      if (!colFilters.status && !showInactive && item.active === false) return false
       const matchType = !filterType || item.type === filterType
+      const matchColType = !colFilters.type || item.type === colFilters.type
+      const matchColStatus = !colFilters.status ||
+        (colFilters.status === 'Active' ? item.active !== false : item.active === false)
       const matchSearch = !search || [item.name, item.sku, item.manufacturer, item.description]
         .some((v) => v?.toLowerCase().includes(search.toLowerCase()))
-      return matchType && matchSearch
+      return matchType && matchColType && matchColStatus && matchSearch
     })
-  }, [catalog, search, filterType, showInactive])
+    if (sortCol) {
+      const dir = sortDir === 'asc' ? 1 : -1
+      items = [...items].sort((a, b) => {
+        let av, bv
+        switch (sortCol) {
+          case 'name': av = (a.name ?? '').toLowerCase(); bv = (b.name ?? '').toLowerCase(); break
+          case 'type': av = a.type ?? ''; bv = b.type ?? ''; break
+          case 'sku': av = (a.sku ?? '').toLowerCase(); bv = (b.sku ?? '').toLowerCase(); break
+          case 'msrp': av = a.msrp ?? 0; bv = b.msrp ?? 0; break
+          case 'cost': av = a.cost ?? 0; bv = b.cost ?? 0; break
+          case 'status': av = a.active !== false ? 0 : 1; bv = b.active !== false ? 0 : 1; break
+          default: return 0
+        }
+        if (typeof av === 'number') return (av - bv) * dir
+        return av.localeCompare(bv) * dir
+      })
+    }
+    return items
+  }, [catalog, search, filterType, showInactive, sortCol, sortDir, colFilters])
 
   async function handleDelete() {
     if (!deleteItem) return
@@ -762,8 +796,42 @@ export default function Catalog() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-              {['Item', 'Type', 'SKU', 'MSRP', 'Cost', 'Status', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+              {[
+                { key: 'name', label: 'Item', sortable: true },
+                { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
+                { key: 'sku', label: 'SKU', sortable: true },
+                { key: 'msrp', label: 'MSRP', sortable: true },
+                { key: 'cost', label: 'Cost', sortable: true },
+                { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
+                { key: 'actions', label: 'Actions', sortable: false },
+              ].map((col) => (
+                <th key={col.key} className="text-left py-2 px-4 align-top">
+                  {col.sortable ? (
+                    <button
+                      onClick={() => toggleSort(col.key)}
+                      className="flex items-center gap-1 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider hover:text-[#1A1A1A] transition-colors"
+                    >
+                      {col.label}
+                      <span className={`text-[10px] ${sortCol === col.key ? 'text-[#8B6914]' : 'text-[#C8C8C8]'}`}>
+                        {sortCol === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{col.label}</span>
+                  )}
+                  {col.options && (
+                    <select
+                      value={colFilters[col.key] || ''}
+                      onChange={(e) => setColFilters((prev) => ({ ...prev, [col.key]: e.target.value }))}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 block w-full text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white text-[#9A9A9A] focus:outline-none focus:border-[#8B6914] cursor-pointer"
+                    >
+                      {col.options.map((o) => (
+                        <option key={o} value={o === 'All Types' || o === 'All' ? '' : o}>{o}</option>
+                      ))}
+                    </select>
+                  )}
+                </th>
               ))}
             </tr>
           </thead>

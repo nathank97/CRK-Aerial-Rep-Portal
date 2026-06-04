@@ -132,6 +132,101 @@ function AddStockModal({ onClose, onSave, catalog }) {
   )
 }
 
+function EditModal({ item, onClose, onSave }) {
+  const [form, setForm] = useState({
+    brand: item.brand ?? '',
+    modelName: item.modelName ?? '',
+    sku: item.sku ?? '',
+    serialNumber: item.serialNumber ?? '',
+    condition: item.condition ?? 'New',
+    quantityOnHand: item.quantityOnHand ?? 0,
+    costPrice: item.costPrice ?? '',
+    lowStockThreshold: item.lowStockThreshold ?? '',
+    notes: item.notes ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }))
+  const cls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
+  const lbl = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
+
+  async function handleSave() {
+    if (!form.modelName.trim()) { setError('Model name is required.'); return }
+    setSaving(true)
+    try {
+      await onSave(form)
+    } catch {
+      setError('Failed to save. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-[#1A1A1A]">Edit Entry</h2>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          <div>
+            <label className={lbl}>Brand</label>
+            <input value={form.brand} onChange={set('brand')} placeholder="e.g. DJI, Autel, AgEagle" className={cls} />
+          </div>
+          <div>
+            <label className={lbl}>Model Name <span className="text-[#D95F5F]">*</span></label>
+            <input value={form.modelName} onChange={set('modelName')} className={cls} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>SKU</label>
+              <input value={form.sku} onChange={set('sku')} className={cls} />
+            </div>
+            <div>
+              <label className={lbl}>Serial #</label>
+              <input value={form.serialNumber} onChange={set('serialNumber')} className={cls} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Condition</label>
+              <select value={form.condition} onChange={set('condition')} className={cls}>
+                {CONDITIONS.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Qty On Hand</label>
+              <input type="number" min="0" value={form.quantityOnHand} onChange={set('quantityOnHand')} className={cls} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Cost Price</label>
+              <input type="number" min="0" step="0.01" value={form.costPrice} onChange={set('costPrice')} placeholder="0.00" className={cls} />
+            </div>
+            <div>
+              <label className={lbl}>Low Stock Alert ≤</label>
+              <input type="number" min="0" value={form.lowStockThreshold} onChange={set('lowStockThreshold')} placeholder="e.g. 2" className={cls} />
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Notes</label>
+            <textarea value={form.notes} onChange={set('notes')} rows={2} className={`${cls} resize-none`} />
+          </div>
+          {error && <p className="text-xs text-[#D95F5F]">{error}</p>}
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-sm font-medium py-2 rounded-lg hover:bg-[#F4F4F5]">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 bg-[#8B6914] hover:bg-[#7a5c11] disabled:opacity-50 text-white text-sm font-semibold py-2 rounded-lg">
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AdjustModal({ item, onClose, onSave }) {
   const [qty, setQty] = useState(item.quantityOnHand)
   const [notes, setNotes] = useState('')
@@ -165,6 +260,7 @@ export default function InventoryDealer() {
   const [filterAvail, setFilterAvail] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [adjustItem, setAdjustItem] = useState(null)
+  const [editItem, setEditItem] = useState(null)
   const [sort, setSort] = useState({ key: '', dir: 'asc' })
 
   const toggleSort = (key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
@@ -234,6 +330,25 @@ export default function InventoryDealer() {
     setShowAdd(false)
   }
 
+  const handleEdit = async (form) => {
+    const qty = parseInt(form.quantityOnHand) || 0
+    const reserved = editItem.quantityReserved ?? 0
+    await updateDoc(doc(db, 'inventory', editItem.id), {
+      brand: form.brand.trim() || null,
+      modelName: form.modelName.trim(),
+      sku: form.sku.trim() || null,
+      serialNumber: form.serialNumber.trim() || null,
+      condition: form.condition,
+      quantityOnHand: qty,
+      quantityAvailable: Math.max(0, qty - reserved),
+      costPrice: form.costPrice !== '' ? parseFloat(form.costPrice) : null,
+      lowStockThreshold: form.lowStockThreshold !== '' ? parseInt(form.lowStockThreshold) : null,
+      notes: form.notes.trim() || null,
+      lastUpdated: serverTimestamp(),
+    })
+    setEditItem(null)
+  }
+
   const handleAdjust = async (itemId, newQty, notes) => {
     const reserved = adjustItem.quantityReserved ?? 0
     await updateDoc(doc(db, 'inventory', itemId), {
@@ -257,6 +372,7 @@ export default function InventoryDealer() {
     <div className="p-4 sm:p-6 max-w-screen-xl mx-auto">
       {showAdd && <AddStockModal catalog={catalog} onClose={() => setShowAdd(false)} onSave={handleAddStock} />}
       {adjustItem && <AdjustModal item={adjustItem} onClose={() => setAdjustItem(null)} onSave={(qty, notes) => handleAdjust(adjustItem.id, qty, notes)} />}
+      {editItem && <EditModal item={editItem} onClose={() => setEditItem(null)} onSave={handleEdit} />}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -367,8 +483,12 @@ export default function InventoryDealer() {
                         <td className="px-4 py-3 text-[#4CAF7D] font-medium">{item.msrp != null ? formatCurrency(getDealerPrice(item, profile)) : '—'}</td>
                         <td className="px-4 py-3 text-[#9A9A9A] whitespace-nowrap">{formatDate(item.lastUpdated)}</td>
                         <td className="px-4 py-3">
-                          <button onClick={() => setAdjustItem(item)}
-                            className="text-xs text-[#8B6914] hover:underline font-medium">Adjust</button>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => setEditItem(item)}
+                              className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                            <button onClick={() => setAdjustItem(item)}
+                              className="text-xs text-[#9A9A9A] hover:underline font-medium">Adjust</button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -410,8 +530,16 @@ export default function InventoryDealer() {
                       {item.msrp != null && <span>MSRP/unit: {formatCurrency(item.msrp)}</span>}
                       {item.msrp != null && <span className="text-[#4CAF7D] font-medium">Rep Price/unit: {formatCurrency(getDealerPrice(item, profile))}</span>}
                     </div>
-                    <button onClick={() => setAdjustItem(item)}
-                      className="mt-3 text-xs text-[#8B6914] hover:underline font-medium">Adjust Stock</button>
+                    <div className="mt-3 flex gap-2">
+                      <button onClick={() => setEditItem(item)}
+                        className="flex-1 text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
+                        Edit
+                      </button>
+                      <button onClick={() => setAdjustItem(item)}
+                        className="flex-1 text-sm border border-gray-200 text-[#9A9A9A] rounded-lg py-1.5 hover:bg-[#F4F4F5] transition-colors">
+                        Adjust
+                      </button>
+                    </div>
                   </div>
                 )
               })

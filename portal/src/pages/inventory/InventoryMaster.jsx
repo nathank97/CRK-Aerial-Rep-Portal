@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, query, where, doc, serverTimestamp, deleteField } from 'firebase/firestore'
+import { onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, getDoc, query, where, doc, serverTimestamp, deleteField } from 'firebase/firestore'
 import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
@@ -556,6 +556,8 @@ export default function InventoryMaster() {
   const [deleting, setDeleting] = useState(false)
   const [showPO, setShowPO] = useState(false)
   const [editPO, setEditPO] = useState(null)
+  const [deletingTx, setDeletingTx] = useState(null)
+  const [deletingTxBusy, setDeletingTxBusy] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
   const [deletingPO, setDeletingPO] = useState(false)
@@ -613,6 +615,31 @@ export default function InventoryMaster() {
 
   const toggleSort = (setter) => (key) =>
     setter((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+
+  async function handleDeleteTx() {
+    if (!deletingTx) return
+    setDeletingTxBusy(true)
+    try {
+      if (deletingTx.inventoryId) {
+        const invSnap = await getDoc(doc(db, 'inventory', deletingTx.inventoryId))
+        if (invSnap.exists()) {
+          const data = invSnap.data()
+          const newOnHand = (data.quantityOnHand ?? 0) - (deletingTx.qty ?? 0)
+          await updateDoc(doc(db, 'inventory', deletingTx.inventoryId), {
+            quantityOnHand: newOnHand,
+            quantityAvailable: Math.max(0, newOnHand - (data.quantityReserved ?? 0)),
+            updatedAt: serverTimestamp(),
+          })
+        }
+      }
+      await deleteDoc(doc(db, 'inventoryTransactions', deletingTx.id))
+      setDeletingTx(null)
+    } catch (e) {
+      console.error('Delete tx error:', e)
+    } finally {
+      setDeletingTxBusy(false)
+    }
+  }
 
   async function handleDelete() {
     if (!deleteItem) return
@@ -819,6 +846,39 @@ export default function InventoryMaster() {
       )}
       {editItem && (
         <EditItemModal item={editItem} dealers={dealers} isAdmin={isAdmin} onClose={() => setEditItem(null)} />
+      )}
+      {deletingTx && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Delete Transaction</h2>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-[#1A1A1A]">
+                Delete this transaction for <span className="font-semibold">{deletingTx.modelName}</span>?
+              </p>
+              {deletingTx.inventoryId && (
+                <p className="text-sm text-[#9A9A9A]">
+                  This will also reverse the inventory change:
+                  {' '}<span className={`font-semibold ${-(deletingTx.qty ?? 0) > 0 ? 'text-[#4CAF7D]' : 'text-[#D95F5F]'}`}>
+                    {-(deletingTx.qty ?? 0) > 0 ? '+' : ''}{-(deletingTx.qty ?? 0)} units
+                  </span>
+                  {' '}will be applied to the inventory record.
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setDeletingTx(null)} disabled={deletingTxBusy}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleDeleteTx} disabled={deletingTxBusy}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#c44f4f] disabled:opacity-50">
+                {deletingTxBusy ? 'Deleting…' : 'Delete & Reverse'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {deleteItem && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -1438,7 +1498,7 @@ export default function InventoryMaster() {
               <table className="text-sm" style={{ minWidth: 900 }}>
                 <thead>
                   <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                    {['Date', 'Type', 'Model', 'Brand', 'SKU', 'Qty', 'Location', 'Source', 'By', 'Notes'].map((h) => (
+                    {['Date', 'Type', 'Model', 'Brand', 'SKU', 'Qty', 'Location', 'Source', 'By', 'Notes', ''].map((h) => (
                       <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -1477,6 +1537,10 @@ export default function InventoryMaster() {
                         </td>
                         <td className="py-3 px-4 text-[#9A9A9A]">{tx.createdBy || '—'}</td>
                         <td className="py-3 px-4 text-[#9A9A9A] text-xs max-w-[160px] truncate">{tx.notes || '—'}</td>
+                        <td className="py-3 px-4">
+                          <button onClick={() => setDeletingTx(tx)}
+                            className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                        </td>
                       </tr>
                     )
                   })}

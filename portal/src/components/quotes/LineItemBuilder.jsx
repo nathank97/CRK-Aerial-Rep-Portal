@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
 import { getDealerPrice, isBelowDealerCost } from '../../utils/pricing'
@@ -90,7 +90,10 @@ function CatalogModal({ onSelect, onClose }) {
 
 export default function LineItemBuilder({ items, onChange, showDealerPricing = true }) {
   const { profile } = useAuth()
+  const { catalog } = useCatalog()
   const [showCatalog, setShowCatalog] = useState(false)
+  const [openDropdown, setOpenDropdown] = useState(null) // item.id with open dropdown
+  const [dropdownSearch, setDropdownSearch] = useState({}) // { itemId: searchText }
 
   const update = (id, field, value) => {
     onChange(items.map((item) => item.id === id ? { ...item, [field]: value } : item))
@@ -102,15 +105,13 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
 
   const addFromCatalog = (catalogItem) => {
     const dealerCost = getDealerPrice(catalogItem, profile)
-    const unitPrice = catalogItem.msrp
-
     onChange([...items, {
       id: crypto.randomUUID(),
       type: 'catalog',
       catalogId: catalogItem.id,
       description: catalogItem.name,
       quantity: 1,
-      unitPrice: unitPrice ?? 0,
+      unitPrice: catalogItem.msrp ?? 0,
       discount: 0,
       discountType: 'percent',
       msrp: catalogItem.msrp ?? null,
@@ -119,13 +120,38 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
     setShowCatalog(false)
   }
 
+  const selectCatalogForItem = (itemId, catalogItem) => {
+    const dealerCost = getDealerPrice(catalogItem, profile)
+    onChange(items.map((item) =>
+      item.id === itemId ? {
+        ...item,
+        type: 'catalog',
+        catalogId: catalogItem.id,
+        description: catalogItem.name,
+        unitPrice: catalogItem.msrp ?? item.unitPrice,
+        msrp: catalogItem.msrp ?? null,
+        dealerCost: dealerCost ?? null,
+      } : item
+    ))
+    setOpenDropdown(null)
+    setDropdownSearch((p) => ({ ...p, [itemId]: '' }))
+  }
+
+  const catalogMatches = useMemo(() => {
+    if (!openDropdown) return []
+    const q = (dropdownSearch[openDropdown] ?? '').toLowerCase().trim()
+    if (!q) return []
+    return catalog.filter((c) =>
+      c.name?.toLowerCase().includes(q) || c.sku?.toLowerCase().includes(q)
+    ).slice(0, 10)
+  }, [openDropdown, dropdownSearch, catalog])
+
   const inputCls = 'border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white w-full'
 
   return (
     <div>
       {showCatalog && <CatalogModal onSelect={addFromCatalog} onClose={() => setShowCatalog(false)} />}
 
-      {/* Line items table */}
       {items.length > 0 && (
         <div className="mb-3 overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
@@ -148,8 +174,44 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
                 return (
                   <tr key={item.id} className="group">
                     <td className="py-2 pr-3">
-                      <input value={item.description} onChange={(e) => update(item.id, 'description', e.target.value)}
-                        placeholder="Description…" className={inputCls} />
+                      {/* Description with catalog typeahead */}
+                      <div className="relative">
+                        <input
+                          value={item.description}
+                          onChange={(e) => {
+                            update(item.id, 'description', e.target.value)
+                            setDropdownSearch((p) => ({ ...p, [item.id]: e.target.value }))
+                            setOpenDropdown(item.id)
+                          }}
+                          onFocus={() => {
+                            setDropdownSearch((p) => ({ ...p, [item.id]: item.description }))
+                            setOpenDropdown(item.id)
+                          }}
+                          onBlur={() => setTimeout(() => setOpenDropdown(null), 150)}
+                          placeholder="Description… or type to search catalog"
+                          className={inputCls}
+                        />
+                        {openDropdown === item.id && catalogMatches.length > 0 && (
+                          <ul className="absolute z-30 left-0 top-full mt-0.5 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto text-sm">
+                            <li className="px-3 py-1.5 text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider border-b border-gray-100">
+                              Catalog matches
+                            </li>
+                            {catalogMatches.map((c) => (
+                              <li key={c.id}
+                                onMouseDown={() => selectCatalogForItem(item.id, c)}
+                                className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer">
+                                <div className="min-w-0">
+                                  <p className="font-medium text-[#1A1A1A] truncate">{c.name}</p>
+                                  {c.sku && <p className="text-xs text-[#9A9A9A]">SKU: {c.sku}</p>}
+                                </div>
+                                {c.msrp != null && (
+                                  <span className="text-xs font-medium text-[#8B6914] shrink-0">{formatCurrency(c.msrp)}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                       {item.type === 'catalog' && showDealerPricing && profile?.role === 'dealer' && item.msrp && (
                         <p className="text-xs text-[#9A9A9A] mt-0.5">
                           MSRP: {formatCurrency(item.msrp)} · Your cost: {formatCurrency(item.dealerCost)}
@@ -199,7 +261,6 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
         </div>
       )}
 
-      {/* Add buttons */}
       <div className="flex gap-2 flex-wrap">
         <button type="button" onClick={() => setShowCatalog(true)}
           className="text-sm border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5 px-3 py-1.5 rounded-lg transition-colors font-medium">

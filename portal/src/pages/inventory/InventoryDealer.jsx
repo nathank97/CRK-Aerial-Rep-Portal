@@ -47,7 +47,7 @@ function AvailBadge({ available, threshold }) {
 
 function AddStockModal({ onClose, onSave, catalog }) {
   const [form, setForm] = useState({
-    modelName: '', catalogId: '', sku: '', serialNumber: '',
+    brand: '', modelName: '', catalogId: '', sku: '', serialNumber: '',
     condition: 'New', quantityOnHand: 1, costPrice: '', lowStockThreshold: 2, notes: '',
   })
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }))
@@ -73,6 +73,10 @@ function AddStockModal({ onClose, onSave, catalog }) {
               <option value="">Select catalog item…</option>
               {catalog.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Brand</label>
+            <input value={form.brand} onChange={set('brand')} placeholder="e.g. DJI, Autel, AgEagle" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Model Name <span className="text-[#D95F5F]">*</span></label>
@@ -210,6 +214,7 @@ export default function InventoryDealer() {
   const handleAddStock = async (form) => {
     const qty = parseInt(form.quantityOnHand) || 0
     await addDoc(inventoryCol, {
+      brand: form.brand || null,
       modelName: form.modelName,
       catalogId: form.catalogId || null,
       sku: form.sku || null,
@@ -320,7 +325,7 @@ export default function InventoryDealer() {
           <thead className="border-b border-gray-100 bg-[#F4F4F5]">
             <tr>
               {[
-                ['Model', 'modelName'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
+                ['Model', 'modelName'], ['Brand', 'brand'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
                 ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'], ['Available', 'available'],
                 ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'], ['Last Updated', 'lastUpdated'], ['', ''],
               ].map(([label, key]) => key
@@ -331,9 +336,9 @@ export default function InventoryDealer() {
           </thead>
           <tbody>
             {loading
-              ? [...Array(5)].map((_, i) => <tr key={i}><td colSpan={10}><SkeletonRow /></td></tr>)
+              ? [...Array(5)].map((_, i) => <tr key={i}><td colSpan={11}><SkeletonRow /></td></tr>)
               : filtered.length === 0
-                ? <tr><td colSpan={10} className="text-center py-12 text-[#9A9A9A] text-sm">
+                ? <tr><td colSpan={11} className="text-center py-12 text-[#9A9A9A] text-sm">
                     No inventory yet. Click "Add Stock" to get started.
                   </td></tr>
                 : sortedFiltered.map((item) => {
@@ -341,6 +346,7 @@ export default function InventoryDealer() {
                     return (
                       <tr key={item.id} className={`border-b border-gray-50 transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#F4F4F5]'}`}>
                         <td className="px-4 py-3 font-medium text-[#1A1A1A]">{item.modelName}</td>
+                        <td className="px-4 py-3 text-[#9A9A9A]">{item.brand || '—'}</td>
                         <td className="px-4 py-3 text-[#9A9A9A] text-xs">
                           {item.sku && <div>SKU: {item.sku}</div>}
                           {item.serialNumber && <div>SN: {item.serialNumber}</div>}
@@ -390,6 +396,7 @@ export default function InventoryDealer() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
                         <p className="font-semibold text-[#1A1A1A]">{item.modelName}</p>
+                        {item.brand && <p className="text-xs text-[#9A9A9A]">{item.brand}</p>}
                         {item.sku && <p className="text-xs text-[#9A9A9A]">SKU: {item.sku}</p>}
                       </div>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>

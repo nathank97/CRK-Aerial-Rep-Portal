@@ -74,6 +74,7 @@ function useAllInventory() {
 // ── Edit Item Modal ──────────────────────────────────────────────────────────
 function EditItemModal({ item, dealers, isAdmin, onClose }) {
   const [form, setForm] = useState({
+    brand: item.brand ?? '',
     modelName: item.modelName ?? '',
     sku: item.sku ?? '',
     serialNumber: item.serialNumber ?? '',
@@ -96,6 +97,7 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
     setSaving(true)
     try {
       await updateDoc(doc(db, 'inventory', item.id), {
+        brand: form.brand.trim() || null,
         modelName: form.modelName.trim(),
         sku: form.sku.trim() || null,
         serialNumber: form.serialNumber.trim() || null,
@@ -141,6 +143,10 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
               </select>
             </div>
           )}
+          <div>
+            <label className={lbl}>Brand</label>
+            <input value={form.brand} onChange={set('brand')} placeholder="e.g. DJI, Autel, AgEagle" className={cls} />
+          </div>
           <div>
             <label className={lbl}>Model Name *</label>
             <input value={form.modelName} onChange={set('modelName')} className={cls} />
@@ -236,6 +242,7 @@ function TransferModal({ item, dealers, onClose }) {
       })
       await addDoc(inventoryCol, {
         dealerId: toDealerId,
+        brand: item.brand ?? null,
         modelName: item.modelName,
         sku: item.sku ?? '',
         serialNumber: item.serialNumber ?? '',
@@ -305,6 +312,7 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   const [catalogId, setCatalogId] = useState('')
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
+  const [brand, setBrand] = useState('')
   const [modelName, setModelName] = useState('')
   const [sku, setSku] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
@@ -348,6 +356,7 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
       await addDoc(inventoryCol, {
         dealerId,
         catalogId: catalogId || null,
+        brand: brand.trim() || null,
         modelName: modelName.trim(),
         sku: sku.trim() || '',
         serialNumber: serialNumber.trim() || '',
@@ -423,6 +432,10 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
                 No catalog items match "{catalogSearch}"
               </div>
             )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Brand</label>
+            <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="e.g. DJI, Autel, AgEagle" className={cls} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Model Name *</label>
@@ -559,9 +572,10 @@ export default function InventoryMaster() {
   const summaryGroups = useMemo(() => {
     const groups = {}
     filtered.forEach((item) => {
-      const key = `${item.modelName ?? ''}||${item.condition ?? ''}`
+      const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}`
       if (!groups[key]) {
         groups[key] = {
+          brand: item.brand ?? '',
           modelName: item.modelName ?? '—',
           condition: item.condition ?? '',
           totalOnHand: 0,
@@ -754,7 +768,7 @@ export default function InventoryMaster() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
-                  ['Model', 'modelName'], ['Condition', 'condition'],
+                  ['Model', 'modelName'], ['Brand', 'brand'], ['Condition', 'condition'],
                   ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
                   ['Total On Hand', 'totalOnHand'], ['Total Reserved', 'totalReserved'],
                   ['Total Available', 'totalAvail'], ['Locations', ''],
@@ -775,6 +789,7 @@ export default function InventoryMaster() {
                 return (
                   <tr key={i} className={`transition-colors ${isNeg ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                     <td className="py-3 px-4 font-medium text-[#1A1A1A]">{g.modelName}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A]">{g.brand || '—'}</td>
                     <td className="py-3 px-4">
                       {g.condition
                         ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>
@@ -820,7 +835,10 @@ export default function InventoryMaster() {
               return (
                 <div key={i} className="p-4">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="font-semibold text-[#1A1A1A]">{g.modelName}</p>
+                    <div>
+                      <p className="font-semibold text-[#1A1A1A]">{g.modelName}</p>
+                      {g.brand && <p className="text-xs text-[#9A9A9A]">{g.brand}</p>}
+                    </div>
                     {g.condition && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>}
                   </div>
                   {(g.msrp != null || g.repPrice != null) && (
@@ -887,7 +905,7 @@ export default function InventoryMaster() {
                   <thead>
                     <tr className="border-b border-gray-50">
                       {[
-                        ['Model', 'modelName'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
+                        ['Model', 'modelName'], ['Brand', 'brand'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
                         ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
                         ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'], ['Available', 'available'],
                         ...(isAdmin ? [['CRK Cost / Unit', 'costPrice'], ['', '']] : []),
@@ -903,6 +921,7 @@ export default function InventoryMaster() {
                       return (
                         <tr key={item.id} className={`${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                           <td className="py-2 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
+                          <td className="py-2 px-4 text-[#9A9A9A]">{item.brand || '—'}</td>
                           <td className="py-2 px-4">
                             <p className="text-[#1A1A1A]">{item.sku || '—'}</p>
                             {item.serialNumber && <p className="text-xs text-[#9A9A9A]">#{item.serialNumber}</p>}
@@ -938,6 +957,7 @@ export default function InventoryMaster() {
                       <div key={item.id} className={`px-4 py-3 flex items-center justify-between gap-3 ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 border-l-2 border-[#D95F5F]' : ''}`}>
                         <div className="min-w-0">
                           <p className="font-medium text-[#1A1A1A] truncate">{item.modelName}</p>
+                          {item.brand && <p className="text-xs text-[#9A9A9A]">{item.brand}</p>}
                           <p className="text-xs text-[#9A9A9A]">{item.sku || 'No SKU'} · {item.condition}</p>
                           <div className="flex gap-3 text-xs mt-0.5">
                             {item.msrp != null && <span className="text-[#9A9A9A]">MSRP: {formatCurrency(item.msrp)}</span>}
@@ -968,7 +988,7 @@ export default function InventoryMaster() {
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                   {[
-                    ['Model', 'modelName'], ['Location', 'locationName'], ['SKU / Serial', 'sku'],
+                    ['Model', 'modelName'], ['Brand', 'brand'], ['Location', 'locationName'], ['SKU / Serial', 'sku'],
                     ['Condition', 'condition'], ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'],
                     ['Available', 'available'], ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
                     ...(isAdmin ? [['CRK Cost / Unit', 'costPrice']] : []),
@@ -989,6 +1009,7 @@ export default function InventoryMaster() {
                   return (
                     <tr key={item.id} className={`transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                       <td className="py-3 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{item.brand || '—'}</td>
                       <td className="py-3 px-4 text-[#9A9A9A] text-xs">{dealerMap[item.dealerId] || '—'}</td>
                       <td className="py-3 px-4">
                         <p className="text-[#1A1A1A]">{item.sku || '—'}</p>
@@ -1045,6 +1066,7 @@ export default function InventoryMaster() {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-semibold text-[#1A1A1A]">{item.modelName}</p>
+                      {item.brand && <p className="text-xs text-[#9A9A9A]">{item.brand}</p>}
                       <p className="text-xs text-[#9A9A9A]">{dealerMap[item.dealerId] || '—'} · {formatDate(item.createdAt ?? item.updatedAt)}</p>
                     </div>
                     <AvailBadge available={available} threshold={item.lowStockThreshold} />

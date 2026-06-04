@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../hooks/useOrders'
 import { orderDoc, invoicesCol, inventoryCol } from '../../firebase/firestore'
 import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
+import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
 import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
 import { emailService } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
@@ -185,6 +186,8 @@ export default function OrderDetail() {
   const [editingNotes, setEditingNotes] = useState(false)
   const [showFulfill, setShowFulfill] = useState(false)
   const [showCCModal, setShowCCModal] = useState(false)
+  const [showDeduct, setShowDeduct] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState(null)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -193,6 +196,15 @@ export default function OrderDetail() {
 
   const handleStatusChange = async (e) => {
     const status = e.target.value
+    const deductTrigger = ['Fulfilled', 'Delivered'].includes(status)
+      && !order.inventoryDeducted
+      && (isAdmin || isWarehouseManager)
+      && (order.lineItems ?? []).length > 0
+    if (deductTrigger) {
+      setPendingStatus(status)
+      setShowDeduct(true)
+      return
+    }
     setSaving(true)
     try {
       await updateDoc(orderDoc(id), { status, updatedAt: serverTimestamp() })
@@ -284,6 +296,22 @@ export default function OrderDetail() {
     } finally {
       setReserving(false)
     }
+  }
+
+  const handleDeductDone = async (details) => {
+    setShowDeduct(false)
+    const updates = {
+      inventoryDeducted: true,
+      inventoryDeductedAt: serverTimestamp(),
+      inventoryDeductionDetails: details,
+      updatedAt: serverTimestamp(),
+    }
+    if (pendingStatus) {
+      updates.status = pendingStatus
+      setPendingStatus(null)
+    }
+    await updateDoc(orderDoc(id), updates)
+    flash('Inventory deducted successfully.')
   }
 
   const handleSendToWarehouse = () => setShowCCModal(true)
@@ -492,6 +520,15 @@ export default function OrderDetail() {
           saving={saving}
         />
       )}
+      {showDeduct && (
+        <DeductInventoryModal
+          lineItems={order.lineItems ?? []}
+          dealerId={order.dealerId ?? user?.uid}
+          title={`Deduct Inventory — ${order.orderNumber}`}
+          onClose={() => { setShowDeduct(false); setPendingStatus(null) }}
+          onDone={handleDeductDone}
+        />
+      )}
       {showCCModal && (
         <CCModal
           presets={emailTemplate.ccPresets}
@@ -553,6 +590,24 @@ export default function OrderDetail() {
               >
                 Fulfill from Warehouse
               </button>
+            )}
+
+            {(isAdmin || isWarehouseManager)
+              && ['Fulfilled', 'Delivered'].includes(order.status)
+              && !order.inventoryDeducted
+              && (order.lineItems ?? []).length > 0 && (
+              <button
+                onClick={() => setShowDeduct(true)}
+                disabled={saving}
+                className="text-sm bg-[#8B6914] hover:bg-[#7a5c11] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium"
+              >
+                Deduct Inventory
+              </button>
+            )}
+            {order.inventoryDeducted && (
+              <span className="text-xs font-medium text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-1 rounded-lg">
+                ✓ Inventory Deducted
+              </span>
             )}
 
             {!order.sentToWarehouse ? (

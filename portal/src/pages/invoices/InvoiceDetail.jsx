@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
@@ -14,6 +14,7 @@ import crkLogoUrl from '../../assets/logo.png'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
+import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -39,6 +40,7 @@ export default function InvoiceDetail() {
   // Partial payment modal
   const [showPartialModal, setShowPartialModal] = useState(false)
   const [showCCModal, setShowCCModal] = useState(false)
+  const [showDeduct, setShowDeduct] = useState(false)
   const [partialAmount, setPartialAmount] = useState('')
   const [partialDate, setPartialDate] = useState('')
 
@@ -225,12 +227,27 @@ export default function InvoiceDetail() {
 
       await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
       flash('Invoice emailed successfully.')
+      // Prompt inventory deduction for standalone invoices (no linked order)
+      if (!invoice.linkedOrderId && !invoice.inventoryDeducted && (invoice.lineItems ?? []).length > 0) {
+        setShowDeduct(true)
+      }
     } catch (err) {
       console.error(err)
       flash('Failed to send invoice. Please try again.', true)
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleInvoiceDeductDone = async (details) => {
+    setShowDeduct(false)
+    await updateDoc(invoiceDoc(id), {
+      inventoryDeducted: true,
+      inventoryDeductedAt: serverTimestamp(),
+      inventoryDeductionDetails: details,
+      updatedAt: serverTimestamp(),
+    })
+    flash('Inventory deducted successfully.')
   }
 
   const handleDuplicate = async () => {
@@ -287,6 +304,15 @@ export default function InvoiceDetail() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      {showDeduct && invoice && (
+        <DeductInventoryModal
+          lineItems={invoice.lineItems ?? []}
+          dealerId={invoice.dealerId ?? ''}
+          title={`Deduct Inventory — ${invoice.invoiceNumber}`}
+          onClose={() => setShowDeduct(false)}
+          onDone={handleInvoiceDeductDone}
+        />
+      )}
       {showCCModal && (
         <CCModal
           presets={emailTemplate.ccPresets}
@@ -369,6 +395,17 @@ export default function InvoiceDetail() {
               className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60">
               Send Invoice
             </button>
+            {!invoice.linkedOrderId && !invoice.inventoryDeducted && (invoice.lineItems ?? []).length > 0 && (
+              <button onClick={() => setShowDeduct(true)} disabled={saving}
+                className="text-sm bg-[#8B6914] hover:bg-[#7a5c11] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium">
+                Deduct Inventory
+              </button>
+            )}
+            {invoice.inventoryDeducted && (
+              <span className="text-xs font-medium text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-1.5 rounded-lg">
+                ✓ Inventory Deducted
+              </span>
+            )}
             {paymentStatus !== 'Paid' && (
               <button onClick={handleMarkPaid} disabled={saving}
                 className="text-sm border border-[#4CAF7D] text-[#4CAF7D] hover:bg-[#4CAF7D]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60">

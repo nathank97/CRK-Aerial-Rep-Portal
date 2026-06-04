@@ -8,6 +8,8 @@ import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
+import { useInventoryBatches } from '../../hooks/useInventoryBatches'
+import BatchEntryModal from './BatchEntryModal'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
 
@@ -499,10 +501,11 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function InventoryMaster() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, isWarehouseManager } = useAuth()
   const { items, loading } = useAllInventory()
   const { dealers, loading: dealersLoading } = useDealers()
   const { catalog } = useCatalog()
+  const { batches, loading: batchesLoading } = useInventoryBatches()
 
   const [search, setSearch] = useState('')
   const [filterDealer, setFilterDealer] = useState('')
@@ -514,6 +517,8 @@ export default function InventoryMaster() {
   const [editItem, setEditItem] = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [showBatchEntry, setShowBatchEntry] = useState(false)
+  const [editBatch, setEditBatch] = useState(null)
   const [summarySort, setSummarySort] = useState({ key: '', dir: 'asc' })
   const [logSort, setLogSort] = useState({ key: '', dir: 'asc' })
   const [locationSort, setLocationSort] = useState({ key: '', dir: 'asc' })
@@ -661,6 +666,7 @@ export default function InventoryMaster() {
     { key: 'summary', label: 'Summary' },
     { key: 'byLocation', label: 'By Location' },
     { key: 'log', label: 'Log' },
+    ...((isAdmin || isWarehouseManager) ? [{ key: 'batches', label: 'Batch Entries' }] : []),
   ]
 
   return (
@@ -668,6 +674,13 @@ export default function InventoryMaster() {
       {showAdd && (
         <AddStockModal dealers={dealers} catalog={catalog} onClose={() => setShowAdd(false)}
           fixedDealerId={isAdmin ? undefined : user?.uid} />
+      )}
+      {(showBatchEntry || editBatch) && (
+        <BatchEntryModal
+          batch={editBatch ?? null}
+          dealers={dealers}
+          onClose={() => { setShowBatchEntry(false); setEditBatch(null) }}
+        />
       )}
       {transferItem && isAdmin && (
         <TransferModal item={transferItem} dealers={dealers} onClose={() => setTransferItem(null)} />
@@ -1118,6 +1131,102 @@ export default function InventoryMaster() {
             })}
           </div>
         </>
+      )}
+
+      {/* ── BATCH ENTRIES TAB ── */}
+      {activeTab === 'batches' && (isAdmin || isWarehouseManager) && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-[#9A9A9A]">
+              {batchesLoading ? 'Loading…' : `${batches.length} batch entr${batches.length !== 1 ? 'ies' : 'y'}`}
+            </p>
+            <button onClick={() => setShowBatchEntry(true)}
+              className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
+              + New Batch Entry
+            </button>
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-[#F4F4F5]">
+                  {['Supplier / Vendor', 'PO Number', 'Date Received', 'Location', 'Items', 'Notes', 'Created By', 'Added', ''].map((h) => (
+                    <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {batchesLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={9} />)
+                ) : batches.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-[#9A9A9A] text-sm">
+                      No batch entries yet. Click "+ New Batch Entry" to get started.
+                    </td>
+                  </tr>
+                ) : batches.map((b) => (
+                  <tr key={b.id} className="hover:bg-[#FAFAFA] transition-colors">
+                    <td className="py-3 px-4 font-medium text-[#1A1A1A]">{b.supplierName}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A]">{b.poNumber || '—'}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{b.dateReceived || '—'}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A]">{dealerMap[b.dealerId] || '—'}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className="text-xs font-semibold bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full">
+                        {b.itemCount ?? '—'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-[#9A9A9A] max-w-[200px] truncate">{b.notes || '—'}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A]">{b.createdBy || '—'}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{formatDate(b.createdAt)}</td>
+                    <td className="py-3 px-4">
+                      <button onClick={() => setEditBatch(b)}
+                        className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {batchesLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 animate-pulse space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-1/2" />
+                  <div className="h-3 bg-gray-100 rounded w-1/3" />
+                </div>
+              ))
+            ) : batches.length === 0 ? (
+              <div className="text-center py-12 text-[#9A9A9A] text-sm">No batch entries yet.</div>
+            ) : batches.map((b) => (
+              <div key={b.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <p className="font-semibold text-[#1A1A1A]">{b.supplierName}</p>
+                    {b.poNumber && <p className="text-xs text-[#9A9A9A]">PO: {b.poNumber}</p>}
+                  </div>
+                  <span className="text-xs font-semibold bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full shrink-0">
+                    {b.itemCount ?? '—'} items
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#9A9A9A] mb-3">
+                  {b.dateReceived && <span>Received: {b.dateReceived}</span>}
+                  <span>Location: {dealerMap[b.dealerId] || '—'}</span>
+                  {b.notes && <span className="truncate max-w-full">{b.notes}</span>}
+                  <span>By: {b.createdBy || '—'}</span>
+                </div>
+                <button onClick={() => setEditBatch(b)}
+                  className="w-full text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
+                  Edit Batch
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Mobile FAB */}

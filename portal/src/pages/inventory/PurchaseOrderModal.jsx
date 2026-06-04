@@ -193,6 +193,27 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
         })
       } else {
         await updateDoc(doc(db, 'purchaseOrders', po.id), payload)
+
+        // Sync field corrections back to any inventory records already created from this PO
+        const invUpdates = []
+        for (const item of payload.items) {
+          if (!item.inventoryIds?.length) continue
+          const invPatch = {
+            brand: item.brand ?? null,
+            modelName: item.modelName,
+            sku: item.sku ?? null,
+            category: item.category ?? null,
+            condition: item.condition,
+            msrp: item.msrp ?? null,
+            costPrice: item.costPrice ?? null,
+            lowStockThreshold: item.lowStockThreshold ?? null,
+            updatedAt: serverTimestamp(),
+          }
+          for (const invId of item.inventoryIds) {
+            invUpdates.push(updateDoc(doc(db, 'inventory', invId), invPatch))
+          }
+        }
+        if (invUpdates.length > 0) await Promise.all(invUpdates)
       }
       onClose()
     } catch (e) {

@@ -11,7 +11,7 @@ import { formatCurrency } from '../../utils/formatters'
  *   onClose()  — called on cancel or after completion
  *   onDone(details) — called after successful deduction
  */
-export default function DeductInventoryModal({ lineItems, dealerId, title, onClose, onDone }) {
+export default function DeductInventoryModal({ lineItems, dealerId, title, alreadyDeducted, onClose, onDone }) {
   const [oemFlags, setOemFlags] = useState(() => {
     const flags = {}
     lineItems.forEach((li) => { flags[li.id] = false })
@@ -58,6 +58,11 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, onClo
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {!result ? (
             <>
+              {alreadyDeducted && (
+                <div className="mb-4 bg-[#E6A817]/10 border border-[#E6A817]/30 rounded-lg px-4 py-3 text-sm text-[#E6A817] font-medium">
+                  ⚠ Inventory was previously deducted for this order. Re-running will deduct <strong>again</strong> — only proceed if the previous run was incorrect (e.g. everything was marked OEM Direct by mistake).
+                </div>
+              )}
               <p className="text-sm text-[#9A9A9A] mb-4">
                 Mark any line items that ship directly from the manufacturer (OEM Direct) — those will be skipped.
                 Everything else will be deducted from inventory. Items with insufficient stock will create negative

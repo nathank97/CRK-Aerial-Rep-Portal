@@ -524,7 +524,8 @@ export default function OrderDetail() {
         <DeductInventoryModal
           lineItems={order.lineItems ?? []}
           dealerId={order.dealerId ?? user?.uid}
-          title={`Deduct Inventory — ${order.orderNumber}`}
+          title={`${order.inventoryDeducted ? 'Re-deduct' : 'Deduct'} Inventory — ${order.orderNumber}`}
+          alreadyDeducted={!!order.inventoryDeducted}
           onClose={() => { setShowDeduct(false); setPendingStatus(null) }}
           onDone={handleDeductDone}
         />
@@ -594,20 +595,18 @@ export default function OrderDetail() {
 
             {(isAdmin || isWarehouseManager)
               && ['Fulfilled', 'Delivered'].includes(order.status)
-              && !order.inventoryDeducted
               && (order.lineItems ?? []).length > 0 && (
               <button
                 onClick={() => setShowDeduct(true)}
                 disabled={saving}
-                className="text-sm bg-[#8B6914] hover:bg-[#7a5c11] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium"
+                className={`text-sm px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium ${
+                  order.inventoryDeducted
+                    ? 'border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5'
+                    : 'bg-[#8B6914] hover:bg-[#7a5c11] text-white'
+                }`}
               >
-                Deduct Inventory
+                {order.inventoryDeducted ? 'Re-deduct Inventory' : 'Deduct Inventory'}
               </button>
-            )}
-            {order.inventoryDeducted && (
-              <span className="text-xs font-medium text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-1 rounded-lg">
-                ✓ Inventory Deducted
-              </span>
             )}
 
             {!order.sentToWarehouse ? (

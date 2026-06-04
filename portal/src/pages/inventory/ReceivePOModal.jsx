@@ -3,6 +3,7 @@ import { addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { inventoryCol, purchaseOrdersCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
+import { writeTx } from '../../utils/inventoryTransactions'
 
 function calcStatus(items) {
   const allDone = items.every((i) => (i.receivedQty ?? 0) >= i.orderedQty)
@@ -73,6 +74,21 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           })
+
+          await writeTx([{
+            type: 'po_receipt',
+            qty,
+            modelName: item.modelName,
+            brand: item.brand ?? null,
+            sku: item.sku ?? null,
+            category: item.category ?? null,
+            dealerId: po.dealerId,
+            inventoryId: invRef.id,
+            sourceType: 'purchase_order',
+            sourceId: po.id,
+            sourceNumber: po.poNumber || po.supplierName,
+            createdBy: profile?.displayName ?? user?.email ?? '',
+          }])
 
           return {
             ...item,

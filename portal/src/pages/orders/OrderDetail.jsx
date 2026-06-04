@@ -7,6 +7,7 @@ import { useOrder } from '../../hooks/useOrders'
 import { orderDoc, invoicesCol, inventoryCol } from '../../firebase/firestore'
 import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
+import { undoInventoryDeduction } from '../../utils/inventoryDeduction'
 import { useEmailTemplate, fillTemplate, formatOrderLineItems } from '../../hooks/useEmailTemplate'
 import { emailService } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
@@ -188,6 +189,7 @@ export default function OrderDetail() {
   const [showCCModal, setShowCCModal] = useState(false)
   const [showDeduct, setShowDeduct] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(null)
+  const [undoing, setUndoing] = useState(false)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -312,6 +314,29 @@ export default function OrderDetail() {
     }
     await updateDoc(orderDoc(id), updates)
     flash('Inventory deducted successfully.')
+  }
+
+  const handleUndoDeduction = async () => {
+    if (!window.confirm('This will reverse all inventory deductions from this order and delete any shortfall records that were auto-created. Continue?')) return
+    setUndoing(true)
+    try {
+      await undoInventoryDeduction(
+        order.inventoryDeductionDetails ?? [],
+        order.dealerId ?? user?.uid,
+        { type: 'order', id, number: order.orderNumber, createdBy: profile?.displayName ?? '' }
+      )
+      await updateDoc(orderDoc(id), {
+        inventoryDeducted: false,
+        inventoryDeductionDetails: [],
+        updatedAt: serverTimestamp(),
+      })
+      flash('Inventory deduction reversed.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to reverse deduction.', true)
+    } finally {
+      setUndoing(false)
+    }
   }
 
   const handleSendToWarehouse = () => setShowCCModal(true)
@@ -526,6 +551,7 @@ export default function OrderDetail() {
           dealerId={order.dealerId ?? user?.uid}
           title={`${order.inventoryDeducted ? 'Re-deduct' : 'Deduct'} Inventory — ${order.orderNumber}`}
           alreadyDeducted={!!order.inventoryDeducted}
+          source={{ type: 'order', id, number: order.orderNumber, createdBy: profile?.displayName ?? '' }}
           onClose={() => { setShowDeduct(false); setPendingStatus(null) }}
           onDone={handleDeductDone}
         />
@@ -596,17 +622,33 @@ export default function OrderDetail() {
             {(isAdmin || isWarehouseManager)
               && ['Fulfilled', 'Delivered'].includes(order.status)
               && (order.lineItems ?? []).length > 0 && (
-              <button
-                onClick={() => setShowDeduct(true)}
-                disabled={saving}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium ${
-                  order.inventoryDeducted
-                    ? 'border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5'
-                    : 'bg-[#8B6914] hover:bg-[#7a5c11] text-white'
-                }`}
-              >
-                {order.inventoryDeducted ? 'Re-deduct Inventory' : 'Deduct Inventory'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowDeduct(true)}
+                  disabled={saving || undoing}
+                  className={`text-sm px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium ${
+                    order.inventoryDeducted
+                      ? 'border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5'
+                      : 'bg-[#8B6914] hover:bg-[#7a5c11] text-white'
+                  }`}
+                >
+                  {order.inventoryDeducted ? 'Re-deduct Inventory' : 'Deduct Inventory'}
+                </button>
+                {order.inventoryDeducted && (
+                  <>
+                    <span className="text-xs font-medium text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-1 rounded-lg">
+                      ✓ Deducted
+                    </span>
+                    <button
+                      onClick={handleUndoDeduction}
+                      disabled={undoing || saving}
+                      className="text-xs text-[#D95F5F] hover:underline disabled:opacity-50 font-medium"
+                    >
+                      {undoing ? 'Reversing…' : 'Undo'}
+                    </button>
+                  </>
+                )}
+              </div>
             )}
 
             {!order.sentToWarehouse ? (

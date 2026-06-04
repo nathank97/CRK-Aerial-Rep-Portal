@@ -11,7 +11,7 @@ import { formatCurrency } from '../../utils/formatters'
  *   onClose()  — called on cancel or after completion
  *   onDone(details) — called after successful deduction
  */
-export default function DeductInventoryModal({ lineItems, dealerId, title, alreadyDeducted, onClose, onDone }) {
+export default function DeductInventoryModal({ lineItems, dealerId, title, alreadyDeducted, source, onClose, onDone }) {
   const [oemFlags, setOemFlags] = useState(() => {
     const flags = {}
     lineItems.forEach((li) => { flags[li.id] = false })
@@ -34,7 +34,7 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
     setRunning(true)
     setError('')
     try {
-      const { details, hadShortfall } = await autoDeductInventory(activeItems, dealerId)
+      const { details, hadShortfall } = await autoDeductInventory(activeItems, dealerId, source ?? {})
       setResult({ details, hadShortfall })
     } catch (e) {
       console.error('Deduction error:', e)

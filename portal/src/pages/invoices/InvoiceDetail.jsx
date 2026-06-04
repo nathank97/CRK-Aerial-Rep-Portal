@@ -15,6 +15,7 @@ import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
+import { undoInventoryDeduction } from '../../utils/inventoryDeduction'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -41,6 +42,7 @@ export default function InvoiceDetail() {
   const [showPartialModal, setShowPartialModal] = useState(false)
   const [showCCModal, setShowCCModal] = useState(false)
   const [showDeduct, setShowDeduct] = useState(false)
+  const [undoing, setUndoing] = useState(false)
   const [editingAmtPaid, setEditingAmtPaid] = useState(false)
   const [amtPaidDraft, setAmtPaidDraft] = useState('')
   const [partialAmount, setPartialAmount] = useState('')
@@ -265,6 +267,29 @@ export default function InvoiceDetail() {
     }
   }
 
+  const handleUndoDeduction = async () => {
+    if (!window.confirm('This will reverse all inventory deductions from this invoice and delete any shortfall records that were auto-created. Continue?')) return
+    setUndoing(true)
+    try {
+      await undoInventoryDeduction(
+        invoice.inventoryDeductionDetails ?? [],
+        invoice.dealerId ?? '',
+        { type: 'invoice', id, number: invoice.invoiceNumber, createdBy: profile?.displayName ?? '' }
+      )
+      await updateDoc(invoiceDoc(id), {
+        inventoryDeducted: false,
+        inventoryDeductionDetails: [],
+        updatedAt: serverTimestamp(),
+      })
+      flash('Inventory deduction reversed.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to reverse deduction.', true)
+    } finally {
+      setUndoing(false)
+    }
+  }
+
   const handleInvoiceDeductDone = async (details) => {
     setShowDeduct(false)
     await updateDoc(invoiceDoc(id), {
@@ -334,7 +359,9 @@ export default function InvoiceDetail() {
         <DeductInventoryModal
           lineItems={invoice.lineItems ?? []}
           dealerId={invoice.dealerId ?? ''}
-          title={`Deduct Inventory — ${invoice.invoiceNumber}`}
+          title={`${invoice.inventoryDeducted ? 'Re-deduct' : 'Deduct'} Inventory — ${invoice.invoiceNumber}`}
+          alreadyDeducted={!!invoice.inventoryDeducted}
+          source={{ type: 'invoice', id, number: invoice.invoiceNumber, createdBy: profile?.displayName ?? '' }}
           onClose={() => setShowDeduct(false)}
           onDone={handleInvoiceDeductDone}
         />
@@ -421,16 +448,28 @@ export default function InvoiceDetail() {
               className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60">
               Send Invoice
             </button>
-            {!invoice.linkedOrderId && !invoice.inventoryDeducted && (invoice.lineItems ?? []).length > 0 && (
-              <button onClick={() => setShowDeduct(true)} disabled={saving}
-                className="text-sm bg-[#8B6914] hover:bg-[#7a5c11] text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium">
-                Deduct Inventory
-              </button>
-            )}
-            {invoice.inventoryDeducted && (
-              <span className="text-xs font-medium text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-1.5 rounded-lg">
-                ✓ Inventory Deducted
-              </span>
+            {!invoice.linkedOrderId && (invoice.lineItems ?? []).length > 0 && (
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowDeduct(true)} disabled={saving || undoing}
+                  className={`text-sm px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 font-medium ${
+                    invoice.inventoryDeducted
+                      ? 'border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5'
+                      : 'bg-[#8B6914] hover:bg-[#7a5c11] text-white'
+                  }`}>
+                  {invoice.inventoryDeducted ? 'Re-deduct Inventory' : 'Deduct Inventory'}
+                </button>
+                {invoice.inventoryDeducted && (
+                  <>
+                    <span className="text-xs font-medium text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-1 rounded-lg">
+                      ✓ Deducted
+                    </span>
+                    <button onClick={handleUndoDeduction} disabled={undoing || saving}
+                      className="text-xs text-[#D95F5F] hover:underline disabled:opacity-50 font-medium">
+                      {undoing ? 'Reversing…' : 'Undo'}
+                    </button>
+                  </>
+                )}
+              </div>
             )}
             {paymentStatus !== 'Paid' && (
               <button onClick={handleMarkPaid} disabled={saving}

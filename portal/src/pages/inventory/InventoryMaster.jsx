@@ -9,8 +9,10 @@ import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders'
+import { useInventoryTransactions } from '../../hooks/useInventoryTransactions'
 import PurchaseOrderModal from './PurchaseOrderModal'
 import ReceivePOModal from './ReceivePOModal'
+import { writeTx } from '../../utils/inventoryTransactions'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
 const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
@@ -369,7 +371,7 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
     if (quantity < 1) { setError('Quantity must be at least 1.'); return }
     setSaving(true)
     try {
-      await addDoc(inventoryCol, {
+      const ref = await addDoc(inventoryCol, {
         dealerId,
         catalogId: catalogId || null,
         brand: brand.trim() || null,
@@ -387,6 +389,18 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
+      await writeTx([{
+        type: 'add_stock',
+        qty: quantity,
+        modelName: modelName.trim(),
+        brand: brand.trim() || null,
+        sku: sku.trim() || null,
+        category: category || null,
+        dealerId,
+        inventoryId: ref.id,
+        sourceType: 'manual',
+        createdBy: '',
+      }])
       onClose()
     } catch {
       setError('Failed to save. Please try again.')
@@ -522,11 +536,12 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function InventoryMaster() {
-  const { user, isAdmin, isWarehouseManager } = useAuth()
+  const { user, profile, isAdmin, isWarehouseManager } = useAuth()
   const { items, loading } = useAllInventory()
   const { dealers, loading: dealersLoading } = useDealers()
   const { catalog } = useCatalog()
   const { pos, loading: posLoading, error: posError } = usePurchaseOrders()
+  const { transactions, loading: txLoading } = useInventoryTransactions()
   const [migrating, setMigrating] = useState(false)
 
   const [search, setSearch] = useState('')
@@ -740,7 +755,10 @@ export default function InventoryMaster() {
     { key: 'summary', label: 'Summary' },
     { key: 'byLocation', label: 'By Location' },
     { key: 'log', label: 'Log' },
-    ...((isAdmin || isWarehouseManager) ? [{ key: 'purchaseOrders', label: 'Purchase Orders' }] : []),
+    ...((isAdmin || isWarehouseManager) ? [
+      { key: 'purchaseOrders', label: 'Purchase Orders' },
+      { key: 'transactions', label: 'Transactions' },
+    ] : []),
   ]
 
   return (
@@ -1398,6 +1416,112 @@ export default function InventoryMaster() {
           </div>
         </div>
       )}
+
+      {/* ── TRANSACTIONS TAB ── */}
+      {activeTab === 'transactions' && (isAdmin || isWarehouseManager) && (() => {
+        const TX_COLORS = {
+          add_stock:      { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'Add Stock' },
+          po_receipt:     { bg: 'bg-[#4CAF7D]/15', text: 'text-[#4CAF7D]',  label: 'PO Receipt' },
+          deduction:      { bg: 'bg-[#D95F5F]/15', text: 'text-[#D95F5F]',  label: 'Deduction' },
+          reversal:       { bg: 'bg-[#9B59B6]/15', text: 'text-[#9B59B6]',  label: 'Reversal' },
+          adjustment:     { bg: 'bg-[#E6A817]/15', text: 'text-[#E6A817]',  label: 'Adjustment' },
+          transfer:       { bg: 'bg-gray-100',      text: 'text-gray-600',   label: 'Transfer' },
+        }
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-[#9A9A9A]">
+                {txLoading ? 'Loading…' : `${transactions.length} transaction${transactions.length !== 1 ? 's' : ''} (latest 500)`}
+              </p>
+            </div>
+            <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
+              <table className="text-sm" style={{ minWidth: 900 }}>
+                <thead>
+                  <tr className="border-b border-gray-100 bg-[#F4F4F5]">
+                    {['Date', 'Type', 'Model', 'Brand', 'SKU', 'Qty', 'Location', 'Source', 'By', 'Notes'].map((h) => (
+                      <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {txLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={10} />)
+                  ) : transactions.length === 0 ? (
+                    <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">
+                      No transactions yet. They are recorded as you add stock, receive POs, and deduct inventory.
+                    </td></tr>
+                  ) : transactions.map((tx) => {
+                    const c = TX_COLORS[tx.type] ?? TX_COLORS.adjustment
+                    const isNeg = (tx.qty ?? 0) < 0
+                    const date = tx.createdAt?.toDate ? tx.createdAt.toDate() : null
+                    const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+                    return (
+                      <tr key={tx.id} className="hover:bg-[#FAFAFA] transition-colors">
+                        <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap text-xs">{dateStr}</td>
+                        <td className="py-3 px-4">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${c.bg} ${c.text}`}>{c.label}</span>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-[#1A1A1A]">{tx.modelName || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A]">{tx.brand || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A]">{tx.sku || '—'}</td>
+                        <td className={`py-3 px-4 font-bold tabular-nums ${isNeg ? 'text-[#D95F5F]' : 'text-[#4CAF7D]'}`}>
+                          {(tx.qty ?? 0) > 0 ? `+${tx.qty}` : tx.qty}
+                        </td>
+                        <td className="py-3 px-4 text-[#9A9A9A]">{dealerMap[tx.dealerId] || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">
+                          {tx.sourceNumber ? (
+                            <span className="text-xs">{tx.sourceType?.replace('_', ' ')} · {tx.sourceNumber}</span>
+                          ) : tx.sourceType ? (
+                            <span className="text-xs capitalize">{tx.sourceType?.replace('_', ' ')}</span>
+                          ) : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-[#9A9A9A]">{tx.createdBy || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A] text-xs max-w-[160px] truncate">{tx.notes || '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* Mobile tx cards */}
+            <div className="md:hidden space-y-2">
+              {txLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 animate-pulse space-y-2">
+                    <div className="h-4 bg-gray-200 rounded w-1/2" /><div className="h-3 bg-gray-100 rounded w-1/3" />
+                  </div>
+                ))
+              ) : transactions.map((tx) => {
+                const c = TX_COLORS[tx.type] ?? TX_COLORS.adjustment
+                const isNeg = (tx.qty ?? 0) < 0
+                const date = tx.createdAt?.toDate ? tx.createdAt.toDate() : null
+                const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+                return (
+                  <div key={tx.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div>
+                        <p className="font-semibold text-[#1A1A1A]">{tx.modelName || '—'}</p>
+                        {tx.brand && <p className="text-xs text-[#9A9A9A]">{tx.brand}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`font-bold tabular-nums ${isNeg ? 'text-[#D95F5F]' : 'text-[#4CAF7D]'}`}>
+                          {(tx.qty ?? 0) > 0 ? `+${tx.qty}` : tx.qty}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center text-xs text-[#9A9A9A]">
+                      <span className={`font-semibold px-2 py-0.5 rounded-full ${c.bg} ${c.text}`}>{c.label}</span>
+                      <span>{dateStr}</span>
+                      {tx.sourceNumber && <span>{tx.sourceNumber}</span>}
+                      <span>{dealerMap[tx.dealerId] || '—'}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Mobile FAB */}
       <button onClick={() => setShowAdd(true)}

@@ -76,6 +76,13 @@ service cloud.firestore {
       allow read, write: if isAuth();
     }
 
+    // ── inventory transactions (audit log) ────────────────────────────────────
+    match /inventoryTransactions/{txId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAdmin();
+    }
+
     // ── service tickets ───────────────────────────────────────────────────────
     match /serviceTickets/{ticketId} {
       allow read: if isAdmin() || resource.data.dealerId == request.auth.uid;

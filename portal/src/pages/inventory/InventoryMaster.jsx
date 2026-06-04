@@ -1,15 +1,16 @@
 import { useState, useMemo, useEffect } from 'react'
-import { onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, query, where, doc, serverTimestamp, deleteField } from 'firebase/firestore'
 import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
 import { getDealerPrice } from '../../utils/pricing'
-import { inventoryCol } from '../../firebase/firestore'
+import { inventoryCol, inventoryBatchesCol, purchaseOrdersCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
-import { useInventoryBatches } from '../../hooks/useInventoryBatches'
-import BatchEntryModal from './BatchEntryModal'
+import { usePurchaseOrders } from '../../hooks/usePurchaseOrders'
+import PurchaseOrderModal from './PurchaseOrderModal'
+import ReceivePOModal from './ReceivePOModal'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
 const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
@@ -525,7 +526,8 @@ export default function InventoryMaster() {
   const { items, loading } = useAllInventory()
   const { dealers, loading: dealersLoading } = useDealers()
   const { catalog } = useCatalog()
-  const { batches, loading: batchesLoading } = useInventoryBatches()
+  const { pos, loading: posLoading } = usePurchaseOrders()
+  const [migrating, setMigrating] = useState(false)
 
   const [search, setSearch] = useState('')
   const [filterDealer, setFilterDealer] = useState('')
@@ -537,8 +539,59 @@ export default function InventoryMaster() {
   const [editItem, setEditItem] = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
   const [deleting, setDeleting] = useState(false)
-  const [showBatchEntry, setShowBatchEntry] = useState(false)
-  const [editBatch, setEditBatch] = useState(null)
+  const [showPO, setShowPO] = useState(false)
+  const [editPO, setEditPO] = useState(null)
+  const [receivePO, setReceivePO] = useState(null)
+  const [deletePO, setDeletePO] = useState(null)
+  const [deletingPO, setDeletingPO] = useState(false)
+
+  // One-time migration: inventoryBatches → purchaseOrders
+  useEffect(() => {
+    if (posLoading) return
+    async function migrate() {
+      const batchSnap = await getDocs(inventoryBatchesCol)
+      if (batchSnap.empty) return
+      setMigrating(true)
+      for (const batchDoc of batchSnap.docs) {
+        const batch = { id: batchDoc.id, ...batchDoc.data() }
+        const itemsSnap = await getDocs(query(inventoryCol, where('batchId', '==', batch.id)))
+        const batchItems = itemsSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        const poRef = await addDoc(purchaseOrdersCol, {
+          supplierName: batch.supplierName ?? '',
+          poNumber: batch.poNumber ?? null,
+          orderDate: batch.dateReceived ?? null,
+          expectedDelivery: batch.dateReceived ?? null,
+          notes: batch.notes ?? null,
+          dealerId: batch.dealerId ?? null,
+          status: 'Fully Received',
+          createdBy: batch.createdBy ?? '',
+          createdAt: batch.createdAt ?? serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          items: batchItems.map((item) => ({
+            id: item.id,
+            catalogId: item.catalogId ?? null,
+            brand: item.brand ?? null,
+            category: item.category ?? null,
+            modelName: item.modelName ?? '',
+            sku: item.sku ?? null,
+            condition: item.condition ?? 'New',
+            orderedQty: item.quantityOnHand ?? 0,
+            receivedQty: item.quantityOnHand ?? 0,
+            costPrice: item.costPrice ?? null,
+            msrp: item.msrp ?? null,
+            lowStockThreshold: item.lowStockThreshold ?? null,
+            inventoryIds: [item.id],
+          })),
+        })
+        for (const item of batchItems) {
+          await updateDoc(doc(db, 'inventory', item.id), { poId: poRef.id, batchId: deleteField() })
+        }
+        await deleteDoc(doc(db, 'inventoryBatches', batch.id))
+      }
+      setMigrating(false)
+    }
+    migrate()
+  }, [posLoading])
   const [summarySort, setSummarySort] = useState({ key: '', dir: 'asc' })
   const [logSort, setLogSort] = useState({ key: '', dir: 'asc' })
   const [locationSort, setLocationSort] = useState({ key: '', dir: 'asc' })
@@ -687,7 +740,7 @@ export default function InventoryMaster() {
     { key: 'summary', label: 'Summary' },
     { key: 'byLocation', label: 'By Location' },
     { key: 'log', label: 'Log' },
-    ...((isAdmin || isWarehouseManager) ? [{ key: 'batches', label: 'Batch Entries' }] : []),
+    ...((isAdmin || isWarehouseManager) ? [{ key: 'purchaseOrders', label: 'Purchase Orders' }] : []),
   ]
 
   return (
@@ -696,12 +749,52 @@ export default function InventoryMaster() {
         <AddStockModal dealers={dealers} catalog={catalog} onClose={() => setShowAdd(false)}
           fixedDealerId={isAdmin ? undefined : user?.uid} />
       )}
-      {(showBatchEntry || editBatch) && (
-        <BatchEntryModal
-          batch={editBatch ?? null}
+      {(showPO || editPO) && (
+        <PurchaseOrderModal
+          po={editPO ?? null}
           dealers={dealers}
-          onClose={() => { setShowBatchEntry(false); setEditBatch(null) }}
+          catalog={catalog}
+          onClose={() => { setShowPO(false); setEditPO(null) }}
         />
+      )}
+      {receivePO && (
+        <ReceivePOModal
+          po={receivePO}
+          dealerMap={dealerMap}
+          onClose={() => setReceivePO(null)}
+        />
+      )}
+      {deletePO && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Delete Purchase Order</h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-[#1A1A1A]">Delete PO from <span className="font-semibold">{deletePO.supplierName}</span>{deletePO.poNumber ? ` (${deletePO.poNumber})` : ''}? This cannot be undone.</p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setDeletePO(null)} disabled={deletingPO}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">Cancel</button>
+              <button onClick={async () => {
+                setDeletingPO(true)
+                await deleteDoc(doc(db, 'purchaseOrders', deletePO.id))
+                setDeletePO(null); setDeletingPO(false)
+              }} disabled={deletingPO}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#c44f4f] disabled:opacity-50">
+                {deletingPO ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {migrating && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl px-8 py-6 shadow-xl text-center">
+            <p className="font-semibold text-[#1A1A1A] mb-1">Migrating batch entries…</p>
+            <p className="text-sm text-[#9A9A9A]">Converting to Purchase Orders. This only runs once.</p>
+          </div>
+        </div>
       )}
       {transferItem && isAdmin && (
         <TransferModal item={transferItem} dealers={dealers} onClose={() => setTransferItem(null)} />
@@ -1157,98 +1250,142 @@ export default function InventoryMaster() {
         </>
       )}
 
-      {/* ── BATCH ENTRIES TAB ── */}
-      {activeTab === 'batches' && (isAdmin || isWarehouseManager) && (
+      {/* ── PURCHASE ORDERS TAB ── */}
+      {activeTab === 'purchaseOrders' && (isAdmin || isWarehouseManager) && (
         <div>
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-[#9A9A9A]">
-              {batchesLoading ? 'Loading…' : `${batches.length} batch entr${batches.length !== 1 ? 'ies' : 'y'}`}
+              {posLoading ? 'Loading…' : `${pos.length} purchase order${pos.length !== 1 ? 's' : ''}`}
             </p>
-            <button onClick={() => setShowBatchEntry(true)}
+            <button onClick={() => setShowPO(true)}
               className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
-              + New Batch Entry
+              + New Purchase Order
             </button>
           </div>
 
           {/* Desktop table */}
           <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="text-sm" style={{ minWidth: 900 }}>
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Supplier / Vendor', 'PO Number', 'Date Received', 'Location', 'Items', 'Notes', 'Created By', 'Added', ''].map((h) => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">
-                      {h}
-                    </th>
+                  {['Supplier / Vendor', 'PO #', 'Order Date', 'Exp. Delivery', 'Location', 'Items', 'Status', 'Outstanding', 'Created By', ''].map((h) => (
+                    <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {batchesLoading ? (
-                  Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={9} />)
-                ) : batches.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-12 text-center text-[#9A9A9A] text-sm">
-                      No batch entries yet. Click "+ New Batch Entry" to get started.
-                    </td>
-                  </tr>
-                ) : batches.map((b) => (
-                  <tr key={b.id} className="hover:bg-[#FAFAFA] transition-colors">
-                    <td className="py-3 px-4 font-medium text-[#1A1A1A]">{b.supplierName}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{b.poNumber || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{b.dateReceived || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{dealerMap[b.dealerId] || '—'}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="text-xs font-semibold bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full">
-                        {b.itemCount ?? '—'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-[#9A9A9A] max-w-[200px] truncate">{b.notes || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{b.createdBy || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{formatDate(b.createdAt)}</td>
-                    <td className="py-3 px-4">
-                      <button onClick={() => setEditBatch(b)}
-                        className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
-                    </td>
-                  </tr>
-                ))}
+                {posLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} cols={10} />)
+                ) : pos.length === 0 ? (
+                  <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">No purchase orders yet. Click "+ New Purchase Order" to get started.</td></tr>
+                ) : pos.map((p) => {
+                  const outstanding = (p.items ?? []).filter((i) => (i.receivedQty ?? 0) < i.orderedQty).length
+                  const statusColor = {
+                    Draft: 'bg-gray-100 text-gray-500',
+                    Ordered: 'bg-[#4A90B8]/15 text-[#4A90B8]',
+                    'Partially Received': 'bg-[#E6A817]/15 text-[#E6A817]',
+                    'Fully Received': 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
+                  }[p.status] ?? 'bg-gray-100 text-gray-500'
+                  const canReceive = ['Ordered', 'Partially Received'].includes(p.status)
+                  const canEdit = p.status !== 'Fully Received'
+                  return (
+                    <tr key={p.id} className="hover:bg-[#FAFAFA] transition-colors">
+                      <td className="py-3 px-4 font-medium text-[#1A1A1A]">{p.supplierName}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{p.poNumber || '—'}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{p.orderDate || '—'}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{p.expectedDelivery || '—'}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{dealerMap[p.dealerId] || '—'}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className="text-xs font-semibold bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full">
+                          {(p.items ?? []).length}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${statusColor}`}>{p.status}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {outstanding > 0
+                          ? <span className="text-xs font-semibold text-[#E6A817]">{outstanding} item{outstanding !== 1 ? 's' : ''}</span>
+                          : <span className="text-xs text-[#4CAF7D]">—</span>}
+                      </td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{p.createdBy || '—'}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3 whitespace-nowrap">
+                          {canReceive && (
+                            <button onClick={() => setReceivePO(p)} className="text-xs font-semibold text-[#4CAF7D] hover:underline">Receive</button>
+                          )}
+                          {canEdit && (
+                            <button onClick={() => setEditPO(p)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                          )}
+                          {p.status === 'Draft' && (
+                            <button onClick={() => setDeletePO(p)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile cards */}
           <div className="md:hidden space-y-3">
-            {batchesLoading ? (
+            {posLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 animate-pulse space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-1/2" />
-                  <div className="h-3 bg-gray-100 rounded w-1/3" />
+                  <div className="h-4 bg-gray-200 rounded w-1/2" /><div className="h-3 bg-gray-100 rounded w-1/3" />
                 </div>
               ))
-            ) : batches.length === 0 ? (
-              <div className="text-center py-12 text-[#9A9A9A] text-sm">No batch entries yet.</div>
-            ) : batches.map((b) => (
-              <div key={b.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <p className="font-semibold text-[#1A1A1A]">{b.supplierName}</p>
-                    {b.poNumber && <p className="text-xs text-[#9A9A9A]">PO: {b.poNumber}</p>}
+            ) : pos.length === 0 ? (
+              <div className="text-center py-12 text-[#9A9A9A] text-sm">No purchase orders yet.</div>
+            ) : pos.map((p) => {
+              const outstanding = (p.items ?? []).filter((i) => (i.receivedQty ?? 0) < i.orderedQty).length
+              const statusColor = {
+                Draft: 'bg-gray-100 text-gray-500',
+                Ordered: 'bg-[#4A90B8]/15 text-[#4A90B8]',
+                'Partially Received': 'bg-[#E6A817]/15 text-[#E6A817]',
+                'Fully Received': 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
+              }[p.status] ?? 'bg-gray-100 text-gray-500'
+              return (
+                <div key={p.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <p className="font-semibold text-[#1A1A1A]">{p.supplierName}</p>
+                      {p.poNumber && <p className="text-xs text-[#9A9A9A]">PO: {p.poNumber}</p>}
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap ${statusColor}`}>{p.status}</span>
                   </div>
-                  <span className="text-xs font-semibold bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full shrink-0">
-                    {b.itemCount ?? '—'} items
-                  </span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#9A9A9A] mb-3">
+                    {p.orderDate && <span>Ordered: {p.orderDate}</span>}
+                    {p.expectedDelivery && <span>Expected: {p.expectedDelivery}</span>}
+                    <span>Location: {dealerMap[p.dealerId] || '—'}</span>
+                    <span>{(p.items ?? []).length} items</span>
+                    {outstanding > 0 && <span className="text-[#E6A817] font-medium">{outstanding} outstanding</span>}
+                  </div>
+                  <div className="flex gap-2">
+                    {['Ordered', 'Partially Received'].includes(p.status) && (
+                      <button onClick={() => setReceivePO(p)}
+                        className="flex-1 text-sm border border-[#4CAF7D] text-[#4CAF7D] rounded-lg py-1.5 hover:bg-[#4CAF7D]/5 transition-colors font-medium">
+                        Receive
+                      </button>
+                    )}
+                    {p.status !== 'Fully Received' && (
+                      <button onClick={() => setEditPO(p)}
+                        className="flex-1 text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
+                        Edit
+                      </button>
+                    )}
+                    {p.status === 'Draft' && (
+                      <button onClick={() => setDeletePO(p)}
+                        className="flex-1 text-sm border border-[#D95F5F] text-[#D95F5F] rounded-lg py-1.5 hover:bg-[#D95F5F]/5 transition-colors">
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#9A9A9A] mb-3">
-                  {b.dateReceived && <span>Received: {b.dateReceived}</span>}
-                  <span>Location: {dealerMap[b.dealerId] || '—'}</span>
-                  {b.notes && <span className="truncate max-w-full">{b.notes}</span>}
-                  <span>By: {b.createdBy || '—'}</span>
-                </div>
-                <button onClick={() => setEditBatch(b)}
-                  className="w-full text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
-                  Edit Batch
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

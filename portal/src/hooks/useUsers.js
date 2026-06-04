@@ -7,7 +7,7 @@ export function useDealers() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(usersCol, where('role', '==', 'dealer'))
+    const q = query(usersCol, where('role', 'in', ['dealer', 'warehouse_manager']))
     const unsub = onSnapshot(q, (snap) => {
       setDealers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)

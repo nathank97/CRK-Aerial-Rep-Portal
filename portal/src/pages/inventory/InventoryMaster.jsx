@@ -12,6 +12,7 @@ import { useInventoryBatches } from '../../hooks/useInventoryBatches'
 import BatchEntryModal from './BatchEntryModal'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
+const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
 
 function SortTh({ label, sortKey, sort, onSort, className = '' }) {
   const active = sort.key === sortKey
@@ -77,6 +78,7 @@ function useAllInventory() {
 function EditItemModal({ item, dealers, isAdmin, onClose }) {
   const [form, setForm] = useState({
     brand: item.brand ?? '',
+    category: item.category ?? 'Drone Kit',
     modelName: item.modelName ?? '',
     sku: item.sku ?? '',
     serialNumber: item.serialNumber ?? '',
@@ -100,6 +102,7 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
     try {
       await updateDoc(doc(db, 'inventory', item.id), {
         brand: form.brand.trim() || null,
+        category: form.category || null,
         modelName: form.modelName.trim(),
         sku: form.sku.trim() || null,
         serialNumber: form.serialNumber.trim() || null,
@@ -145,9 +148,17 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
               </select>
             </div>
           )}
-          <div>
-            <label className={lbl}>Brand</label>
-            <input value={form.brand} onChange={set('brand')} placeholder="e.g. DJI, Autel, AgEagle" className={cls} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Brand</label>
+              <input value={form.brand} onChange={set('brand')} placeholder="e.g. DJI, Autel, AgEagle" className={cls} />
+            </div>
+            <div>
+              <label className={lbl}>Category</label>
+              <select value={form.category} onChange={set('category')} className={cls}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
           <div>
             <label className={lbl}>Model Name *</label>
@@ -245,6 +256,7 @@ function TransferModal({ item, dealers, onClose }) {
       await addDoc(inventoryCol, {
         dealerId: toDealerId,
         brand: item.brand ?? null,
+        category: item.category ?? null,
         modelName: item.modelName,
         sku: item.sku ?? '',
         serialNumber: item.serialNumber ?? '',
@@ -315,6 +327,7 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [brand, setBrand] = useState('')
+  const [category, setCategory] = useState('Drone Kit')
   const [modelName, setModelName] = useState('')
   const [sku, setSku] = useState('')
   const [serialNumber, setSerialNumber] = useState('')
@@ -359,6 +372,7 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
         dealerId,
         catalogId: catalogId || null,
         brand: brand.trim() || null,
+        category: category || null,
         modelName: modelName.trim(),
         sku: sku.trim() || '',
         serialNumber: serialNumber.trim() || '',
@@ -461,9 +475,15 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Quantity *</label>
-              <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} className={cls} />
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)} className={cls}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Quantity *</label>
+            <input type="number" min="1" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} className={cls} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -577,10 +597,11 @@ export default function InventoryMaster() {
   const summaryGroups = useMemo(() => {
     const groups = {}
     filtered.forEach((item) => {
-      const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}`
+      const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
       if (!groups[key]) {
         groups[key] = {
           brand: item.brand ?? '',
+          category: item.category ?? '',
           modelName: item.modelName ?? '—',
           condition: item.condition ?? '',
           totalOnHand: 0,
@@ -781,7 +802,7 @@ export default function InventoryMaster() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
-                  ['Model', 'modelName'], ['Brand', 'brand'], ['Condition', 'condition'],
+                  ['Model', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
                   ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
                   ['Total On Hand', 'totalOnHand'], ['Total Reserved', 'totalReserved'],
                   ['Total Available', 'totalAvail'], ['Locations', ''],
@@ -803,6 +824,7 @@ export default function InventoryMaster() {
                   <tr key={i} className={`transition-colors ${isNeg ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                     <td className="py-3 px-4 font-medium text-[#1A1A1A]">{g.modelName}</td>
                     <td className="py-3 px-4 text-[#9A9A9A]">{g.brand || '—'}</td>
+                    <td className="py-3 px-4 text-[#9A9A9A]">{g.category || '—'}</td>
                     <td className="py-3 px-4">
                       {g.condition
                         ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>
@@ -918,7 +940,7 @@ export default function InventoryMaster() {
                   <thead>
                     <tr className="border-b border-gray-50">
                       {[
-                        ['Model', 'modelName'], ['Brand', 'brand'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
+                        ['Model', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
                         ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
                         ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'], ['Available', 'available'],
                         ...(isAdmin ? [['CRK Cost / Unit', 'costPrice'], ['', '']] : []),
@@ -935,6 +957,7 @@ export default function InventoryMaster() {
                         <tr key={item.id} className={`${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                           <td className="py-2 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
                           <td className="py-2 px-4 text-[#9A9A9A]">{item.brand || '—'}</td>
+                          <td className="py-2 px-4 text-[#9A9A9A]">{item.category || '—'}</td>
                           <td className="py-2 px-4">
                             <p className="text-[#1A1A1A]">{item.sku || '—'}</p>
                             {item.serialNumber && <p className="text-xs text-[#9A9A9A]">#{item.serialNumber}</p>}
@@ -997,11 +1020,11 @@ export default function InventoryMaster() {
       {activeTab === 'log' && (
         <>
           <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
-            <table className="text-sm" style={{ minWidth: 1100 }}>
+            <table className="text-sm" style={{ minWidth: 1250 }}>
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                   {[
-                    ['Model', 'modelName'], ['Brand', 'brand'], ['Location', 'locationName'], ['SKU / Serial', 'sku'],
+                    ['Model', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Location', 'locationName'], ['SKU / Serial', 'sku'],
                     ['Condition', 'condition'], ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'],
                     ['Available', 'available'], ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
                     ...(isAdmin ? [['CRK Cost / Unit', 'costPrice']] : []),
@@ -1023,6 +1046,7 @@ export default function InventoryMaster() {
                     <tr key={item.id} className={`transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                       <td className="py-3 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
                       <td className="py-3 px-4 text-[#9A9A9A]">{item.brand || '—'}</td>
+                      <td className="py-3 px-4 text-[#9A9A9A]">{item.category || '—'}</td>
                       <td className="py-3 px-4 text-[#9A9A9A] text-xs">{dealerMap[item.dealerId] || '—'}</td>
                       <td className="py-3 px-4">
                         <p className="text-[#1A1A1A]">{item.sku || '—'}</p>

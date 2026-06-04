@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
+const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
 
 function SortTh({ label, sortKey, sort, onSort }) {
   const active = sort.key === sortKey
@@ -48,7 +49,7 @@ function AvailBadge({ available, threshold }) {
 function AddStockModal({ onClose, onSave, catalog }) {
   const [form, setForm] = useState({
     brand: '', modelName: '', catalogId: '', sku: '', serialNumber: '',
-    condition: 'New', quantityOnHand: 1, costPrice: '', lowStockThreshold: 2, notes: '',
+    condition: 'New', category: 'Drone Kit', quantityOnHand: 1, costPrice: '', lowStockThreshold: 2, notes: '',
   })
   const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }))
 
@@ -100,9 +101,15 @@ function AddStockModal({ onClose, onSave, catalog }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Qty On Hand <span className="text-[#D95F5F]">*</span></label>
-              <input type="number" min="1" value={form.quantityOnHand} onChange={set('quantityOnHand')} className={inputCls} />
+              <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Category</label>
+              <select value={form.category} onChange={set('category')} className={inputCls}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Qty On Hand <span className="text-[#D95F5F]">*</span></label>
+            <input type="number" min="1" value={form.quantityOnHand} onChange={set('quantityOnHand')} className={inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -135,6 +142,7 @@ function AddStockModal({ onClose, onSave, catalog }) {
 function EditModal({ item, onClose, onSave }) {
   const [form, setForm] = useState({
     brand: item.brand ?? '',
+    category: item.category ?? 'Drone Kit',
     modelName: item.modelName ?? '',
     sku: item.sku ?? '',
     serialNumber: item.serialNumber ?? '',
@@ -195,9 +203,15 @@ function EditModal({ item, onClose, onSave }) {
               </select>
             </div>
             <div>
-              <label className={lbl}>Qty On Hand</label>
-              <input type="number" min="0" value={form.quantityOnHand} onChange={set('quantityOnHand')} className={cls} />
+              <label className={lbl}>Category</label>
+              <select value={form.category} onChange={set('category')} className={cls}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
             </div>
+          </div>
+          <div>
+            <label className={lbl}>Qty On Hand</label>
+            <input type="number" min="0" value={form.quantityOnHand} onChange={set('quantityOnHand')} className={cls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -311,6 +325,7 @@ export default function InventoryDealer() {
     const qty = parseInt(form.quantityOnHand) || 0
     await addDoc(inventoryCol, {
       brand: form.brand || null,
+      category: form.category || null,
       modelName: form.modelName,
       catalogId: form.catalogId || null,
       sku: form.sku || null,
@@ -335,6 +350,7 @@ export default function InventoryDealer() {
     const reserved = editItem.quantityReserved ?? 0
     await updateDoc(doc(db, 'inventory', editItem.id), {
       brand: form.brand.trim() || null,
+      category: form.category || null,
       modelName: form.modelName.trim(),
       sku: form.sku.trim() || null,
       serialNumber: form.serialNumber.trim() || null,
@@ -436,12 +452,12 @@ export default function InventoryDealer() {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+        <table className="text-sm" style={{ minWidth: 1050 }}>
           <thead className="border-b border-gray-100 bg-[#F4F4F5]">
             <tr>
               {[
-                ['Model', 'modelName'], ['Brand', 'brand'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
+                ['Model', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['SKU / Serial', 'sku'], ['Condition', 'condition'],
                 ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'], ['Available', 'available'],
                 ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'], ['Last Updated', 'lastUpdated'], ['', ''],
               ].map(([label, key]) => key
@@ -452,9 +468,9 @@ export default function InventoryDealer() {
           </thead>
           <tbody>
             {loading
-              ? [...Array(5)].map((_, i) => <tr key={i}><td colSpan={11}><SkeletonRow /></td></tr>)
+              ? [...Array(5)].map((_, i) => <tr key={i}><td colSpan={12}><SkeletonRow /></td></tr>)
               : filtered.length === 0
-                ? <tr><td colSpan={11} className="text-center py-12 text-[#9A9A9A] text-sm">
+                ? <tr><td colSpan={12} className="text-center py-12 text-[#9A9A9A] text-sm">
                     No inventory yet. Click "Add Stock" to get started.
                   </td></tr>
                 : sortedFiltered.map((item) => {
@@ -463,6 +479,7 @@ export default function InventoryDealer() {
                       <tr key={item.id} className={`border-b border-gray-50 transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#F4F4F5]'}`}>
                         <td className="px-4 py-3 font-medium text-[#1A1A1A]">{item.modelName}</td>
                         <td className="px-4 py-3 text-[#9A9A9A]">{item.brand || '—'}</td>
+                        <td className="px-4 py-3 text-[#9A9A9A]">{item.category || '—'}</td>
                         <td className="px-4 py-3 text-[#9A9A9A] text-xs">
                           {item.sku && <div>SKU: {item.sku}</div>}
                           {item.serialNumber && <div>SN: {item.serialNumber}</div>}
@@ -517,6 +534,7 @@ export default function InventoryDealer() {
                       <div>
                         <p className="font-semibold text-[#1A1A1A]">{item.modelName}</p>
                         {item.brand && <p className="text-xs text-[#9A9A9A]">{item.brand}</p>}
+                        {item.category && <p className="text-xs text-[#9A9A9A]">{item.category}</p>}
                         {item.sku && <p className="text-xs text-[#9A9A9A]">SKU: {item.sku}</p>}
                       </div>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>

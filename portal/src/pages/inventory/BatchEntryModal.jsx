@@ -5,6 +5,7 @@ import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
+const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
 
 function blankRow(key) {
   return {
@@ -12,6 +13,7 @@ function blankRow(key) {
     inventoryId: null,
     inventoryReserved: 0,
     brand: '',
+    category: 'Drone Kit',
     modelName: '',
     sku: '',
     serialNumber: '',
@@ -58,6 +60,7 @@ export default function BatchEntryModal({ batch, dealers, onClose }) {
               inventoryId: d.id,
               inventoryReserved: data.quantityReserved ?? 0,
               brand: data.brand ?? '',
+              category: data.category ?? 'Drone Kit',
               modelName: data.modelName ?? '',
               sku: data.sku ?? '',
               serialNumber: data.serialNumber ?? '',
@@ -119,6 +122,7 @@ export default function BatchEntryModal({ batch, dealers, onClose }) {
             return addDoc(inventoryCol, {
               batchId: batchRef.id,
               brand: row.brand.trim() || null,
+              category: row.category || null,
               modelName: row.modelName.trim(),
               sku: row.sku.trim() || null,
               serialNumber: row.serialNumber.trim() || null,
@@ -154,6 +158,7 @@ export default function BatchEntryModal({ batch, dealers, onClose }) {
             if (row.inventoryId) {
               return updateDoc(doc(db, 'inventory', row.inventoryId), {
                 brand: row.brand.trim() || null,
+                category: row.category || null,
                 modelName: row.modelName.trim(),
                 sku: row.sku.trim() || null,
                 serialNumber: row.serialNumber.trim() || null,
@@ -169,6 +174,7 @@ export default function BatchEntryModal({ batch, dealers, onClose }) {
               return addDoc(inventoryCol, {
                 batchId: batch.id,
                 brand: row.brand.trim() || null,
+                category: row.category || null,
                 modelName: row.modelName.trim(),
                 sku: row.sku.trim() || null,
                 serialNumber: row.serialNumber.trim() || null,
@@ -274,6 +280,7 @@ export default function BatchEntryModal({ batch, dealers, onClose }) {
                     <tr className="bg-[#F4F4F5] border-b border-gray-200">
                       <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-8">#</th>
                       <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Brand</th>
+                      <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Category</th>
                       <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Model Name *</th>
                       <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">SKU</th>
                       <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Serial #</th>
@@ -292,6 +299,12 @@ export default function BatchEntryModal({ batch, dealers, onClose }) {
                         <td className="px-2 py-1.5">
                           <input value={row.brand} onChange={(e) => updateRow(row._key, 'brand', e.target.value)}
                             placeholder="DJI" className={iCls} style={{ minWidth: 80 }} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <select value={row.category} onChange={(e) => updateRow(row._key, 'category', e.target.value)}
+                            className={iCls} style={{ minWidth: 110 }}>
+                            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                          </select>
                         </td>
                         <td className="px-2 py-1.5">
                           <input value={row.modelName} onChange={(e) => updateRow(row._key, 'modelName', e.target.value)}

@@ -1268,7 +1268,7 @@ export default function InventoryMaster() {
             <table className="text-sm" style={{ minWidth: 900 }}>
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {['Supplier / Vendor', 'PO #', 'Order Date', 'Exp. Delivery', 'Location', 'Items', 'Status', 'Outstanding', 'Created By', ''].map((h) => (
+                  {['Supplier / Vendor', 'PO #', 'Order Date', 'Exp. Delivery', 'Location', 'Items', 'Status', 'Outstanding', 'Freight', 'Created By', ''].map((h) => (
                     <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -1307,6 +1307,9 @@ export default function InventoryMaster() {
                         {outstanding > 0
                           ? <span className="text-xs font-semibold text-[#E6A817]">{outstanding} item{outstanding !== 1 ? 's' : ''}</span>
                           : <span className="text-xs text-[#4CAF7D]">—</span>}
+                      </td>
+                      <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">
+                        {p.freightCost != null ? formatCurrency(p.freightCost) : '—'}
                       </td>
                       <td className="py-3 px-4 text-[#9A9A9A]">{p.createdBy || '—'}</td>
                       <td className="py-3 px-4">
@@ -1361,6 +1364,7 @@ export default function InventoryMaster() {
                     {p.expectedDelivery && <span>Expected: {p.expectedDelivery}</span>}
                     <span>Location: {dealerMap[p.dealerId] || '—'}</span>
                     <span>{(p.items ?? []).length} items</span>
+                    {p.freightCost != null && <span>Freight: {formatCurrency(p.freightCost)}</span>}
                     {outstanding > 0 && <span className="text-[#E6A817] font-medium">{outstanding} outstanding</span>}
                   </div>
                   <div className="flex gap-2">

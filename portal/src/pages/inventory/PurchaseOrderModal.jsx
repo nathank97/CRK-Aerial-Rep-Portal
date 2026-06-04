@@ -8,6 +8,26 @@ const CONDITIONS = ['New', 'Demo', 'Refurbished']
 const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
 const CATALOG_CATEGORY = { Drone: 'Drone Kit', Part: 'Parts', Accessory: 'Accessory', Service: 'Other', Other: 'Other' }
 
+// Safe coercions — guard against catalog numeric fields landing on .trim() calls
+function safeStr(v) {
+  if (v == null) return ''
+  return typeof v === 'string' ? v : String(v)
+}
+function safeNum(v) {
+  if (v === '' || v == null) return null
+  const n = parseFloat(v)
+  return isNaN(n) ? null : n
+}
+function safeInt(v) {
+  if (v === '' || v == null) return null
+  const n = parseInt(v)
+  return isNaN(n) ? null : n
+}
+function fmt(n) {
+  if (n == null) return '—'
+  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function blankRow(key) {
   return {
     _key: key, itemId: null, catalogId: null,
@@ -20,7 +40,6 @@ function blankRow(key) {
 const iCls = 'border border-gray-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white w-full'
 const lbl = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
 const hCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]'
-
 const STATUS_OPTS = ['Draft', 'Ordered']
 
 export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
@@ -34,6 +53,9 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
   const [expectedDelivery, setExpectedDelivery] = useState(po?.expectedDelivery ?? '')
   const [dealerId, setDealerId] = useState(po?.dealerId ?? '')
   const [notes, setNotes] = useState(po?.notes ?? '')
+  const [freightCost, setFreightCost] = useState(
+    po?.freightCost != null ? String(po.freightCost) : ''
+  )
   const [status, setStatus] = useState(
     (po && !['Draft', 'Ordered'].includes(po.status)) ? po.status : (po?.status ?? 'Draft')
   )
@@ -44,15 +66,15 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
       _key: i + 1,
       itemId: item.id,
       catalogId: item.catalogId ?? null,
-      brand: item.brand ?? '',
+      brand: safeStr(item.brand),
       category: item.category ?? 'Drone Kit',
-      modelName: item.modelName ?? '',
-      sku: item.sku ?? '',
+      modelName: safeStr(item.modelName),
+      sku: safeStr(item.sku),
       condition: item.condition ?? 'New',
       orderedQty: item.orderedQty ?? 1,
-      costPrice: item.costPrice ?? '',
-      msrp: item.msrp ?? '',
-      lowStockThreshold: item.lowStockThreshold ?? '',
+      costPrice: item.costPrice != null ? String(item.costPrice) : '',
+      msrp: item.msrp != null ? String(item.msrp) : '',
+      lowStockThreshold: item.lowStockThreshold != null ? String(item.lowStockThreshold) : '',
       receivedQty: item.receivedQty ?? 0,
       inventoryIds: item.inventoryIds ?? [],
     }))
@@ -62,7 +84,7 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
     if (!po?.items?.length) return {}
     const s = {}
     po.items.forEach((item, i) => {
-      if (item.catalogId) s[i + 1] = item.modelName + (item.sku ? ` (${item.sku})` : '')
+      if (item.catalogId) s[i + 1] = safeStr(item.modelName) + (item.sku ? ` (${item.sku})` : '')
     })
     return s
   })
@@ -83,16 +105,14 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
   function addRow() { setRows((p) => [...p, blankRow(nextKey())]) }
 
   function updateRow(key, field, value) {
-    setRows((p) => p.map((r) => (r._key === key ? { ...r, [field]: value } : r)))
+    setRows((p) => p.map((r) => r._key === key ? { ...r, [field]: value } : r))
   }
 
   function updateRowMulti(key, updates) {
-    setRows((p) => p.map((r) => (r._key === key ? { ...r, ...updates } : r)))
+    setRows((p) => p.map((r) => r._key === key ? { ...r, ...updates } : r))
   }
 
-  function removeRow(key) {
-    setRows((p) => p.filter((r) => r._key !== key))
-  }
+  function removeRow(key) { setRows((p) => p.filter((r) => r._key !== key)) }
 
   function handleCatalogSearch(key, value) {
     setCatalogSearches((p) => ({ ...p, [key]: value }))
@@ -103,14 +123,14 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
   function handleCatalogSelect(key, item) {
     updateRowMulti(key, {
       catalogId: item.id,
-      brand: item.manufacturer ?? '',
+      brand: safeStr(item.manufacturer),
       category: CATALOG_CATEGORY[item.type] ?? 'Other',
-      modelName: item.name,
-      sku: item.sku ?? '',
-      msrp: item.msrp ?? '',
-      costPrice: item.cost ?? '',
+      modelName: safeStr(item.name),
+      sku: safeStr(item.sku),
+      msrp: item.msrp != null ? String(item.msrp) : '',
+      costPrice: item.cost != null ? String(item.cost) : '',
     })
-    setCatalogSearches((p) => ({ ...p, [key]: item.name + (item.sku ? ` (${item.sku})` : '') }))
+    setCatalogSearches((p) => ({ ...p, [key]: safeStr(item.name) + (item.sku ? ` (${item.sku})` : '') }))
     setOpenCatalogRow(null)
   }
 
@@ -120,19 +140,19 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
   }
 
   function buildItems() {
-    return rows.map((row, i) => ({
+    return rows.map((row) => ({
       id: row.itemId ?? String(row._key),
       catalogId: row.catalogId ?? null,
-      brand: row.brand.trim() || null,
+      brand: safeStr(row.brand).trim() || null,
       category: row.category || null,
-      modelName: row.modelName.trim(),
-      sku: row.sku.trim() || null,
+      modelName: safeStr(row.modelName).trim(),
+      sku: safeStr(row.sku).trim() || null,
       condition: row.condition,
       orderedQty: parseInt(row.orderedQty) || 1,
       receivedQty: row.receivedQty ?? 0,
-      costPrice: row.costPrice !== '' ? parseFloat(row.costPrice) : null,
-      msrp: row.msrp !== '' ? parseFloat(row.msrp) : null,
-      lowStockThreshold: row.lowStockThreshold !== '' ? parseInt(row.lowStockThreshold) : null,
+      costPrice: safeNum(row.costPrice),
+      msrp: safeNum(row.msrp),
+      lowStockThreshold: safeInt(row.lowStockThreshold),
       inventoryIds: row.inventoryIds ?? [],
     }))
   }
@@ -143,62 +163,63 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
     if (!orderDate) { setError('Order date is required.'); return }
     if (!dealerId) { setError('Location is required.'); return }
     if (rows.length === 0) { setError('Add at least one item.'); return }
-    const badIdx = rows.findIndex((r) => !r.modelName.trim())
+    const badIdx = rows.findIndex((r) => !safeStr(r.modelName).trim())
     if (badIdx !== -1) { setError(`Row ${badIdx + 1}: Model name is required.`); return }
-    const overReceived = rows.find((r) => {
-      const ordered = parseInt(r.orderedQty) || 1
-      return r.receivedQty > ordered
-    })
+    const overReceived = rows.find((r) => (r.receivedQty ?? 0) > (parseInt(r.orderedQty) || 1))
     if (overReceived) {
-      setError(`"${overReceived.modelName}": Ordered qty cannot be less than already received qty (${overReceived.receivedQty}).`)
+      setError(`"${overReceived.modelName}": Ordered qty cannot be less than received qty (${overReceived.receivedQty}).`)
       return
     }
 
     setSaving(true)
-    const items = buildItems()
-    const finalStatus = (['Partially Received', 'Fully Received'].includes(status)) ? status : status
-
     try {
+      const payload = {
+        supplierName: supplierName.trim(),
+        poNumber: poNumber.trim() || null,
+        orderDate,
+        expectedDelivery: expectedDelivery || null,
+        notes: notes.trim() || null,
+        dealerId,
+        status,
+        freightCost: safeNum(freightCost),
+        items: buildItems(),
+        updatedAt: serverTimestamp(),
+      }
       if (!po) {
         await addDoc(purchaseOrdersCol, {
-          supplierName: supplierName.trim(),
-          poNumber: poNumber.trim() || null,
-          orderDate,
-          expectedDelivery: expectedDelivery || null,
-          notes: notes.trim() || null,
-          dealerId,
-          status: finalStatus,
-          items,
+          ...payload,
           createdBy: profile?.displayName ?? user?.email ?? '',
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
         })
       } else {
-        await updateDoc(doc(db, 'purchaseOrders', po.id), {
-          supplierName: supplierName.trim(),
-          poNumber: poNumber.trim() || null,
-          orderDate,
-          expectedDelivery: expectedDelivery || null,
-          notes: notes.trim() || null,
-          dealerId,
-          status: finalStatus,
-          items,
-          updatedAt: serverTimestamp(),
-        })
+        await updateDoc(doc(db, 'purchaseOrders', po.id), payload)
       }
       onClose()
     } catch (e) {
-      console.error(e)
-      setError('Failed to save. Please try again.')
+      console.error('PO save error:', e)
+      setError(`Failed to save: ${e?.message ?? 'Unknown error'}`)
       setSaving(false)
     }
   }
+
+  // Totals
+  const lineTotal = (row) => {
+    const qty = parseInt(row.orderedQty) || 0
+    const cost = safeNum(row.costPrice)
+    return cost != null ? qty * cost : null
+  }
+  const subtotal = rows.reduce((s, r) => {
+    const t = lineTotal(r)
+    return t != null ? s + t : s
+  }, 0)
+  const freight = safeNum(freightCost) ?? 0
+  const grandTotal = subtotal + freight
 
   const isSystemStatus = ['Partially Received', 'Fully Received'].includes(status)
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-6 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl mb-6">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-7xl mb-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-base font-semibold text-[#1A1A1A]">
@@ -210,8 +231,8 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          {/* Header fields */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Header */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="col-span-2 md:col-span-1">
               <label className={lbl}>Supplier / Vendor <span className="text-[#D95F5F]">*</span></label>
               <input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. DJI Enterprise" className={hCls} />
@@ -228,7 +249,14 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
               <label className={lbl}>Expected Delivery</label>
               <input type="date" value={expectedDelivery} onChange={(e) => setExpectedDelivery(e.target.value)} className={hCls} />
             </div>
+            <div>
+              <label className={lbl}>Freight Cost</label>
+              <input type="number" min="0" step="0.01" value={freightCost}
+                onChange={(e) => setFreightCost(e.target.value)}
+                placeholder="0.00" className={hCls} />
+            </div>
           </div>
+
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
               <label className={lbl}>Location <span className="text-[#D95F5F]">*</span></label>
@@ -267,26 +295,23 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="text-sm" style={{ minWidth: 1050 }}>
+              <table className="text-sm" style={{ minWidth: 1150 }}>
                 <thead>
                   <tr className="bg-[#F4F4F5] border-b border-gray-200">
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-8">#</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">From Catalog</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Brand</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Category</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Model Name *</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">SKU</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Condition</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Ordered *</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Cost</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">MSRP</th>
-                    <th className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Low Stock ≤</th>
-                    <th className="px-3 py-2.5 w-8" />
+                    {[
+                      ['#', 'w-8'], ['From Catalog', ''], ['Brand', ''], ['Category', ''],
+                      ['Model Name *', ''], ['SKU', ''], ['Condition', ''],
+                      ['Ordered *', ''], ['Cost / Unit', ''], ['MSRP / Unit', ''],
+                      ['Total Cost', ''], ['Low Stock ≤', ''], ['', 'w-8'],
+                    ].map(([h, w]) => (
+                      <th key={h} className={`text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap ${w}`}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {rows.map((row, idx) => {
                     const isReceived = (row.receivedQty ?? 0) > 0
+                    const total = lineTotal(row)
                     return (
                       <tr key={row._key} className={isReceived ? 'bg-[#4CAF7D]/5' : 'hover:bg-[#FAFAFA]'}>
                         <td className="px-3 py-1.5 text-xs text-[#9A9A9A] text-center">
@@ -349,7 +374,8 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
                           </select>
                         </td>
                         <td className="px-2 py-1.5">
-                          <input type="number" min={row.receivedQty > 0 ? row.receivedQty : 1} value={row.orderedQty}
+                          <input type="number" min={row.receivedQty > 0 ? row.receivedQty : 1}
+                            value={row.orderedQty}
                             onChange={(e) => updateRow(row._key, 'orderedQty', e.target.value)}
                             className={iCls} style={{ minWidth: 65 }} />
                         </td>
@@ -362,6 +388,9 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
                           <input type="number" min="0" step="0.01" value={row.msrp}
                             onChange={(e) => updateRow(row._key, 'msrp', e.target.value)}
                             placeholder="0.00" className={iCls} style={{ minWidth: 90 }} />
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-medium text-[#1A1A1A] whitespace-nowrap pr-4">
+                          {total != null ? fmt(total) : <span className="text-[#9A9A9A]">—</span>}
                         </td>
                         <td className="px-2 py-1.5">
                           <input type="number" min="0" value={row.lowStockThreshold}
@@ -379,11 +408,30 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
                     )
                   })}
                   {rows.length === 0 && (
-                    <tr><td colSpan={12} className="py-8 text-center text-sm text-[#9A9A9A]">No items — click "+ Add Row"</td></tr>
+                    <tr><td colSpan={13} className="py-8 text-center text-sm text-[#9A9A9A]">No items — click "+ Add Row"</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Totals footer */}
+            <div className="mt-3 flex justify-end">
+              <div className="bg-[#F4F4F5] rounded-lg px-5 py-3 space-y-1 text-sm min-w-[260px]">
+                <div className="flex justify-between gap-8">
+                  <span className="text-[#9A9A9A]">Subtotal</span>
+                  <span className="font-medium text-[#1A1A1A]">{fmt(subtotal)}</span>
+                </div>
+                <div className="flex justify-between gap-8">
+                  <span className="text-[#9A9A9A]">Freight</span>
+                  <span className="font-medium text-[#1A1A1A]">{freight > 0 ? fmt(freight) : '—'}</span>
+                </div>
+                <div className="flex justify-between gap-8 border-t border-gray-300 pt-1 mt-1">
+                  <span className="font-semibold text-[#1A1A1A]">Grand Total</span>
+                  <span className="font-bold text-[#8B6914]">{fmt(grandTotal)}</span>
+                </div>
+              </div>
+            </div>
+
             {rows.length > 0 && (
               <button onClick={addRow} className="mt-2 text-sm text-[#8B6914] hover:underline font-medium">+ Add Row</button>
             )}

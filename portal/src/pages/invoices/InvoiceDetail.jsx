@@ -41,6 +41,8 @@ export default function InvoiceDetail() {
   const [showPartialModal, setShowPartialModal] = useState(false)
   const [showCCModal, setShowCCModal] = useState(false)
   const [showDeduct, setShowDeduct] = useState(false)
+  const [editingAmtPaid, setEditingAmtPaid] = useState(false)
+  const [amtPaidDraft, setAmtPaidDraft] = useState('')
   const [partialAmount, setPartialAmount] = useState('')
   const [partialDate, setPartialDate] = useState('')
 
@@ -183,6 +185,30 @@ export default function InvoiceDetail() {
     } catch (err) {
       console.error(err)
       flash('Failed to record payment.', true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveAmtPaid = async () => {
+    const newPaid = Math.min(Math.max(0, parseFloat(amtPaidDraft) || 0), invoice.total ?? 0)
+    const newBalance = (invoice.total ?? 0) - newPaid
+    const newStatus = computePaymentStatus({ total: invoice.total ?? 0, amountPaid: newPaid, dueDate: invoice.dueDate })
+    setSaving(true)
+    try {
+      await updateDoc(invoiceDoc(id), {
+        amountPaid: newPaid,
+        balanceDue: newBalance,
+        paymentStatus: newStatus,
+        status: newStatus,
+        ...(newPaid >= (invoice.total ?? 0) ? { paidAt: serverTimestamp() } : {}),
+        updatedAt: serverTimestamp(),
+      })
+      setEditingAmtPaid(false)
+      flash('Amount paid updated.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to update.', true)
     } finally {
       setSaving(false)
     }
@@ -659,12 +685,42 @@ export default function InvoiceDetail() {
               <span className="text-[#111111]">Total</span>
               <span className="text-[#8B6914] text-base">{formatCurrency(invoice.total)}</span>
             </div>
-            {(invoice.amountPaid ?? 0) > 0 && (
-              <div className="flex justify-between">
-                <span className="text-[#9A9A9A]">Amount Paid</span>
-                <span className="font-medium text-[#4CAF7D]">({formatCurrency(invoice.amountPaid)})</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center">
+              <span className="text-[#9A9A9A]">Amount Paid</span>
+              {editingAmtPaid ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-[#9A9A9A]">$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={amtPaidDraft}
+                    onChange={(e) => setAmtPaidDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAmtPaid(); if (e.key === 'Escape') setEditingAmtPaid(false) }}
+                    className="w-28 border border-[#8B6914] rounded px-2 py-0.5 text-sm focus:outline-none text-right"
+                    autoFocus
+                  />
+                  <button onClick={handleSaveAmtPaid} disabled={saving}
+                    className="text-xs font-semibold text-white bg-[#8B6914] hover:bg-[#7a5c11] px-2 py-0.5 rounded disabled:opacity-50">
+                    {saving ? '…' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingAmtPaid(false)}
+                    className="text-xs text-[#9A9A9A] hover:text-[#1A1A1A]">✕</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className={`font-medium ${(invoice.amountPaid ?? 0) > 0 ? 'text-[#4CAF7D]' : 'text-[#9A9A9A]'}`}>
+                    {(invoice.amountPaid ?? 0) > 0 ? `(${formatCurrency(invoice.amountPaid)})` : formatCurrency(0)}
+                  </span>
+                  <button
+                    onClick={() => { setAmtPaidDraft(String(invoice.amountPaid ?? 0)); setEditingAmtPaid(true) }}
+                    className="text-[#9A9A9A] hover:text-[#8B6914] transition-colors"
+                    title="Edit amount paid">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.536-6.536a2 2 0 012.828 0l.172.172a2 2 0 010 2.828L12 14H9v-3z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
             <div className={`flex justify-between font-bold pt-1 border-t border-gray-200 ${isOverdue ? 'text-[#D95F5F]' : balanceDue === 0 ? 'text-[#4CAF7D]' : 'text-[#111111]'}`}>
               <span>Balance Due</span>
               <span className="text-base">{formatCurrency(balanceDue)}</span>

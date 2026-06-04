@@ -28,7 +28,7 @@ const lbl = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider
 
 export default function BatchEntryModal({ batch, dealers, onClose }) {
   const { profile, user } = useAuth()
-  const keyRef = useRef(0)
+  const keyRef = useRef(1)
   const nextKey = () => { keyRef.current += 1; return keyRef.current }
 
   const [supplierName, setSupplierName] = useState(batch?.supplierName ?? '')

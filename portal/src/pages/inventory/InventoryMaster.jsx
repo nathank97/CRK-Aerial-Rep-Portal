@@ -4,7 +4,7 @@ import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
 import { getDealerPrice } from '../../utils/pricing'
-import { inventoryCol, inventoryBatchesCol, purchaseOrdersCol } from '../../firebase/firestore'
+import { inventoryCol, inventoryBatchesCol, purchaseOrdersCol, inventoryTxCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
@@ -558,6 +558,9 @@ export default function InventoryMaster() {
   const [editPO, setEditPO] = useState(null)
   const [deletingTx, setDeletingTx] = useState(null)
   const [deletingTxBusy, setDeletingTxBusy] = useState(false)
+  const [showCleanup, setShowCleanup] = useState(false)
+  const [cleanupBusy, setCleanupBusy] = useState(false)
+  const [cleanupDone, setCleanupDone] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
   const [deletingPO, setDeletingPO] = useState(false)
@@ -615,6 +618,24 @@ export default function InventoryMaster() {
 
   const toggleSort = (setter) => (key) =>
     setter((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+
+  async function handleCleanupInventory() {
+    setCleanupBusy(true)
+    try {
+      // Delete all inventory records not linked to a PO
+      const nonPo = items.filter((i) => !i.poId)
+      await Promise.all(nonPo.map((i) => deleteDoc(doc(db, 'inventory', i.id))))
+      // Delete all transaction records
+      const txSnap = await getDocs(inventoryTxCol)
+      await Promise.all(txSnap.docs.map((d) => deleteDoc(d.ref)))
+      setCleanupDone(true)
+      setShowCleanup(false)
+    } catch (e) {
+      console.error('Cleanup error:', e)
+    } finally {
+      setCleanupBusy(false)
+    }
+  }
 
   async function handleDeleteTx() {
     if (!deletingTx) return
@@ -847,6 +868,35 @@ export default function InventoryMaster() {
       {editItem && (
         <EditItemModal item={editItem} dealers={dealers} isAdmin={isAdmin} onClose={() => setEditItem(null)} />
       )}
+      {showCleanup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Clean Up Inventory</h2>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-[#1A1A1A]">This will permanently delete:</p>
+              <ul className="text-sm text-[#9A9A9A] space-y-1 list-disc pl-4">
+                <li><span className="font-semibold text-[#D95F5F]">{items.filter((i) => !i.poId).length} inventory records</span> not linked to a Purchase Order</li>
+                <li>All <span className="font-semibold text-[#D95F5F]">{transactions.length} transaction log entries</span></li>
+              </ul>
+              <p className="text-sm text-[#9A9A9A]">
+                Inventory received against your existing PO will be kept. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setShowCleanup(false)} disabled={cleanupBusy}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleCleanupInventory} disabled={cleanupBusy}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#c44f4f] disabled:opacity-50">
+                {cleanupBusy ? 'Cleaning…' : 'Delete & Clean Up'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {deletingTx && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -916,6 +966,25 @@ export default function InventoryMaster() {
           + Add Stock
         </button>
       </div>
+
+      {/* One-time cleanup banner */}
+      {isAdmin && !cleanupDone && items.filter((i) => !i.poId).length > 0 && (
+        <div className="mb-4 bg-[#E6A817]/10 border border-[#E6A817]/30 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-[#E6A817] font-medium">
+            {items.filter((i) => !i.poId).length} inventory items are not linked to a Purchase Order.
+            Click to remove them and keep only PO-received stock.
+          </p>
+          <button onClick={() => setShowCleanup(true)}
+            className="shrink-0 bg-[#E6A817] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#d4960e] transition-colors">
+            Clean Up Now
+          </button>
+        </div>
+      )}
+      {cleanupDone && (
+        <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
+          ✓ Cleanup complete — only PO-linked inventory remains.
+        </div>
+      )}
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">

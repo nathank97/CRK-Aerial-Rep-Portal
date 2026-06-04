@@ -526,7 +526,7 @@ export default function InventoryMaster() {
   const { items, loading } = useAllInventory()
   const { dealers, loading: dealersLoading } = useDealers()
   const { catalog } = useCatalog()
-  const { pos, loading: posLoading } = usePurchaseOrders()
+  const { pos, loading: posLoading, error: posError } = usePurchaseOrders()
   const [migrating, setMigrating] = useState(false)
 
   const [search, setSearch] = useState('')
@@ -1253,6 +1253,11 @@ export default function InventoryMaster() {
       {/* ── PURCHASE ORDERS TAB ── */}
       {activeTab === 'purchaseOrders' && (isAdmin || isWarehouseManager) && (
         <div>
+          {posError && (
+            <div className="mb-4 bg-[#D95F5F]/10 border border-[#D95F5F]/30 rounded-lg px-4 py-3 text-sm text-[#D95F5F]">
+              Error loading purchase orders: {posError}. Try refreshing the page.
+            </div>
+          )}
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-[#9A9A9A]">
               {posLoading ? 'Loading…' : `${pos.length} purchase order${pos.length !== 1 ? 's' : ''}`}

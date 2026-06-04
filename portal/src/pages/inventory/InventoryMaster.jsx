@@ -776,8 +776,8 @@ export default function InventoryMaster() {
 
       {/* ── SUMMARY TAB ── */}
       {activeTab === 'summary' && (
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-sm hidden md:table">
+        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
+          <table className="text-sm hidden md:table" style={{ minWidth: 900 }}>
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
@@ -904,7 +904,7 @@ export default function InventoryMaster() {
             const locTotalUnits = locItems.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
             const locOutCount = locItems.filter((i) => (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0) <= 0).length
             return (
-              <div key={locName} className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+              <div key={locName} className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
                 <div className="flex items-center justify-between px-4 py-3 bg-[#F4F4F5] border-b border-gray-100">
                   <div>
                     <p className="font-semibold text-[#1A1A1A]">{locName}</p>
@@ -914,7 +914,7 @@ export default function InventoryMaster() {
                     <span className="text-xs font-semibold bg-[#D95F5F]/15 text-[#D95F5F] px-2 py-0.5 rounded-full">{locOutCount} out</span>
                   )}
                 </div>
-                <table className="w-full text-sm hidden md:table">
+                <table className="text-sm hidden md:table" style={{ minWidth: 900 }}>
                   <thead>
                     <tr className="border-b border-gray-50">
                       {[
@@ -996,8 +996,8 @@ export default function InventoryMaster() {
       {/* ── LOG TAB ── */}
       {activeTab === 'log' && (
         <>
-          <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
+            <table className="text-sm" style={{ minWidth: 1100 }}>
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                   {[
@@ -1147,7 +1147,7 @@ export default function InventoryMaster() {
           </div>
 
           {/* Desktop table */}
-          <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+          <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">

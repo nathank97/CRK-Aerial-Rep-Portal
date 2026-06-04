@@ -31,7 +31,6 @@ import InvoiceNew from './pages/invoices/InvoiceNew'
 import InvoiceDetail from './pages/invoices/InvoiceDetail'
 
 // Inventory
-import InventoryDealer from './pages/inventory/InventoryDealer'
 import InventoryMaster from './pages/inventory/InventoryMaster'
 
 // Service

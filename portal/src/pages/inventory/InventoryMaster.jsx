@@ -617,6 +617,8 @@ export default function InventoryMaster() {
   }, [posLoading])
   const [summarySort, setSummarySort] = useState({ key: '', dir: 'asc' })
   const [locationSort, setLocationSort] = useState({ key: '', dir: 'asc' })
+  const [summaryFilterBrand, setSummaryFilterBrand] = useState('')
+  const [summaryFilterCategory, setSummaryFilterCategory] = useState('')
 
   const toggleSort = (setter) => (key) =>
     setter((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
@@ -807,6 +809,17 @@ export default function InventoryMaster() {
     const rest = summaryGroups.filter((g) => g.totalOnHand >= 0)
     return [...applySort(neg, summarySort.key, summarySort.dir, getVal), ...applySort(rest, summarySort.key, summarySort.dir, getVal)]
   }, [summaryGroups, summarySort])
+
+  const summaryBrands = useMemo(
+    () => [...new Set(summaryGroups.map((g) => g.brand).filter(Boolean))].sort(),
+    [summaryGroups]
+  )
+
+  const visibleSummary = useMemo(() => sortedSummary.filter((g) => {
+    const matchBrand = !summaryFilterBrand || g.brand === summaryFilterBrand
+    const matchCat = !summaryFilterCategory || g.category === summaryFilterCategory
+    return matchBrand && matchCat
+  }), [sortedSummary, summaryFilterBrand, summaryFilterCategory])
 
   const sortLocItems = (locItems) => {
     const getVal = (item, k) => {
@@ -1071,6 +1084,27 @@ export default function InventoryMaster() {
 
       {/* ── SUMMARY TAB ── */}
       {activeTab === 'summary' && (
+        <>
+        {/* Summary filters */}
+        <div className="flex flex-wrap gap-3 mb-3">
+          <select value={summaryFilterBrand} onChange={(e) => setSummaryFilterBrand(e.target.value)} className={inputCls}>
+            <option value="">All Brands</option>
+            {summaryBrands.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+          <select value={summaryFilterCategory} onChange={(e) => setSummaryFilterCategory(e.target.value)} className={inputCls}>
+            <option value="">All Categories</option>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {(summaryFilterBrand || summaryFilterCategory) && (
+            <button onClick={() => { setSummaryFilterBrand(''); setSummaryFilterCategory('') }}
+              className="text-xs text-[#9A9A9A] hover:text-[#1A1A1A] border border-gray-200 px-3 py-2 rounded-lg transition-colors">
+              Clear filters
+            </button>
+          )}
+          <span className="text-xs text-[#9A9A9A] self-center ml-auto">
+            {visibleSummary.length} group{visibleSummary.length !== 1 ? 's' : ''}
+          </span>
+        </div>
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
           <table className="text-sm hidden md:table" style={{ minWidth: 900 }}>
             <thead>
@@ -1089,9 +1123,9 @@ export default function InventoryMaster() {
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
-              ) : summaryGroups.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-[#9A9A9A] text-sm">No inventory found.</td></tr>
-              ) : sortedSummary.map((g, i) => {
+              ) : visibleSummary.length === 0 ? (
+                <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">No items match the current filters.</td></tr>
+              ) : visibleSummary.map((g, i) => {
                 const totalAvail = g.totalOnHand - g.totalReserved
                 const isNeg = g.totalOnHand < 0
                 return (
@@ -1137,9 +1171,9 @@ export default function InventoryMaster() {
                   <div className="h-3 bg-gray-100 rounded w-1/3" />
                 </div>
               ))
-            ) : summaryGroups.length === 0 ? (
-              <div className="text-center py-12 text-[#9A9A9A] text-sm">No inventory found.</div>
-            ) : sortedSummary.map((g, i) => {
+            ) : visibleSummary.length === 0 ? (
+              <div className="text-center py-12 text-[#9A9A9A] text-sm">No items match the current filters.</div>
+            ) : visibleSummary.map((g, i) => {
               const totalAvail = g.totalOnHand - g.totalReserved
               return (
                 <div key={i} className="p-4">
@@ -1180,6 +1214,7 @@ export default function InventoryMaster() {
             })}
           </div>
         </div>
+        </>
       )}
 
       {/* ── BY LOCATION TAB ── */}

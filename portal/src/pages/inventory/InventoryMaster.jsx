@@ -820,14 +820,16 @@ export default function InventoryMaster() {
   }
 
   // KPIs (across all items, not just filtered)
-  const totalUnits = items.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
-  const totalAvailable = items.reduce((s, i) => s + Math.max(0, (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0)), 0)
-  const lowStockCount = items.filter((i) => {
+  const inStockItems = items.filter((i) => i.inventoryStatus !== 'on_order' && i.inventoryStatus !== 'cancelled')
+  const totalUnits = inStockItems.reduce((s, i) => s + (i.quantityOnHand ?? 0), 0)
+  const totalAvailable = inStockItems.reduce((s, i) => s + Math.max(0, (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0)), 0)
+  const onOrderUnits = items.filter((i) => i.inventoryStatus === 'on_order').reduce((s, i) => s + (i.quantityOnOrder ?? 0), 0)
+  const lowStockCount = inStockItems.filter((i) => {
     const avail = (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0)
     return avail > 0 && i.lowStockThreshold != null && avail <= i.lowStockThreshold
   }).length
-  const outOfStockCount = items.filter((i) => (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0) <= 0).length
-  const negativeStockCount = items.filter((i) => (i.quantityOnHand ?? 0) < 0).length
+  const outOfStockCount = inStockItems.filter((i) => (i.quantityOnHand ?? 0) - (i.quantityReserved ?? 0) <= 0).length
+  const negativeStockCount = inStockItems.filter((i) => (i.quantityOnHand ?? 0) < 0).length
 
   const isLoading = loading || dealersLoading
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
@@ -1018,9 +1020,10 @@ export default function InventoryMaster() {
       )}
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
         {[
-          { label: 'Total Units', value: totalUnits, color: 'text-[#1A1A1A]' },
+          { label: 'In Stock', value: totalUnits, color: 'text-[#1A1A1A]' },
+          { label: 'On Order', value: onOrderUnits, color: onOrderUnits > 0 ? 'text-[#4A90B8]' : 'text-[#9A9A9A]' },
           { label: 'Available', value: totalAvailable, color: 'text-[#4CAF7D]' },
           { label: 'Low Stock', value: lowStockCount, color: 'text-[#E6A817]' },
           { label: 'Out of Stock', value: outOfStockCount, color: 'text-[#D95F5F]' },
@@ -1245,7 +1248,11 @@ export default function InventoryMaster() {
                             {(item.quantityOnHand ?? 0) < 0 && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
                           </td>
                           <td className="py-2 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
-                          <td className="py-2 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
+                          <td className="py-2 px-4 text-center">
+                            {item.inventoryStatus === 'on_order'
+                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#4A90B8]/15 text-[#4A90B8]">On Order</span>
+                              : <AvailBadge available={available} threshold={item.lowStockThreshold} />}
+                          </td>
                           {isAdmin && <td className="py-2 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
                           {isAdmin && (
                             <td className="py-2 px-4">
@@ -1465,11 +1472,13 @@ export default function InventoryMaster() {
       {activeTab === 'log' && (isAdmin || isWarehouseManager) && (() => {
         const TX_COLORS = {
           add_stock:      { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'Add Stock' },
+          po_ordered:     { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'PO Ordered' },
           po_receipt:     { bg: 'bg-[#4CAF7D]/15', text: 'text-[#4CAF7D]',  label: 'PO Receipt' },
           deduction:      { bg: 'bg-[#D95F5F]/15', text: 'text-[#D95F5F]',  label: 'Deduction' },
           reversal:       { bg: 'bg-[#9B59B6]/15', text: 'text-[#9B59B6]',  label: 'Reversal' },
           adjustment:     { bg: 'bg-[#E6A817]/15', text: 'text-[#E6A817]',  label: 'Adjustment' },
           transfer:       { bg: 'bg-gray-100',      text: 'text-gray-600',   label: 'Transfer' },
+          cancellation:   { bg: 'bg-gray-100',      text: 'text-gray-500',   label: 'Cancelled' },
         }
         return (
           <div>
@@ -1482,7 +1491,7 @@ export default function InventoryMaster() {
               <table className="text-sm" style={{ minWidth: 900 }}>
                 <thead>
                   <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                    {['Date', 'Type', 'Model', 'Brand', 'SKU', 'Qty', 'Location', 'Source', 'By', 'Notes', ''].map((h) => (
+                    {['Date', 'Type', 'Model', 'Brand / SKU', 'Qty', 'From', 'To', 'Source', 'By', 'Notes', ''].map((h) => (
                       <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -1506,17 +1515,20 @@ export default function InventoryMaster() {
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${c.bg} ${c.text}`}>{c.label}</span>
                         </td>
                         <td className="py-3 px-4 font-medium text-[#1A1A1A]">{tx.modelName || '—'}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A]">{tx.brand || '—'}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A]">{tx.sku || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A]">
+                          <p>{tx.brand || '—'}</p>
+                          {tx.sku && <p className="text-xs">{tx.sku}</p>}
+                        </td>
                         <td className={`py-3 px-4 font-bold tabular-nums ${isNeg ? 'text-[#D95F5F]' : 'text-[#4CAF7D]'}`}>
                           {(tx.qty ?? 0) > 0 ? `+${tx.qty}` : tx.qty}
                         </td>
-                        <td className="py-3 px-4 text-[#9A9A9A]">{dealerMap[tx.dealerId] || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A] text-xs whitespace-nowrap">{tx.fromLocation || dealerMap[tx.dealerId] || '—'}</td>
+                        <td className="py-3 px-4 text-[#9A9A9A] text-xs whitespace-nowrap">{tx.toLocation || '—'}</td>
                         <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">
                           {tx.sourceNumber ? (
-                            <span className="text-xs">{tx.sourceType?.replace('_', ' ')} · {tx.sourceNumber}</span>
+                            <span className="text-xs">{tx.sourceNumber}</span>
                           ) : tx.sourceType ? (
-                            <span className="text-xs capitalize">{tx.sourceType?.replace('_', ' ')}</span>
+                            <span className="text-xs capitalize">{tx.sourceType.replace(/_/g, ' ')}</span>
                           ) : '—'}
                         </td>
                         <td className="py-3 px-4 text-[#9A9A9A]">{tx.createdBy || '—'}</td>

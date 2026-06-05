@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import { addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
-import { inventoryCol, purchaseOrdersCol } from '../../firebase/firestore'
+import { addDoc, updateDoc, getDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
 import { writeTx } from '../../utils/inventoryTransactions'
 
 function calcStatus(items) {
-  const allDone = items.every((i) => (i.receivedQty ?? 0) >= i.orderedQty)
-  if (allDone) return 'Fully Received'
-  const anyDone = items.some((i) => (i.receivedQty ?? 0) > 0)
-  if (anyDone) return 'Partially Received'
+  const active = items.filter((i) => !i.cancelled)
+  if (active.length === 0) return 'Fully Received'
+  if (active.every((i) => (i.receivedQty ?? 0) >= i.orderedQty)) return 'Fully Received'
+  if (active.some((i) => (i.receivedQty ?? 0) > 0)) return 'Partially Received'
   return 'Ordered'
 }
 
@@ -20,81 +20,181 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
     po.items?.forEach((item) => { init[item.id] = '' })
     return init
   })
+  const [cancelNow, setCancelNow] = useState({})
   const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10))
   const [receiptNotes, setReceiptNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const outstanding = (item) => Math.max(0, item.orderedQty - (item.receivedQty ?? 0))
+  const locationName = dealerMap[po.dealerId] || po.dealerId || '—'
+
+  function toggleCancel(itemId) {
+    setCancelNow((p) => {
+      const next = { ...p, [itemId]: !p[itemId] }
+      if (next[itemId]) setReceiveNow((rn) => ({ ...rn, [itemId]: '' }))
+      return next
+    })
+  }
 
   function receiveAll() {
     const next = {}
-    po.items?.forEach((item) => { next[item.id] = outstanding(item) })
+    po.items?.forEach((item) => {
+      if (!item.cancelled && !cancelNow[item.id]) next[item.id] = outstanding(item)
+      else next[item.id] = ''
+    })
     setReceiveNow(next)
   }
 
   const totalReceiving = Object.values(receiveNow).reduce((s, v) => s + (parseInt(v) || 0), 0)
-  const hasAnything = totalReceiving > 0
+  const totalCancelling = Object.keys(cancelNow).filter((k) => cancelNow[k]).length
+  const hasAnything = totalReceiving > 0 || totalCancelling > 0
 
   async function handleSave() {
     setError('')
-    if (!hasAnything) { setError('Enter a quantity to receive for at least one item.'); return }
-
+    if (!hasAnything) { setError('Enter a quantity to receive or mark at least one item as cancelled.'); return }
     for (const item of po.items ?? []) {
+      if (item.cancelled || cancelNow[item.id]) continue
       const qty = parseInt(receiveNow[item.id]) || 0
-      if (qty < 0) { setError(`Quantity cannot be negative.`); return }
+      if (qty < 0) { setError('Quantity cannot be negative.'); return }
       if (qty > outstanding(item)) {
-        setError(`"${item.modelName}": cannot receive more than the outstanding qty (${outstanding(item)}).`)
+        setError(`"${item.modelName}": cannot receive more than outstanding qty (${outstanding(item)}).`)
         return
       }
     }
 
     setSaving(true)
+    const createdBy = profile?.displayName ?? user?.email ?? ''
+
     try {
       const updatedItems = await Promise.all(
         (po.items ?? []).map(async (item) => {
+          if (item.cancelled) return item
+
           const qty = parseInt(receiveNow[item.id]) || 0
-          if (qty === 0) return item
+          const isCancellingNow = !!cancelNow[item.id]
+          if (qty === 0 && !isCancellingNow) return item
 
-          const invRef = await addDoc(inventoryCol, {
-            poId: po.id,
-            brand: item.brand ?? null,
-            category: item.category ?? null,
-            modelName: item.modelName,
-            sku: item.sku ?? null,
-            condition: item.condition ?? 'New',
-            quantityOnHand: qty,
-            quantityReserved: 0,
-            quantityAvailable: qty,
-            msrp: item.msrp ?? null,
-            costPrice: item.costPrice ?? null,
-            lowStockThreshold: item.lowStockThreshold ?? null,
-            dealerId: po.dealerId,
-            receivedDate,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          })
+          const newReceivedQty = (item.receivedQty ?? 0) + qty
 
-          await writeTx([{
-            type: 'po_receipt',
-            qty,
-            modelName: item.modelName,
-            brand: item.brand ?? null,
-            sku: item.sku ?? null,
-            category: item.category ?? null,
-            dealerId: po.dealerId,
-            inventoryId: invRef.id,
-            sourceType: 'purchase_order',
-            sourceId: po.id,
-            sourceNumber: po.poNumber || po.supplierName,
-            createdBy: profile?.displayName ?? user?.email ?? '',
-          }])
-
-          return {
-            ...item,
-            receivedQty: (item.receivedQty ?? 0) + qty,
-            inventoryIds: [...(item.inventoryIds ?? []), invRef.id],
+          if (qty > 0) {
+            if (item.inventoryIds?.length > 0) {
+              // New flow: update existing on_order record
+              const invId = item.inventoryIds[0]
+              const invSnap = await getDoc(doc(db, 'inventory', invId))
+              if (invSnap.exists()) {
+                const d = invSnap.data()
+                const newOnHand = (d.quantityOnHand ?? 0) + qty
+                const newOnOrder = Math.max(0, (d.quantityOnOrder ?? item.orderedQty) - qty)
+                await updateDoc(doc(db, 'inventory', invId), {
+                  quantityOnHand: newOnHand,
+                  quantityOnOrder: newOnOrder,
+                  quantityAvailable: Math.max(0, newOnHand - (d.quantityReserved ?? 0)),
+                  inventoryStatus: 'in_stock',
+                  receivedDate,
+                  updatedAt: serverTimestamp(),
+                })
+                await writeTx([{
+                  type: 'po_receipt',
+                  qty,
+                  modelName: item.modelName,
+                  brand: item.brand ?? null,
+                  sku: item.sku ?? null,
+                  category: item.category ?? null,
+                  dealerId: po.dealerId,
+                  inventoryId: invId,
+                  sourceType: 'purchase_order',
+                  sourceId: po.id,
+                  sourceNumber: po.poNumber || po.supplierName,
+                  fromLocation: po.supplierName || 'Supplier',
+                  toLocation: locationName,
+                  notes: receiptNotes || null,
+                  createdBy,
+                }])
+              }
+              if (!isCancellingNow) return { ...item, receivedQty: newReceivedQty }
+            } else {
+              // Legacy flow: create new inventory record
+              const invRef = await addDoc(inventoryCol, {
+                poId: po.id,
+                inventoryStatus: 'in_stock',
+                dealerId: po.dealerId,
+                brand: item.brand ?? null,
+                category: item.category ?? null,
+                modelName: item.modelName,
+                sku: item.sku ?? null,
+                condition: item.condition ?? 'New',
+                quantityOnHand: qty,
+                quantityOnOrder: 0,
+                quantityReserved: 0,
+                quantityAvailable: qty,
+                msrp: item.msrp ?? null,
+                costPrice: item.costPrice ?? null,
+                lowStockThreshold: item.lowStockThreshold ?? null,
+                receivedDate,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              })
+              await writeTx([{
+                type: 'po_receipt',
+                qty,
+                modelName: item.modelName,
+                brand: item.brand ?? null,
+                sku: item.sku ?? null,
+                category: item.category ?? null,
+                dealerId: po.dealerId,
+                inventoryId: invRef.id,
+                sourceType: 'purchase_order',
+                sourceId: po.id,
+                sourceNumber: po.poNumber || po.supplierName,
+                fromLocation: po.supplierName || 'Supplier',
+                toLocation: locationName,
+                notes: receiptNotes || null,
+                createdBy,
+              }])
+              if (!isCancellingNow) {
+                return { ...item, receivedQty: newReceivedQty, inventoryIds: [...(item.inventoryIds ?? []), invRef.id] }
+              }
+            }
           }
+
+          if (isCancellingNow) {
+            const cancelQty = outstanding(item) - qty
+            if (item.inventoryIds?.length > 0) {
+              const invId = item.inventoryIds[0]
+              const invSnap = await getDoc(doc(db, 'inventory', invId))
+              if (invSnap.exists()) {
+                const d = invSnap.data()
+                if ((d.quantityOnHand ?? 0) > 0 || qty > 0) {
+                  await updateDoc(doc(db, 'inventory', invId), { quantityOnOrder: 0, updatedAt: serverTimestamp() })
+                } else {
+                  await updateDoc(doc(db, 'inventory', invId), { inventoryStatus: 'cancelled', quantityOnOrder: 0, updatedAt: serverTimestamp() })
+                }
+              }
+            }
+            if (cancelQty > 0) {
+              await writeTx([{
+                type: 'cancellation',
+                qty: -cancelQty,
+                modelName: item.modelName,
+                brand: item.brand ?? null,
+                sku: item.sku ?? null,
+                category: item.category ?? null,
+                dealerId: po.dealerId,
+                inventoryId: item.inventoryIds?.[0] ?? null,
+                sourceType: 'purchase_order',
+                sourceId: po.id,
+                sourceNumber: po.poNumber || po.supplierName,
+                fromLocation: locationName,
+                toLocation: 'Cancelled',
+                notes: receiptNotes || null,
+                createdBy,
+              }])
+            }
+            return { ...item, receivedQty: newReceivedQty, cancelled: true }
+          }
+
+          return { ...item, receivedQty: newReceivedQty }
         })
       )
 
@@ -103,7 +203,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
         items: updatedItems,
         status: newStatus,
         lastReceivedDate: receivedDate,
-        lastReceivedBy: profile?.displayName ?? user?.email ?? '',
+        lastReceivedBy: createdBy,
         updatedAt: serverTimestamp(),
       })
       onClose()
@@ -123,7 +223,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
           <div>
             <h2 className="text-base font-semibold text-[#1A1A1A]">Receive Against PO</h2>
             <p className="text-xs text-[#9A9A9A] mt-0.5">
-              {po.supplierName}{po.poNumber ? ` · PO ${po.poNumber}` : ''} · {dealerMap[po.dealerId] || '—'}
+              {po.supplierName}{po.poNumber ? ` · PO ${po.poNumber}` : ''} · {locationName}
             </p>
           </div>
           <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
@@ -137,17 +237,13 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Notes</label>
-              <input value={receiptNotes} onChange={(e) => setReceiptNotes(e.target.value)}
-                placeholder="Optional" className={`${iCls} w-full`} />
+              <input value={receiptNotes} onChange={(e) => setReceiptNotes(e.target.value)} placeholder="Optional" className={`${iCls} w-full`} />
             </div>
           </div>
 
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-[#1A1A1A]">Items</p>
-            <button onClick={receiveAll}
-              className="text-sm text-[#8B6914] font-semibold hover:underline">
-              Receive All Outstanding
-            </button>
+            <button onClick={receiveAll} className="text-sm text-[#8B6914] font-semibold hover:underline">Receive All Outstanding</button>
           </div>
 
           <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -159,19 +255,39 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
                   <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Received</th>
                   <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Outstanding</th>
                   <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Receive Now</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Cancel</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {(po.items ?? []).map((item) => {
                   const out = outstanding(item)
-                  const done = out === 0
+                  const done = out === 0 && !item.cancelled
+                  const alreadyCancelled = item.cancelled
+                  const isCancellingNow = !!cancelNow[item.id]
+
+                  if (alreadyCancelled) {
+                    return (
+                      <tr key={item.id} className="bg-gray-50 opacity-60">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-[#1A1A1A]">{item.modelName}</p>
+                          <p className="text-xs text-[#9A9A9A]">{[item.brand, item.category, item.sku].filter(Boolean).join(' · ')}</p>
+                        </td>
+                        <td className="px-3 py-3 text-center text-[#1A1A1A]">{item.orderedQty}</td>
+                        <td className="px-3 py-3 text-center text-[#9A9A9A]">{item.receivedQty ?? 0}</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="text-xs font-semibold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">Cancelled</span>
+                        </td>
+                        <td className="px-3 py-3 text-center text-[#9A9A9A]">—</td>
+                        <td className="px-3 py-3 text-center text-[#9A9A9A]">—</td>
+                      </tr>
+                    )
+                  }
+
                   return (
-                    <tr key={item.id} className={done ? 'bg-[#4CAF7D]/5' : ''}>
+                    <tr key={item.id} className={done ? 'bg-[#4CAF7D]/5' : isCancellingNow ? 'bg-[#D95F5F]/5' : ''}>
                       <td className="px-4 py-3">
                         <p className="font-medium text-[#1A1A1A]">{item.modelName}</p>
-                        <p className="text-xs text-[#9A9A9A]">
-                          {[item.brand, item.category, item.sku].filter(Boolean).join(' · ')}
-                        </p>
+                        <p className="text-xs text-[#9A9A9A]">{[item.brand, item.category, item.sku].filter(Boolean).join(' · ')}</p>
                       </td>
                       <td className="px-3 py-3 text-center text-[#1A1A1A]">{item.orderedQty}</td>
                       <td className="px-3 py-3 text-center">
@@ -182,7 +298,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
                       <td className="px-3 py-3 text-center">
                         {done
                           ? <span className="text-xs font-semibold bg-[#4CAF7D]/15 text-[#4CAF7D] px-2 py-0.5 rounded-full">Done</span>
-                          : <span className="text-sm font-semibold text-[#E6A817]">{out}</span>
+                          : <span className={`text-sm font-semibold ${isCancellingNow ? 'text-[#D95F5F] line-through' : 'text-[#E6A817]'}`}>{out}</span>
                         }
                       </td>
                       <td className="px-3 py-3 text-center">
@@ -192,9 +308,22 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
                           <input
                             type="number" min="0" max={out}
                             value={receiveNow[item.id] ?? ''}
+                            disabled={isCancellingNow}
                             onChange={(e) => setReceiveNow((p) => ({ ...p, [item.id]: e.target.value }))}
-                            className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-[#8B6914]"
+                            className={`w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-[#8B6914] ${isCancellingNow ? 'bg-gray-100 opacity-50' : ''}`}
                             placeholder="0"
+                          />
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        {done ? (
+                          <span className="text-xs text-[#9A9A9A]">—</span>
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={isCancellingNow}
+                            onChange={() => toggleCancel(item.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-[#D95F5F] cursor-pointer"
                           />
                         )}
                       </td>
@@ -205,9 +334,11 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
             </table>
           </div>
 
-          {totalReceiving > 0 && (
+          {hasAnything && (
             <p className="text-sm text-[#9A9A9A]">
-              Receiving <span className="font-semibold text-[#1A1A1A]">{totalReceiving}</span> total unit{totalReceiving !== 1 ? 's' : ''} — inventory records will be created automatically.
+              {totalReceiving > 0 && <>Receiving <span className="font-semibold text-[#1A1A1A]">{totalReceiving}</span> unit{totalReceiving !== 1 ? 's' : ''}</>}
+              {totalReceiving > 0 && totalCancelling > 0 && ' · '}
+              {totalCancelling > 0 && <>Cancelling <span className="font-semibold text-[#D95F5F]">{totalCancelling}</span> item{totalCancelling !== 1 ? 's' : ''}</>}
             </p>
           )}
 
@@ -215,10 +346,10 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
         </div>
 
         <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
-          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] text-sm font-medium py-2.5 rounded-lg hover:bg-[#F4F4F5]">Cancel</button>
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] text-sm font-medium py-2.5 rounded-lg hover:bg-[#F4F4F5]">Close</button>
           <button onClick={handleSave} disabled={saving || !hasAnything}
             className="flex-1 bg-[#8B6914] text-white text-sm font-semibold py-2.5 rounded-lg hover:bg-[#7a5c11] disabled:opacity-50 transition-colors">
-            {saving ? 'Saving…' : `Receive ${totalReceiving > 0 ? totalReceiving + ' Unit' + (totalReceiving !== 1 ? 's' : '') : ''}`}
+            {saving ? 'Saving…' : `Confirm${totalReceiving > 0 ? ` ${totalReceiving} unit${totalReceiving !== 1 ? 's' : ''}` : ''}${totalCancelling > 0 ? `${totalReceiving > 0 ? ' +' : ''} ${totalCancelling} cancel${totalCancelling !== 1 ? 's' : ''}` : ''}`}
           </button>
         </div>
       </div>

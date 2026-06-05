@@ -18,9 +18,11 @@ export async function writeTx(entries) {
         category: e.category ?? null,
         dealerId: e.dealerId ?? null,
         inventoryId: e.inventoryId ?? null,
-        sourceType: e.sourceType ?? null,   // 'order' | 'invoice' | 'purchase_order' | 'manual'
+        sourceType: e.sourceType ?? null,
         sourceId: e.sourceId ?? null,
         sourceNumber: e.sourceNumber ?? null,
+        fromLocation: e.fromLocation ?? null,
+        toLocation: e.toLocation ?? null,
         createdBy: e.createdBy ?? '',
         notes: e.notes ?? null,
         createdAt: serverTimestamp(),

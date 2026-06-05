@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { purchaseOrdersCol, inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
@@ -73,7 +74,17 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
     return s
   })
   const [openCatalogRow, setOpenCatalogRow] = useState(null)
+  const [catalogAnchor, setCatalogAnchor] = useState(null)
+  const catalogInputRefs = useRef({})
   const [saving, setSaving] = useState(false)
+
+  function positionCatalogDropdown(key) {
+    const el = catalogInputRefs.current[key]
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      setCatalogAnchor({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 240) })
+    }
+  }
   const [error, setError] = useState('')
 
   const isDraft = !po || po.status === 'Draft'
@@ -438,12 +449,19 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
                             ? <span className="text-[9px] font-bold bg-[#4CAF7D]/20 text-[#4CAF7D] px-1 py-0.5 rounded">RCV</span>
                             : idx + 1}
                         </td>
-                        <td className="px-2 py-1.5 relative">
+                        <td className="px-2 py-1.5">
                           <div className="relative">
                             <input
+                              ref={el => { catalogInputRefs.current[row._key] = el }}
                               value={catalogSearches[row._key] ?? ''}
-                              onChange={(e) => handleCatalogSearch(row._key, e.target.value)}
-                              onFocus={() => setOpenCatalogRow(row._key)}
+                              onChange={(e) => {
+                                handleCatalogSearch(row._key, e.target.value)
+                                positionCatalogDropdown(row._key)
+                              }}
+                              onFocus={() => {
+                                setOpenCatalogRow(row._key)
+                                positionCatalogDropdown(row._key)
+                              }}
                               onBlur={() => setTimeout(() => setOpenCatalogRow(null), 150)}
                               placeholder="Search…"
                               disabled={isCancelled}
@@ -455,18 +473,6 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9A9A9A] hover:text-[#1A1A1A] text-sm leading-none">×</button>
                             )}
                           </div>
-                          {openCatalogRow === row._key && catalogMatches.length > 0 && (
-                            <ul className="absolute z-30 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto text-sm" style={{ minWidth: 220 }}>
-                              {catalogMatches.map((c) => (
-                                <li key={c.id} onMouseDown={() => handleCatalogSelect(row._key, c)}
-                                  className="px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer">
-                                  <span className="font-medium text-[#1A1A1A]">{c.name}</span>
-                                  {c.sku && <span className="ml-2 text-xs text-[#9A9A9A]">{c.sku}</span>}
-                                  {c.manufacturer && <span className="ml-2 text-xs text-[#9A9A9A]">· {c.manufacturer}</span>}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
                         </td>
                         <td className="px-2 py-1.5">
                           <input value={row.brand} onChange={(e) => updateRow(row._key, 'brand', e.target.value)} disabled={isCancelled} placeholder="DJI" className={iCls} style={{ minWidth: 80 }} />
@@ -544,6 +550,22 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
 
           {error && <p className="text-sm text-[#D95F5F] font-medium">{error}</p>}
         </div>
+
+        {openCatalogRow !== null && catalogMatches.length > 0 && catalogAnchor && createPortal(
+          <ul
+            style={{ position: 'fixed', top: catalogAnchor.top, left: catalogAnchor.left, width: catalogAnchor.width, zIndex: 9999 }}
+            className="bg-white border border-gray-200 rounded-lg shadow-xl max-h-44 overflow-y-auto text-sm">
+            {catalogMatches.map((c) => (
+              <li key={c.id} onMouseDown={() => handleCatalogSelect(openCatalogRow, c)}
+                className="px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer">
+                <span className="font-medium text-[#1A1A1A]">{c.name}</span>
+                {c.sku && <span className="ml-2 text-xs text-[#9A9A9A]">{c.sku}</span>}
+                {c.manufacturer && <span className="ml-2 text-xs text-[#9A9A9A]">· {c.manufacturer}</span>}
+              </li>
+            ))}
+          </ul>,
+          document.body
+        )}
 
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
           <button onClick={onClose} className="border border-gray-200 text-[#1A1A1A] text-sm font-medium py-2.5 px-5 rounded-lg hover:bg-[#F4F4F5]">

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
 import { getDealerPrice, isBelowDealerCost } from '../../utils/pricing'
@@ -92,8 +93,18 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
   const { profile } = useAuth()
   const { catalog } = useCatalog()
   const [showCatalog, setShowCatalog] = useState(false)
-  const [openDropdown, setOpenDropdown] = useState(null) // item.id with open dropdown
-  const [dropdownSearch, setDropdownSearch] = useState({}) // { itemId: searchText }
+  const [openDropdown, setOpenDropdown] = useState(null)
+  const [dropdownSearch, setDropdownSearch] = useState({})
+  const [dropdownAnchor, setDropdownAnchor] = useState(null)
+  const inputRefs = useRef({})
+
+  function positionDropdown(itemId) {
+    const el = inputRefs.current[itemId]
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      setDropdownAnchor({ top: rect.bottom + 2, left: rect.left, width: rect.width })
+    }
+  }
 
   const update = (id, field, value) => {
     onChange(items.map((item) => item.id === id ? { ...item, [field]: value } : item))
@@ -174,43 +185,25 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
                 return (
                   <tr key={item.id} className="group">
                     <td className="py-2 pr-3">
-                      {/* Description with catalog typeahead */}
                       <div className="relative">
                         <input
+                          ref={el => { inputRefs.current[item.id] = el }}
                           value={item.description}
                           onChange={(e) => {
                             update(item.id, 'description', e.target.value)
                             setDropdownSearch((p) => ({ ...p, [item.id]: e.target.value }))
                             setOpenDropdown(item.id)
+                            positionDropdown(item.id)
                           }}
                           onFocus={() => {
                             setDropdownSearch((p) => ({ ...p, [item.id]: item.description }))
                             setOpenDropdown(item.id)
+                            positionDropdown(item.id)
                           }}
                           onBlur={() => setTimeout(() => setOpenDropdown(null), 150)}
                           placeholder="Description… or type to search catalog"
                           className={inputCls}
                         />
-                        {openDropdown === item.id && catalogMatches.length > 0 && (
-                          <ul className="absolute z-30 left-0 top-full mt-0.5 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto text-sm">
-                            <li className="px-3 py-1.5 text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider border-b border-gray-100">
-                              Catalog matches
-                            </li>
-                            {catalogMatches.map((c) => (
-                              <li key={c.id}
-                                onMouseDown={() => selectCatalogForItem(item.id, c)}
-                                className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer">
-                                <div className="min-w-0">
-                                  <p className="font-medium text-[#1A1A1A] truncate">{c.name}</p>
-                                  {c.sku && <p className="text-xs text-[#9A9A9A]">SKU: {c.sku}</p>}
-                                </div>
-                                {c.msrp != null && (
-                                  <span className="text-xs font-medium text-[#8B6914] shrink-0">{formatCurrency(c.msrp)}</span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
                       </div>
                       {item.type === 'catalog' && showDealerPricing && profile?.role === 'dealer' && item.msrp && (
                         <p className="text-xs text-[#9A9A9A] mt-0.5">
@@ -276,6 +269,30 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
         <p className="text-center text-[#9A9A9A] text-sm py-6 border-2 border-dashed border-gray-200 rounded-xl mt-3">
           No line items yet. Add from catalog or create a custom item.
         </p>
+      )}
+
+      {openDropdown && catalogMatches.length > 0 && dropdownAnchor && createPortal(
+        <ul
+          style={{ position: 'fixed', top: dropdownAnchor.top, left: dropdownAnchor.left, width: dropdownAnchor.width, zIndex: 9999 }}
+          className="bg-white border border-gray-200 rounded-lg shadow-xl max-h-44 overflow-y-auto text-sm">
+          <li className="px-3 py-1.5 text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider border-b border-gray-100">
+            Catalog matches
+          </li>
+          {catalogMatches.map((c) => (
+            <li key={c.id}
+              onMouseDown={() => selectCatalogForItem(openDropdown, c)}
+              className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer">
+              <div className="min-w-0">
+                <p className="font-medium text-[#1A1A1A] truncate">{c.name}</p>
+                {c.sku && <p className="text-xs text-[#9A9A9A]">SKU: {c.sku}</p>}
+              </div>
+              {c.msrp != null && (
+                <span className="text-xs font-medium text-[#8B6914] shrink-0">{formatCurrency(c.msrp)}</span>
+              )}
+            </li>
+          ))}
+        </ul>,
+        document.body
       )}
     </div>
   )

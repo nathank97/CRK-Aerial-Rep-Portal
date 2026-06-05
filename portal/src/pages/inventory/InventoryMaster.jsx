@@ -1110,7 +1110,7 @@ export default function InventoryMaster() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
-                  ['Model', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
+                  ['Model / Item', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
                   ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
                   ['Total On Hand', 'totalOnHand'], ['Total Reserved', 'totalReserved'],
                   ['Total Available', 'totalAvail'], ['Locations', ''],
@@ -1399,7 +1399,7 @@ export default function InventoryMaster() {
                     'Fully Received': 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
                   }[p.status] ?? 'bg-gray-100 text-gray-500'
                   const canReceive = ['Ordered', 'Partially Received'].includes(p.status)
-                  const canEdit = p.status !== 'Fully Received'
+                  const canEdit = true
                   return (
                     <tr key={p.id} className="hover:bg-[#FAFAFA] transition-colors">
                       <td className="py-3 px-4 font-medium text-[#1A1A1A]">{p.supplierName}</td>
@@ -1484,12 +1484,10 @@ export default function InventoryMaster() {
                         Receive
                       </button>
                     )}
-                    {p.status !== 'Fully Received' && (
-                      <button onClick={() => setEditPO(p)}
-                        className="flex-1 text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
-                        Edit
-                      </button>
-                    )}
+                    <button onClick={() => setEditPO(p)}
+                      className="flex-1 text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
+                      Edit
+                    </button>
                     <button onClick={() => setDeletePO(p)}
                       className="flex-1 text-sm border border-[#D95F5F] text-[#D95F5F] rounded-lg py-1.5 hover:bg-[#D95F5F]/5 transition-colors">
                       Delete

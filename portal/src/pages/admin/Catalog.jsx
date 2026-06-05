@@ -754,6 +754,39 @@ export default function Catalog() {
     setDeleteItem(null)
   }
 
+  function exportCSV() {
+    const headers = ['Name','SKU','Type','Manufacturer','MSRP','Cost','Tier 1','Tier 2','Tier 3','Description','Tags','Notes','Image URL','Active']
+    const escape = (v) => {
+      if (v == null) return ''
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = catalog.map((item) => [
+      item.name ?? '',
+      item.sku ?? '',
+      item.type ?? '',
+      item.manufacturer ?? '',
+      item.msrp ?? '',
+      item.cost ?? '',
+      item.tier1 ?? '',
+      item.tier2 ?? '',
+      item.tier3 ?? '',
+      item.description ?? '',
+      item.tags ?? '',
+      item.notes ?? '',
+      item.imageUrl ?? '',
+      item.active === false ? 'Inactive' : 'Active',
+    ].map(escape).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `crk_catalog_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
 
   return (
@@ -765,6 +798,10 @@ export default function Catalog() {
           <p className="text-sm text-[#9A9A9A] mt-0.5">{filtered.length} item{filtered.length !== 1 ? 's' : ''} shown</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={exportCSV} disabled={catalog.length === 0}
+            className="border border-gray-200 text-[#1A1A1A] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#F4F4F5] transition-colors disabled:opacity-40">
+            ↓ Export CSV
+          </button>
           <button onClick={() => setShowImport(true)}
             className="border border-[#8B6914] text-[#8B6914] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#8B6914]/5 transition-colors">
             ↑ Import CSV

@@ -1356,7 +1356,7 @@ export default function InventoryMaster() {
                 ) : pos.length === 0 ? (
                   <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">No purchase orders yet. Click "+ New Purchase Order" to get started.</td></tr>
                 ) : pos.map((p) => {
-                  const outstanding = (p.items ?? []).filter((i) => (i.receivedQty ?? 0) < i.orderedQty).length
+                  const outstanding = (p.items ?? []).filter((i) => !i.cancelled && (i.receivedQty ?? 0) < i.orderedQty).length
                   const statusColor = {
                     Draft: 'bg-gray-100 text-gray-500',
                     Ordered: 'bg-[#4A90B8]/15 text-[#4A90B8]',
@@ -1418,7 +1418,7 @@ export default function InventoryMaster() {
             ) : pos.length === 0 ? (
               <div className="text-center py-12 text-[#9A9A9A] text-sm">No purchase orders yet.</div>
             ) : pos.map((p) => {
-              const outstanding = (p.items ?? []).filter((i) => (i.receivedQty ?? 0) < i.orderedQty).length
+              const outstanding = (p.items ?? []).filter((i) => !i.cancelled && (i.receivedQty ?? 0) < i.orderedQty).length
               const statusColor = {
                 Draft: 'bg-gray-100 text-gray-500',
                 Ordered: 'bg-[#4A90B8]/15 text-[#4A90B8]',

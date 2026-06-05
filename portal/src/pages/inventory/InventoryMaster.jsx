@@ -556,6 +556,9 @@ export default function InventoryMaster() {
   const [deleting, setDeleting] = useState(false)
   const [showPO, setShowPO] = useState(false)
   const [editPO, setEditPO] = useState(null)
+  const [cancelPO, setCancelPO] = useState(null)
+  const [cancelSel, setCancelSel] = useState({})
+  const [cancelBusy, setCancelBusy] = useState(false)
   const [deletingTx, setDeletingTx] = useState(null)
   const [deletingTxBusy, setDeletingTxBusy] = useState(false)
   const [showCleanup, setShowCleanup] = useState(false)
@@ -613,11 +616,53 @@ export default function InventoryMaster() {
     migrate()
   }, [posLoading])
   const [summarySort, setSummarySort] = useState({ key: '', dir: 'asc' })
-  const [logSort, setLogSort] = useState({ key: '', dir: 'asc' })
   const [locationSort, setLocationSort] = useState({ key: '', dir: 'asc' })
 
   const toggleSort = (setter) => (key) =>
     setter((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+
+  async function handleCancelItems() {
+    if (!cancelPO) return
+    setCancelBusy(true)
+    try {
+      const updatedItems = (cancelPO.items ?? []).map((item) => ({
+        ...item,
+        cancelled: cancelSel[item.id] ? true : (item.cancelled ?? false),
+      }))
+      const active = updatedItems.filter((i) => !i.cancelled)
+      let newStatus = cancelPO.status
+      if (active.length === 0) newStatus = 'Cancelled'
+      else if (active.every((i) => (i.receivedQty ?? 0) >= i.orderedQty)) newStatus = 'Fully Received'
+      else if (active.some((i) => (i.receivedQty ?? 0) > 0)) newStatus = 'Partially Received'
+      await updateDoc(doc(db, 'purchaseOrders', cancelPO.id), {
+        items: updatedItems, status: newStatus, updatedAt: serverTimestamp(),
+      })
+      const cancelledNow = (cancelPO.items ?? []).filter((i) => cancelSel[i.id] && !i.cancelled)
+      if (cancelledNow.length > 0) {
+        await writeTx(cancelledNow.map((item) => ({
+          type: 'cancellation',
+          qty: -(Math.max(0, item.orderedQty - (item.receivedQty ?? 0))),
+          modelName: item.modelName,
+          brand: item.brand ?? null,
+          sku: item.sku ?? null,
+          category: item.category ?? null,
+          dealerId: cancelPO.dealerId,
+          inventoryId: null,
+          sourceType: 'purchase_order',
+          sourceId: cancelPO.id,
+          sourceNumber: cancelPO.poNumber || cancelPO.supplierName,
+          notes: 'PO item cancelled',
+          createdBy: profile?.displayName ?? '',
+        })))
+      }
+      setCancelPO(null)
+      setCancelSel({})
+    } catch (e) {
+      console.error('Cancel error:', e)
+    } finally {
+      setCancelBusy(false)
+    }
+  }
 
   async function handleCleanupInventory() {
     setCleanupBusy(true)
@@ -763,19 +808,6 @@ export default function InventoryMaster() {
     return [...applySort(neg, summarySort.key, summarySort.dir, getVal), ...applySort(rest, summarySort.key, summarySort.dir, getVal)]
   }, [summaryGroups, summarySort])
 
-  const sortedLog = useMemo(() => {
-    const getVal = (item, k) => {
-      if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
-      if (k === 'locationName') return dealerMap[item.dealerId] || ''
-      if (k === 'dealerPrice') return item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null
-      if (k === 'createdAt') return item.createdAt?.toDate?.()?.getTime() ?? item.updatedAt?.toDate?.()?.getTime() ?? 0
-      return item[k]
-    }
-    const neg = filtered.filter((i) => (i.quantityOnHand ?? 0) < 0)
-    const rest = filtered.filter((i) => (i.quantityOnHand ?? 0) >= 0)
-    return [...applySort(neg, logSort.key, logSort.dir, getVal), ...applySort(rest, logSort.key, logSort.dir, getVal)]
-  }, [filtered, logSort, dealerMap, dealerProfileMap])
-
   const sortLocItems = (locItems) => {
     const getVal = (item, k) => {
       if (k === 'available') return (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
@@ -802,10 +834,9 @@ export default function InventoryMaster() {
   const TABS = [
     { key: 'summary', label: 'Summary' },
     { key: 'byLocation', label: 'By Location' },
-    { key: 'log', label: 'Log' },
     ...((isAdmin || isWarehouseManager) ? [
       { key: 'purchaseOrders', label: 'Purchase Orders' },
-      { key: 'transactions', label: 'Transactions' },
+      { key: 'log', label: 'Log' },
     ] : []),
   ]
 
@@ -837,7 +868,7 @@ export default function InventoryMaster() {
               <h2 className="text-base font-semibold text-[#1A1A1A]">Delete Purchase Order</h2>
             </div>
             <div className="px-5 py-4">
-              <p className="text-sm text-[#1A1A1A]">Delete PO from <span className="font-semibold">{deletePO.supplierName}</span>{deletePO.poNumber ? ` (${deletePO.poNumber})` : ''}? This cannot be undone.</p>
+              <p className="text-sm text-[#1A1A1A]">Delete PO from <span className="font-semibold">{deletePO.supplierName}</span>{deletePO.poNumber ? ` (${deletePO.poNumber})` : ''}? This cannot be undone.{deletePO.status !== 'Draft' ? ' Any already-received inventory items will remain in stock.' : ''}</p>
             </div>
             <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
               <button onClick={() => setDeletePO(null)} disabled={deletingPO}
@@ -1256,153 +1287,40 @@ export default function InventoryMaster() {
         </div>
       )}
 
-      {/* ── LOG TAB ── */}
-      {activeTab === 'log' && (
-        <>
-          <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
-            <table className="text-sm" style={{ minWidth: 1250 }}>
-              <thead>
-                <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                  {[
-                    ['Model', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Location', 'locationName'], ['SKU / Serial', 'sku'],
-                    ['Condition', 'condition'], ['On Hand', 'quantityOnHand'], ['Reserved', 'quantityReserved'],
-                    ['Available', 'available'], ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'dealerPrice'],
-                    ...(isAdmin ? [['CRK Cost / Unit', 'costPrice']] : []),
-                    ['Added', 'createdAt'], ['', ''],
-                  ].map(([label, key]) => key
-                    ? <SortTh key={label} label={label} sortKey={key} sort={logSort} onSort={toggleSort(setLogSort)} />
-                    : <th key="actions" className="py-3 px-4" />
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 10 : 9} />)
-                ) : filtered.length === 0 ? (
-                  <tr><td colSpan={isAdmin ? 12 : 11} className="py-12 text-center text-[#9A9A9A] text-sm">No entries found.</td></tr>
-                ) : sortedLog.map((item) => {
-                  const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
-                  return (
-                    <tr key={item.id} className={`transition-colors ${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
-                      <td className="py-3 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{item.brand || '—'}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{item.category || '—'}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A] text-xs">{dealerMap[item.dealerId] || '—'}</td>
-                      <td className="py-3 px-4">
-                        <p className="text-[#1A1A1A]">{item.sku || '—'}</p>
-                        {item.serialNumber && <p className="text-xs text-[#9A9A9A]">#{item.serialNumber}</p>}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {item.condition ?? '—'}
-                        </span>
-                      </td>
-                      <td className={`py-3 px-4 text-center font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
-                        {item.quantityOnHand ?? 0}
-                        {(item.quantityOnHand ?? 0) < 0 && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
-                      </td>
-                      <td className="py-3 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
-                      <td className="py-3 px-4 text-center"><AvailBadge available={available} threshold={item.lowStockThreshold} /></td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
-                      <td className="py-3 px-4 text-[#4CAF7D] font-medium">{item.msrp != null ? formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId])) : '—'}</td>
-                      {isAdmin && <td className="py-3 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
-                      <td className="py-3 px-4 text-xs text-[#9A9A9A] whitespace-nowrap">{formatDate(item.createdAt ?? item.updatedAt)}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => setEditItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
-                          {isAdmin && (
-                            <button onClick={() => setTransferItem(item)} className="text-xs text-[#9A9A9A] hover:underline font-medium">Transfer</button>
-                          )}
-                          {isAdmin && (
-                            <button onClick={() => setDeleteItem(item)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile log cards */}
-          <div className="md:hidden space-y-3">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 animate-pulse space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-2/3" />
-                  <div className="h-3 bg-gray-100 rounded w-1/2" />
-                </div>
-              ))
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-12 text-[#9A9A9A] text-sm">No entries found.</div>
-            ) : sortedLog.map((item) => {
-              const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
-              return (
-                <div key={item.id} className={`rounded-xl p-4 shadow-sm border ${(item.quantityOnHand ?? 0) < 0 ? 'border-[#D95F5F]/40 bg-[#D95F5F]/5' : 'bg-white border-gray-100'}`}>
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-semibold text-[#1A1A1A]">{item.modelName}</p>
-                      {item.brand && <p className="text-xs text-[#9A9A9A]">{item.brand}</p>}
-                      <p className="text-xs text-[#9A9A9A]">{dealerMap[item.dealerId] || '—'} · {formatDate(item.createdAt ?? item.updatedAt)}</p>
-                    </div>
-                    <AvailBadge available={available} threshold={item.lowStockThreshold} />
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#9A9A9A] mb-3">
-                    {item.sku && <span>SKU: {item.sku}</span>}
-                    {item.serialNumber && <span>S/N: {item.serialNumber}</span>}
-                    {item.condition && <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>{item.condition}</span>}
-                    {item.msrp != null && <span>MSRP: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.msrp)}</span></span>}
-                    {item.msrp != null && <span>Rep: <span className="font-medium text-[#4CAF7D]">{formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId]))}</span></span>}
-                    {isAdmin && item.costPrice != null && <span>CRK Cost: <span className="font-medium text-[#1A1A1A]">{formatCurrency(item.costPrice)}</span></span>}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center mb-3">
-                    <div className="bg-[#F4F4F5] rounded-lg py-1.5">
-                      <p className="text-xs text-[#9A9A9A]">On Hand</p>
-                      <p className={`font-bold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
-                        {item.quantityOnHand ?? 0}{(item.quantityOnHand ?? 0) < 0 ? ' ⚠' : ''}
-                      </p>
-                    </div>
-                    <div className="bg-[#F4F4F5] rounded-lg py-1.5">
-                      <p className="text-xs text-[#9A9A9A]">Reserved</p>
-                      <p className="font-bold text-[#1A1A1A]">{item.quantityReserved ?? 0}</p>
-                    </div>
-                    <div className="bg-[#F4F4F5] rounded-lg py-1.5">
-                      <p className="text-xs text-[#9A9A9A]">Available</p>
-                      <p className="font-bold text-[#1A1A1A]">{available}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditItem(item)}
-                      className="flex-1 text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
-                      Edit
-                    </button>
-                    {isAdmin && (
-                      <button onClick={() => setTransferItem(item)}
-                        className="flex-1 text-sm border border-gray-200 text-[#9A9A9A] rounded-lg py-1.5 hover:bg-[#F4F4F5] transition-colors">
-                        Transfer
-                      </button>
-                    )}
-                    {isAdmin && (
-                      <button onClick={() => setDeleteItem(item)}
-                        className="flex-1 text-sm border border-[#D95F5F] text-[#D95F5F] rounded-lg py-1.5 hover:bg-[#D95F5F]/5 transition-colors">
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-
       {/* ── PURCHASE ORDERS TAB ── */}
-      {activeTab === 'purchaseOrders' && (isAdmin || isWarehouseManager) && (
+      {activeTab === 'purchaseOrders' && (isAdmin || isWarehouseManager) && (() => {
+        const openPos = pos.filter((p) => p.status !== 'Fully Received' && p.status !== 'Cancelled')
+        const outstandingUnits = openPos.reduce((sum, p) =>
+          sum + (p.items ?? []).filter((i) => !i.cancelled).reduce((s, i) =>
+            s + Math.max(0, i.orderedQty - (i.receivedQty ?? 0)), 0), 0)
+        const outstandingValue = openPos.reduce((sum, p) =>
+          sum + (p.items ?? []).filter((i) => !i.cancelled).reduce((s, i) =>
+            s + Math.max(0, i.orderedQty - (i.receivedQty ?? 0)) * (i.costPrice ?? 0), 0), 0)
+        const overdueCount = openPos.filter((p) =>
+          p.expectedDelivery && new Date(p.expectedDelivery) < new Date() &&
+          ['Ordered', 'Partially Received'].includes(p.status)
+        ).length
+        return (
         <div>
           {posError && (
             <div className="mb-4 bg-[#D95F5F]/10 border border-[#D95F5F]/30 rounded-lg px-4 py-3 text-sm text-[#D95F5F]">
               Error loading purchase orders: {posError}. Try refreshing the page.
+            </div>
+          )}
+          {/* PO KPI Strip */}
+          {!posLoading && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              {[
+                { label: 'Open POs', value: openPos.length, color: 'text-[#1A1A1A]', border: '' },
+                { label: 'Outstanding Units', value: outstandingUnits, color: outstandingUnits > 0 ? 'text-[#E6A817]' : 'text-[#1A1A1A]', border: outstandingUnits > 0 ? 'border-[#E6A817]' : '' },
+                { label: 'Outstanding Value', value: '$' + outstandingValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), color: outstandingValue > 0 ? 'text-[#8B6914]' : 'text-[#1A1A1A]', border: '' },
+                { label: 'Overdue', value: overdueCount, color: overdueCount > 0 ? 'text-[#D95F5F]' : 'text-[#9A9A9A]', border: overdueCount > 0 ? 'border-[#D95F5F]' : '' },
+              ].map((k) => (
+                <div key={k.label} className={`bg-white border rounded-xl p-4 shadow-sm ${k.border || 'border-gray-100'}`}>
+                  <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-1">{k.label}</p>
+                  <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
+                </div>
+              ))}
             </div>
           )}
           <div className="flex items-center justify-between mb-4">
@@ -1472,9 +1390,7 @@ export default function InventoryMaster() {
                           {canEdit && (
                             <button onClick={() => setEditPO(p)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
                           )}
-                          {p.status === 'Draft' && (
-                            <button onClick={() => setDeletePO(p)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
-                          )}
+                          <button onClick={() => setDeletePO(p)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -1532,22 +1448,21 @@ export default function InventoryMaster() {
                         Edit
                       </button>
                     )}
-                    {p.status === 'Draft' && (
-                      <button onClick={() => setDeletePO(p)}
-                        className="flex-1 text-sm border border-[#D95F5F] text-[#D95F5F] rounded-lg py-1.5 hover:bg-[#D95F5F]/5 transition-colors">
-                        Delete
-                      </button>
-                    )}
+                    <button onClick={() => setDeletePO(p)}
+                      className="flex-1 text-sm border border-[#D95F5F] text-[#D95F5F] rounded-lg py-1.5 hover:bg-[#D95F5F]/5 transition-colors">
+                      Delete
+                    </button>
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
-      )}
+        )
+      })()}
 
-      {/* ── TRANSACTIONS TAB ── */}
-      {activeTab === 'transactions' && (isAdmin || isWarehouseManager) && (() => {
+      {/* ── LOG TAB (movement history) ── */}
+      {activeTab === 'log' && (isAdmin || isWarehouseManager) && (() => {
         const TX_COLORS = {
           add_stock:      { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'Add Stock' },
           po_receipt:     { bg: 'bg-[#4CAF7D]/15', text: 'text-[#4CAF7D]',  label: 'PO Receipt' },

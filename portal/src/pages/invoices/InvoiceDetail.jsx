@@ -16,6 +16,7 @@ import { emailService, blobToBase64 } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
 import { undoInventoryDeduction } from '../../utils/inventoryDeduction'
+import LineItemBuilder from '../../components/quotes/LineItemBuilder'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -73,15 +74,6 @@ export default function InvoiceDetail() {
     return item.discountType === 'percent' ? base * (1 - disc / 100) : Math.max(0, base - disc)
   }
 
-  const updateLineItem = (idx, field, val) =>
-    setEditLineItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item))
-
-  const addLineItem = () =>
-    setEditLineItems(prev => [...prev, { id: `new_${Date.now()}`, description: '', quantity: 1, unitPrice: '', discount: 0, discountType: 'dollar' }])
-
-  const removeLineItem = (idx) =>
-    setEditLineItems(prev => prev.filter((_, i) => i !== idx))
-
   const enterEdit = () => {
     setEditPaymentTerms(invoice.paymentTerms ?? 'Net 30')
     setEditDueDate(toDateString(invoice.dueDate))
@@ -89,7 +81,18 @@ export default function InvoiceDetail() {
     setEditInternalNotes(invoice.internalNotes ?? '')
     setEditAmountPaid(invoice.amountPaid ?? 0)
     setEditPaidAt(toDateString(invoice.paidAt))
-    setEditLineItems(invoice.lineItems ?? [])
+    setEditLineItems((invoice.lineItems ?? []).map(item => ({
+      id: item.id ?? crypto.randomUUID(),
+      type: item.type ?? 'custom',
+      catalogId: item.catalogId ?? null,
+      description: item.description ?? '',
+      quantity: item.quantity ?? 1,
+      unitPrice: item.unitPrice ?? 0,
+      discount: item.discount ?? 0,
+      discountType: item.discountType ?? 'percent',
+      msrp: item.msrp ?? null,
+      dealerCost: item.dealerCost ?? null,
+    })))
     setEditMode(true)
   }
 
@@ -126,7 +129,7 @@ export default function InvoiceDetail() {
         updatedAt: serverTimestamp(),
       })
       setEditMode(false)
-      flash('Invoice updated.')
+      flash(invoice.inventoryDeducted ? 'Invoice updated. Inventory was previously deducted — re-deduct if quantities changed.' : 'Invoice updated.')
     } catch (err) {
       console.error(err)
       flash('Failed to save changes.', true)
@@ -541,70 +544,8 @@ export default function InvoiceDetail() {
           </div>
           {/* Line Items Editor */}
           <div className="mt-5 pt-5 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Line Items</h3>
-              <button type="button" onClick={addLineItem}
-                className="text-xs text-[#8B6914] hover:text-[#7a5c12] font-semibold transition-colors">
-                + Add Row
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[640px]">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 pr-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
-                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-20">Qty</th>
-                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
-                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-36">Discount</th>
-                    <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {editLineItems.map((item, idx) => (
-                    <tr key={item.id ?? idx}>
-                      <td className="py-1.5 pr-2">
-                        <input type="text" value={item.description}
-                          onChange={e => updateLineItem(idx, 'description', e.target.value)}
-                          className={inputCls} placeholder="Description" />
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <input type="number" min="0" step="1" value={item.quantity}
-                          onChange={e => updateLineItem(idx, 'quantity', e.target.value)}
-                          className={`${inputCls} text-right`} />
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <input type="number" min="0" step="0.01" value={item.unitPrice}
-                          onChange={e => updateLineItem(idx, 'unitPrice', e.target.value)}
-                          className={`${inputCls} text-right`} placeholder="0.00" />
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <div className="flex gap-1">
-                          <input type="number" min="0" step="0.01" value={item.discount || ''}
-                            onChange={e => updateLineItem(idx, 'discount', e.target.value)}
-                            className={`${inputCls} text-right`} placeholder="0" />
-                          <select value={item.discountType || 'dollar'}
-                            onChange={e => updateLineItem(idx, 'discountType', e.target.value)}
-                            className="border border-gray-200 rounded-lg px-1 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white w-14">
-                            <option value="dollar">$</option>
-                            <option value="percent">%</option>
-                          </select>
-                        </div>
-                      </td>
-                      <td className="py-1.5 px-2 text-right font-semibold text-[#111111]">
-                        {formatCurrency(calcLineTotal(item))}
-                      </td>
-                      <td className="py-1.5 pl-2">
-                        <button type="button" onClick={() => removeLineItem(idx)}
-                          className="text-[#D95F5F] hover:text-[#b84848] text-xl leading-none font-light">
-                          ×
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <h3 className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-3">Line Items</h3>
+            <LineItemBuilder items={editLineItems} onChange={setEditLineItems} />
             {/* Live totals preview */}
             {(() => {
               const editSubtotal = editLineItems.reduce((sum, item) => sum + calcLineTotal(item), 0)

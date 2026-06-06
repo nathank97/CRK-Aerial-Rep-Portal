@@ -589,28 +589,6 @@ function ItemModal({ item, onClose }) {
             </div>
           </div>
 
-          {/* Tier pricing */}
-          <div>
-            <label className={labelCls}>Dealer Pricing Tiers ($)</label>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-xs text-[#9A9A9A] mb-1">Tier 1</p>
-                <input type="number" min="0" step="0.01" value={form.tier1}
-                  onChange={(e) => set('tier1', e.target.value)} className={inputCls} placeholder="0.00" />
-              </div>
-              <div>
-                <p className="text-xs text-[#9A9A9A] mb-1">Tier 2</p>
-                <input type="number" min="0" step="0.01" value={form.tier2}
-                  onChange={(e) => set('tier2', e.target.value)} className={inputCls} placeholder="0.00" />
-              </div>
-              <div>
-                <p className="text-xs text-[#9A9A9A] mb-1">Tier 3</p>
-                <input type="number" min="0" step="0.01" value={form.tier3}
-                  onChange={(e) => set('tier3', e.target.value)} className={inputCls} placeholder="0.00" />
-              </div>
-            </div>
-          </div>
-
           {/* Description */}
           <div>
             <label className={labelCls}>Description</label>
@@ -736,6 +714,7 @@ export default function Catalog() {
           case 'name': av = (a.name ?? '').toLowerCase(); bv = (b.name ?? '').toLowerCase(); break
           case 'type': av = a.type ?? ''; bv = b.type ?? ''; break
           case 'sku': av = (a.sku ?? '').toLowerCase(); bv = (b.sku ?? '').toLowerCase(); break
+          case 'tags': av = (a.tags ?? '').toLowerCase(); bv = (b.tags ?? '').toLowerCase(); break
           case 'msrp': av = a.msrp ?? 0; bv = b.msrp ?? 0; break
           case 'cost': av = a.cost ?? 0; bv = b.cost ?? 0; break
           case 'status': av = a.active !== false ? 0 : 1; bv = b.active !== false ? 0 : 1; break
@@ -837,6 +816,7 @@ export default function Catalog() {
                 { key: 'name', label: 'Item', sortable: true },
                 { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
                 { key: 'sku', label: 'SKU', sortable: true },
+                { key: 'tags', label: 'Tags', sortable: true },
                 { key: 'msrp', label: 'MSRP', sortable: true },
                 { key: 'cost', label: 'Cost', sortable: true },
                 { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
@@ -876,13 +856,13 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 7 }).map((__, j) => (
+                  {Array.from({ length: 8 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="py-12 text-center text-[#9A9A9A] text-sm">
+              <tr><td colSpan={8} className="py-12 text-center text-[#9A9A9A] text-sm">
                 {catalog.length === 0 ? 'No catalog items yet. Add the first one above.' : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
@@ -909,6 +889,7 @@ export default function Catalog() {
                   </span>
                 </td>
                 <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.sku || '—'}</td>
+                <td className="py-2 px-3 text-xs text-[#9A9A9A]">{item.tags || '—'}</td>
                 <td className="py-2 px-3 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
                 <td className="py-2 px-3 text-[#9A9A9A]">{item.cost != null ? formatCurrency(item.cost) : '—'}</td>
                 <td className="py-2 px-3">

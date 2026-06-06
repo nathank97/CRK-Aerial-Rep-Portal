@@ -21,7 +21,7 @@ function SortTh({ label, sortKey, sort, onSort, className = '' }) {
   const active = sort.key === sortKey
   return (
     <th onClick={() => onSort(sortKey)}
-      className={`text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider cursor-pointer select-none hover:text-[#1A1A1A] transition-colors ${className}`}>
+      className={`text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider cursor-pointer select-none hover:text-[#1A1A1A] transition-colors ${className}`}>
       <span className="inline-flex items-center gap-1">
         {label}
         <span className={`text-[10px] leading-none ${active ? 'text-[#8B6914]' : 'opacity-25'}`}>
@@ -856,7 +856,7 @@ export default function InventoryMaster() {
   ]
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       {showAdd && (
         <AddStockModal dealers={dealers} catalog={catalog} onClose={() => setShowAdd(false)}
           fixedDealerId={isAdmin ? undefined : user?.uid} />
@@ -1106,7 +1106,7 @@ export default function InventoryMaster() {
           </span>
         </div>
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
-          <table className="text-sm hidden md:table" style={{ minWidth: 900 }}>
+          <table className="w-full text-sm hidden md:table" style={{ minWidth: 900 }}>
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
@@ -1116,7 +1116,7 @@ export default function InventoryMaster() {
                   ['Total Available', 'totalAvail'], ['Locations', ''],
                 ].map(([label, key]) => key
                   ? <SortTh key={label} label={label} sortKey={key} sort={summarySort} onSort={toggleSort(setSummarySort)} />
-                  : <th key={label} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{label}</th>
+                  : <th key={label} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{label}</th>
                 )}
               </tr>
             </thead>
@@ -1130,25 +1130,25 @@ export default function InventoryMaster() {
                 const isNeg = g.totalOnHand < 0
                 return (
                   <tr key={i} className={`transition-colors ${isNeg ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
-                    <td className="py-3 px-4 font-medium text-[#1A1A1A]">{g.modelName}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{g.brand || '—'}</td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{g.category || '—'}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-3 font-medium text-[#1A1A1A]">{g.modelName}</td>
+                    <td className="py-2 px-3 text-[#9A9A9A]">{g.brand || '—'}</td>
+                    <td className="py-2 px-3 text-[#9A9A9A]">{g.category || '—'}</td>
+                    <td className="py-2 px-3">
                       {g.condition
                         ? <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>
                         : '—'}
                     </td>
-                    <td className="py-3 px-4 text-[#9A9A9A]">{g.msrp != null ? formatCurrency(g.msrp) : '—'}</td>
-                    <td className="py-3 px-4 font-medium text-[#4CAF7D]">{g.repPrice != null ? formatCurrency(g.repPrice) : '—'}</td>
-                    <td className={`py-3 px-4 text-center font-semibold ${isNeg ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                    <td className="py-2 px-3 text-[#9A9A9A]">{g.msrp != null ? formatCurrency(g.msrp) : '—'}</td>
+                    <td className="py-2 px-3 font-medium text-[#4CAF7D]">{g.repPrice != null ? formatCurrency(g.repPrice) : '—'}</td>
+                    <td className={`py-2 px-3 text-center font-semibold ${isNeg ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
                       {g.totalOnHand}
                       {isNeg && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
                     </td>
-                    <td className="py-3 px-4 text-center text-[#9A9A9A]">{g.totalReserved}</td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-2 px-3 text-center text-[#9A9A9A]">{g.totalReserved}</td>
+                    <td className="py-2 px-3 text-center">
                       <AvailBadge available={totalAvail} threshold={null} />
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-3">
                       <div className="flex flex-wrap gap-1">
                         {g.locations.map((l) => (
                           <span key={l.name} className="text-xs bg-[#F4F4F5] text-[#1A1A1A] px-2 py-0.5 rounded-full">
@@ -1245,7 +1245,7 @@ export default function InventoryMaster() {
                     <span className="text-xs font-semibold bg-[#D95F5F]/15 text-[#D95F5F] px-2 py-0.5 rounded-full">{locOutCount} out</span>
                   )}
                 </div>
-                <table className="text-sm hidden md:table" style={{ minWidth: 900 }}>
+                <table className="w-full text-sm hidden md:table" style={{ minWidth: 900 }}>
                   <thead>
                     <tr className="border-b border-gray-50">
                       {[
@@ -1255,7 +1255,7 @@ export default function InventoryMaster() {
                         ...(isAdmin ? [['CRK Cost / Unit', 'costPrice'], ['', '']] : []),
                       ].map(([label, key]) => key
                         ? <SortTh key={label} label={label} sortKey={key} sort={locationSort} onSort={toggleSort(setLocationSort)} className="py-2" />
-                        : <th key={`empty-${label}`} className="py-2 px-4" />
+                        : <th key={`empty-${label}`} className="py-2 px-3" />
                       )}
                     </tr>
                   </thead>
@@ -1264,33 +1264,33 @@ export default function InventoryMaster() {
                       const available = (item.quantityOnHand ?? 0) - (item.quantityReserved ?? 0)
                       return (
                         <tr key={item.id} className={`${(item.quantityOnHand ?? 0) < 0 ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
-                          <td className="py-2 px-4 font-medium text-[#1A1A1A]">{item.modelName}</td>
-                          <td className="py-2 px-4 text-[#9A9A9A]">{item.brand || '—'}</td>
-                          <td className="py-2 px-4 text-[#9A9A9A]">{item.category || '—'}</td>
-                          <td className="py-2 px-4">
+                          <td className="py-2 px-3 font-medium text-[#1A1A1A]">{item.modelName}</td>
+                          <td className="py-2 px-3 text-[#9A9A9A]">{item.brand || '—'}</td>
+                          <td className="py-2 px-3 text-[#9A9A9A]">{item.category || '—'}</td>
+                          <td className="py-2 px-3">
                             <p className="text-[#1A1A1A]">{item.sku || '—'}</p>
                             {item.serialNumber && <p className="text-xs text-[#9A9A9A]">#{item.serialNumber}</p>}
                           </td>
-                          <td className="py-2 px-4">
+                          <td className="py-2 px-3">
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[item.condition] ?? 'bg-gray-100 text-gray-600'}`}>
                               {item.condition ?? '—'}
                             </span>
                           </td>
-                          <td className="py-2 px-4 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
-                          <td className="py-2 px-4 font-medium text-[#4CAF7D]">{item.msrp != null ? formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId])) : '—'}</td>
-                          <td className={`py-2 px-4 text-center font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
+                          <td className="py-2 px-3 text-[#9A9A9A]">{item.msrp != null ? formatCurrency(item.msrp) : '—'}</td>
+                          <td className="py-2 px-3 font-medium text-[#4CAF7D]">{item.msrp != null ? formatCurrency(getDealerPrice(item, dealerProfileMap[item.dealerId])) : '—'}</td>
+                          <td className={`py-2 px-3 text-center font-semibold ${(item.quantityOnHand ?? 0) < 0 ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
                             {item.quantityOnHand ?? 0}
                             {(item.quantityOnHand ?? 0) < 0 && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
                           </td>
-                          <td className="py-2 px-4 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
-                          <td className="py-2 px-4 text-center">
+                          <td className="py-2 px-3 text-center text-[#9A9A9A]">{item.quantityReserved ?? 0}</td>
+                          <td className="py-2 px-3 text-center">
                             {item.inventoryStatus === 'on_order'
                               ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#4A90B8]/15 text-[#4A90B8]">On Order</span>
                               : <AvailBadge available={available} threshold={item.lowStockThreshold} />}
                           </td>
-                          {isAdmin && <td className="py-2 px-4 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
+                          {isAdmin && <td className="py-2 px-3 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
                           {isAdmin && (
-                            <td className="py-2 px-4">
+                            <td className="py-2 px-3">
                               <button onClick={() => setTransferItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
                             </td>
                           )}
@@ -1377,11 +1377,11 @@ export default function InventoryMaster() {
 
           {/* Desktop table */}
           <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
-            <table className="text-sm" style={{ minWidth: 900 }}>
+            <table className="w-full text-sm" style={{ minWidth: 900 }}>
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                   {['Supplier / Vendor', 'PO #', 'Order Date', 'Exp. Delivery', 'Location', 'Items', 'Status', 'Outstanding', 'Freight', 'Created By', ''].map((h) => (
-                    <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1402,29 +1402,29 @@ export default function InventoryMaster() {
                   const canEdit = true
                   return (
                     <tr key={p.id} className="hover:bg-[#FAFAFA] transition-colors">
-                      <td className="py-3 px-4 font-medium text-[#1A1A1A]">{p.supplierName}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{p.poNumber || '—'}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{p.orderDate || '—'}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">{p.expectedDelivery || '—'}</td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{dealerMap[p.dealerId] || '—'}</td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 font-medium text-[#1A1A1A]">{p.supplierName}</td>
+                      <td className="py-2 px-3 text-[#9A9A9A]">{p.poNumber || '—'}</td>
+                      <td className="py-2 px-3 text-[#9A9A9A] whitespace-nowrap">{p.orderDate || '—'}</td>
+                      <td className="py-2 px-3 text-[#9A9A9A] whitespace-nowrap">{p.expectedDelivery || '—'}</td>
+                      <td className="py-2 px-3 text-[#9A9A9A]">{dealerMap[p.dealerId] || '—'}</td>
+                      <td className="py-2 px-3 text-center">
                         <span className="text-xs font-semibold bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full">
                           {(p.items ?? []).length}
                         </span>
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3">
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${statusColor}`}>{p.status}</span>
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 text-center">
                         {outstanding > 0
                           ? <span className="text-xs font-semibold text-[#E6A817]">{outstanding} item{outstanding !== 1 ? 's' : ''}</span>
                           : <span className="text-xs text-[#4CAF7D]">—</span>}
                       </td>
-                      <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">
+                      <td className="py-2 px-3 text-[#9A9A9A] whitespace-nowrap">
                         {p.freightCost != null ? formatCurrency(p.freightCost) : '—'}
                       </td>
-                      <td className="py-3 px-4 text-[#9A9A9A]">{p.createdBy || '—'}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-2 px-3 text-[#9A9A9A]">{p.createdBy || '—'}</td>
+                      <td className="py-2 px-3">
                         <div className="flex items-center gap-3 whitespace-nowrap">
                           {canReceive && (
                             <button onClick={() => setReceivePO(p)} className="text-xs font-semibold text-[#4CAF7D] hover:underline">Receive</button>
@@ -1521,11 +1521,11 @@ export default function InventoryMaster() {
               </p>
             </div>
             <div className="hidden md:block bg-white border border-gray-100 rounded-xl shadow-sm overflow-x-auto">
-              <table className="text-sm" style={{ minWidth: 900 }}>
+              <table className="w-full text-sm" style={{ minWidth: 900 }}>
                 <thead>
                   <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                     {['Date', 'Type', 'Model', 'Brand / SKU', 'Qty', 'From', 'To', 'Source', 'By', 'Notes', ''].map((h) => (
-                      <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -1543,30 +1543,30 @@ export default function InventoryMaster() {
                     const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
                     return (
                       <tr key={tx.id} className="hover:bg-[#FAFAFA] transition-colors">
-                        <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap text-xs">{dateStr}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3 text-[#9A9A9A] whitespace-nowrap text-xs">{dateStr}</td>
+                        <td className="py-2 px-3">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${c.bg} ${c.text}`}>{c.label}</span>
                         </td>
-                        <td className="py-3 px-4 font-medium text-[#1A1A1A]">{tx.modelName || '—'}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A]">
+                        <td className="py-2 px-3 font-medium text-[#1A1A1A]">{tx.modelName || '—'}</td>
+                        <td className="py-2 px-3 text-[#9A9A9A]">
                           <p>{tx.brand || '—'}</p>
                           {tx.sku && <p className="text-xs">{tx.sku}</p>}
                         </td>
-                        <td className={`py-3 px-4 font-bold tabular-nums ${isNeg ? 'text-[#D95F5F]' : 'text-[#4CAF7D]'}`}>
+                        <td className={`py-2 px-3 font-bold tabular-nums ${isNeg ? 'text-[#D95F5F]' : 'text-[#4CAF7D]'}`}>
                           {(tx.qty ?? 0) > 0 ? `+${tx.qty}` : tx.qty}
                         </td>
-                        <td className="py-3 px-4 text-[#9A9A9A] text-xs whitespace-nowrap">{tx.fromLocation || dealerMap[tx.dealerId] || '—'}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A] text-xs whitespace-nowrap">{tx.toLocation || '—'}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A] whitespace-nowrap">
+                        <td className="py-2 px-3 text-[#9A9A9A] text-xs whitespace-nowrap">{tx.fromLocation || dealerMap[tx.dealerId] || '—'}</td>
+                        <td className="py-2 px-3 text-[#9A9A9A] text-xs whitespace-nowrap">{tx.toLocation || '—'}</td>
+                        <td className="py-2 px-3 text-[#9A9A9A] whitespace-nowrap">
                           {tx.sourceNumber ? (
                             <span className="text-xs">{tx.sourceNumber}</span>
                           ) : tx.sourceType ? (
                             <span className="text-xs capitalize">{tx.sourceType.replace(/_/g, ' ')}</span>
                           ) : '—'}
                         </td>
-                        <td className="py-3 px-4 text-[#9A9A9A]">{tx.createdBy || '—'}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A] text-xs max-w-[160px] truncate">{tx.notes || '—'}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3 text-[#9A9A9A]">{tx.createdBy || '—'}</td>
+                        <td className="py-2 px-3 text-[#9A9A9A] text-xs max-w-[160px] truncate">{tx.notes || '—'}</td>
+                        <td className="py-2 px-3">
                           <button onClick={() => setDeletingTx(tx)}
                             className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
                         </td>

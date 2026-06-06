@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+﻿import { useState, useEffect, useMemo } from 'react'
 import { onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
 import { taxRatesCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
@@ -75,11 +75,11 @@ function RateRow({ state, existingRate, onSaved }) {
   if (editing) {
     return (
       <tr className="bg-[#FFFDF5] border-b border-gray-100">
-        <td className="py-2 px-4">
+        <td className="py-2 px-3">
           <span className="font-mono text-xs font-bold text-[#8B6914]">{state.abbr}</span>
           <span className="text-sm text-[#1A1A1A] ml-2">{state.name}</span>
         </td>
-        <td className="py-2 px-4">
+        <td className="py-2 px-3">
           <div className="relative w-28">
             <input
               type="number" min="0" max="20" step="0.001"
@@ -90,12 +90,12 @@ function RateRow({ state, existingRate, onSaved }) {
             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#9A9A9A]">%</span>
           </div>
         </td>
-        <td className="py-2 px-4">
+        <td className="py-2 px-3">
           <input value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder="Optional notes…"
             className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#8B6914]" />
         </td>
-        <td className="py-2 px-4">
+        <td className="py-2 px-3">
           <div className="flex gap-2">
             <button onClick={save} disabled={saving}
               className="text-xs bg-[#8B6914] text-white px-3 py-1.5 rounded-lg font-medium hover:bg-[#7a5c12] disabled:opacity-50 transition-colors">
@@ -255,7 +255,7 @@ export default function TaxRates() {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['State', 'Tax Rate', 'Notes', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -264,7 +264,7 @@ export default function TaxRates() {
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="animate-pulse border-b border-gray-50">
                   {Array.from({ length: 4 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))

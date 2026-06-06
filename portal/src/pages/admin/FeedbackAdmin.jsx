@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { updateDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { useAllFeedback, useTicketComments } from '../../hooks/useFeedback'
 import { db } from '../../firebase/config'
@@ -280,7 +280,7 @@ export default function FeedbackAdmin() {
   const newCount = feedback.filter((f) => f.status === 'New').length
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1A1A1A]">Feedback & Bug Reports</h1>
         <p className="text-sm text-[#9A9A9A] mt-0.5">{feedback.length} total submission{feedback.length !== 1 ? 's' : ''}</p>

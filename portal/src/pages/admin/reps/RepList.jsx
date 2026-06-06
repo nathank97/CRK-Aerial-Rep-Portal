@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useReps } from '../../../hooks/useReps'
 import { formatDate } from '../../../utils/formatters'
@@ -32,7 +32,7 @@ export default function RepList() {
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A1A]">Rep Manager</h1>
@@ -88,7 +88,7 @@ export default function RepList() {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['Rep', 'Status', 'Territory', 'Commission', 'Start Date', 'Linked Dealer', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -97,7 +97,7 @@ export default function RepList() {
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 7 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
@@ -108,7 +108,7 @@ export default function RepList() {
             ) : filtered.map((rep) => (
               <tr key={rep.id} onClick={() => navigate(`/admin/reps/${rep.id}`)}
                 className="hover:bg-[#FAFAFA] cursor-pointer transition-colors">
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#8B6914]/15 flex items-center justify-center text-xs font-bold text-[#8B6914]">
                       {(rep.firstName ?? '?')[0].toUpperCase()}
@@ -119,22 +119,22 @@ export default function RepList() {
                     </div>
                   </div>
                 </td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[rep.status] ?? 'bg-gray-100 text-gray-500'}`}>
                     {rep.status}
                   </span>
                 </td>
-                <td className="py-3 px-4 text-[#9A9A9A] text-xs">{rep.territoryName || '—'}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3 text-[#9A9A9A] text-xs">{rep.territoryName || '—'}</td>
+                <td className="py-2 px-3">
                   {rep.commissionPercent != null ? (
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#8B6914]/10 text-[#8B6914]">
                       {rep.commissionPercent}%
                     </span>
                   ) : <span className="text-[#9A9A9A]">—</span>}
                 </td>
-                <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(rep.startDate) || '—'}</td>
-                <td className="py-3 px-4 text-xs text-[#9A9A9A]">{rep.linkedDealerName || '—'}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(rep.startDate) || '—'}</td>
+                <td className="py-2 px-3 text-xs text-[#9A9A9A]">{rep.linkedDealerName || '—'}</td>
+                <td className="py-2 px-3">
                   <button onClick={(e) => { e.stopPropagation(); navigate(`/admin/reps/${rep.id}`) }}
                     className="text-xs text-[#8B6914] hover:underline font-medium">View</button>
                 </td>

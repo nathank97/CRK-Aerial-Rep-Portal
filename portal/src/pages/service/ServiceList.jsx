@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useServiceTickets } from '../../hooks/useServiceTickets'
 import { formatDate } from '../../utils/formatters'
@@ -35,7 +35,7 @@ export default function ServiceList() {
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A1A]">Service Tickets</h1>
@@ -67,7 +67,7 @@ export default function ServiceList() {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['Ticket #', 'Subject', 'Customer', 'Drone Model', 'Priority', 'Status', 'Opened', 'Assigned To'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -79,18 +79,18 @@ export default function ServiceList() {
             ) : filtered.map((t) => (
               <tr key={t.id} onClick={() => navigate(`/service/${t.id}`)}
                 className="hover:bg-[#FAFAFA] cursor-pointer transition-colors">
-                <td className="py-3 px-4 font-mono text-xs font-semibold text-[#8B6914]">{t.ticketNumber}</td>
-                <td className="py-3 px-4 font-medium text-[#1A1A1A] max-w-xs truncate">{t.subject}</td>
-                <td className="py-3 px-4 text-[#9A9A9A]">{t.customerName || '—'}</td>
-                <td className="py-3 px-4 text-[#9A9A9A]">{t.droneModel || '—'}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3 font-mono text-xs font-semibold text-[#8B6914]">{t.ticketNumber}</td>
+                <td className="py-2 px-3 font-medium text-[#1A1A1A] max-w-xs truncate">{t.subject}</td>
+                <td className="py-2 px-3 text-[#9A9A9A]">{t.customerName || '—'}</td>
+                <td className="py-2 px-3 text-[#9A9A9A]">{t.droneModel || '—'}</td>
+                <td className="py-2 px-3">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${priorityColor[t.priority] ?? 'bg-gray-100 text-gray-500'}`}>
                     {t.priority ?? 'Normal'}
                   </span>
                 </td>
-                <td className="py-3 px-4"><StatusBadge status={t.status} /></td>
-                <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(t.createdAt)}</td>
-                <td className="py-3 px-4 text-[#9A9A9A] text-xs">{t.assignedToName || '—'}</td>
+                <td className="py-2 px-3"><StatusBadge status={t.status} /></td>
+                <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(t.createdAt)}</td>
+                <td className="py-2 px-3 text-[#9A9A9A] text-xs">{t.assignedToName || '—'}</td>
               </tr>
             ))}
           </tbody>

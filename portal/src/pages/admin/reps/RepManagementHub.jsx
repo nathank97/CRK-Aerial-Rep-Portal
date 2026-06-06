@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useReps } from '../../../hooks/useReps'
 import { formatDate } from '../../../utils/formatters'
@@ -65,7 +65,7 @@ export default function RepManagementHub() {
   }, [prospectReps])
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
@@ -153,7 +153,7 @@ export default function RepManagementHub() {
                       {['Rep', 'Status', 'Territory', 'Commission', 'Rating', 'Last Review', 'Review Notes', ''].map((h) => (
                         <th
                           key={h}
-                          className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider"
+                          className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider"
                         >
                           {h}
                         </th>
@@ -167,7 +167,7 @@ export default function RepManagementHub() {
                         onClick={() => navigate(`/admin/reps/${rep.id}`)}
                         className="hover:bg-[#FAFAFA] cursor-pointer transition-colors"
                       >
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-[#8B6914]/15 flex items-center justify-center text-xs font-bold text-[#8B6914] shrink-0">
                               {(rep.firstName ?? '?')[0].toUpperCase()}
@@ -180,15 +180,15 @@ export default function RepManagementHub() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           <span
                             className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[rep.status] ?? 'bg-gray-100 text-gray-500'}`}
                           >
                             {rep.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-[#9A9A9A]">{rep.territoryName || '—'}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3 text-xs text-[#9A9A9A]">{rep.territoryName || '—'}</td>
+                        <td className="py-2 px-3">
                           {rep.commissionPercent != null ? (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#8B6914]/10 text-[#8B6914]">
                               {rep.commissionPercent}%
@@ -197,24 +197,24 @@ export default function RepManagementHub() {
                             <span className="text-[#9A9A9A] text-xs">—</span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           {rep.performanceRating ? (
                             <StarRating rating={rep.performanceRating} />
                           ) : (
                             <span className="text-xs text-[#9A9A9A]">Not rated</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-xs text-[#9A9A9A] whitespace-nowrap">
+                        <td className="py-2 px-3 text-xs text-[#9A9A9A] whitespace-nowrap">
                           {formatDate(rep.lastReviewDate) || '—'}
                         </td>
-                        <td className="py-3 px-4 text-xs text-[#9A9A9A] max-w-[180px]">
+                        <td className="py-2 px-3 text-xs text-[#9A9A9A] max-w-[180px]">
                           {rep.reviewNotes ? (
                             <p className="truncate">{rep.reviewNotes}</p>
                           ) : (
                             <span>—</span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/admin/reps/${rep.id}`) }}
                             className="text-xs text-[#8B6914] hover:underline font-medium whitespace-nowrap"
@@ -246,7 +246,7 @@ export default function RepManagementHub() {
                         onClick={() => navigate(`/admin/reps/${rep.id}`)}
                         className="hover:bg-[#FAFAFA] cursor-pointer transition-colors"
                       >
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0">
                               {(rep.firstName ?? '?')[0].toUpperCase()}
@@ -259,18 +259,18 @@ export default function RepManagementHub() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           <span
                             className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor[rep.status] ?? 'bg-gray-100 text-gray-500'}`}
                           >
                             {rep.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-[#9A9A9A]">{rep.territoryName || '—'}</td>
-                        <td className="py-3 px-4 text-xs text-[#9A9A9A] whitespace-nowrap">
+                        <td className="py-2 px-3 text-xs text-[#9A9A9A]">{rep.territoryName || '—'}</td>
+                        <td className="py-2 px-3 text-xs text-[#9A9A9A] whitespace-nowrap">
                           {formatDate(rep.lastReviewDate) || '—'}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3">
                           <button
                             onClick={(e) => { e.stopPropagation(); navigate(`/admin/reps/${rep.id}`) }}
                             className="text-xs text-[#9A9A9A] hover:underline font-medium"

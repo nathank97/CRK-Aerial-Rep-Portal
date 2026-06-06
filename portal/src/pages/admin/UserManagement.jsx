@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useAllUsers } from '../../hooks/useUsers'
 import { createDealerAccount, createUserAccount, resetPassword } from '../../firebase/auth'
@@ -447,7 +447,7 @@ function RepsTab({ users, loading }) {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['Territory Rep', 'Location', 'Email', 'Pricing', 'Modules', 'Joined', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -456,7 +456,7 @@ function RepsTab({ users, loading }) {
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 7 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
@@ -467,7 +467,7 @@ function RepsTab({ users, loading }) {
               const enabledCount = MODULE_ACCESS.filter((m) => mods[m.key] !== false).length
               return (
                 <tr key={dealer.id} className="hover:bg-[#FAFAFA] transition-colors">
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-[#8B6914]/15 flex items-center justify-center text-xs font-bold text-[#8B6914]">
                         {(dealer.displayName ?? '?')[0].toUpperCase()}
@@ -475,13 +475,13 @@ function RepsTab({ users, loading }) {
                       <span className="font-medium text-[#1A1A1A]">{dealer.displayName ?? '—'}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-xs text-[#9A9A9A]">
+                  <td className="py-2 px-3 text-xs text-[#9A9A9A]">
                     {dealer.location ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#4A90B8]/10 text-[#4A90B8]">{dealer.location}</span>
                     ) : '—'}
                   </td>
-                  <td className="py-3 px-4 text-[#9A9A9A]">{dealer.email}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3 text-[#9A9A9A]">{dealer.email}</td>
+                  <td className="py-2 px-3">
                     {(!dealer.pricingTier || dealer.pricingTier === 'margin') ? (
                       <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full bg-[#8B6914]/10 text-[#8B6914]">
                         {dealer.marginPercent ?? 0}% margin
@@ -492,9 +492,9 @@ function RepsTab({ users, loading }) {
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-xs text-[#9A9A9A]">{enabledCount}/{MODULE_ACCESS.length} enabled</td>
-                  <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(dealer.createdAt)}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3 text-xs text-[#9A9A9A]">{enabledCount}/{MODULE_ACCESS.length} enabled</td>
+                  <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(dealer.createdAt)}</td>
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-3">
                       <button onClick={() => setSelectedDealer(dealer)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
                       <button onClick={() => handleResendInvite(dealer)} disabled={resendingId === dealer.id}
@@ -577,7 +577,7 @@ function AdminsTab({ users, loading }) {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['Name', 'Email', 'Joined', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -586,7 +586,7 @@ function AdminsTab({ users, loading }) {
               Array.from({ length: 2 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 4 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
@@ -594,7 +594,7 @@ function AdminsTab({ users, loading }) {
               <tr><td colSpan={4} className="py-12 text-center text-[#9A9A9A] text-sm">No admin users found.</td></tr>
             ) : admins.map((u) => (
               <tr key={u.id} className="hover:bg-[#FAFAFA] transition-colors">
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#4A90B8]/15 flex items-center justify-center text-xs font-bold text-[#4A90B8]">
                       {(u.displayName ?? '?')[0].toUpperCase()}
@@ -605,9 +605,9 @@ function AdminsTab({ users, loading }) {
                     </div>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-[#9A9A9A]">{u.email}</td>
-                <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(u.createdAt)}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3 text-[#9A9A9A]">{u.email}</td>
+                <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(u.createdAt)}</td>
+                <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     <button onClick={() => handleResend(u)} disabled={resendingId === u.id}
                       className="text-xs text-[#4A90B8] hover:underline font-medium disabled:opacity-50">
@@ -689,7 +689,7 @@ function WarehouseTab({ users, loading }) {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['Name', 'Email', 'Joined', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -698,7 +698,7 @@ function WarehouseTab({ users, loading }) {
               Array.from({ length: 2 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 4 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
@@ -706,7 +706,7 @@ function WarehouseTab({ users, loading }) {
               <tr><td colSpan={4} className="py-12 text-center text-[#9A9A9A] text-sm">No warehouse users found.</td></tr>
             ) : warehouseUsers.map((u) => (
               <tr key={u.id} className="hover:bg-[#FAFAFA] transition-colors">
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-[#2E2E2E]/15 flex items-center justify-center text-xs font-bold text-[#2E2E2E]">
                       {(u.displayName ?? '?')[0].toUpperCase()}
@@ -717,9 +717,9 @@ function WarehouseTab({ users, loading }) {
                     </div>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-[#9A9A9A]">{u.email}</td>
-                <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(u.createdAt)}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3 text-[#9A9A9A]">{u.email}</td>
+                <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(u.createdAt)}</td>
+                <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     <button onClick={() => handleResend(u)} disabled={resendingId === u.id}
                       className="text-xs text-[#4A90B8] hover:underline font-medium disabled:opacity-50">
@@ -763,7 +763,7 @@ export default function UserManagement() {
   }), [users])
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#1A1A1A]">User Management</h1>

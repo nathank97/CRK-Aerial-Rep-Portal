@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { deleteDoc, doc } from 'firebase/firestore'
 import { useOrders } from '../../hooks/useOrders'
@@ -43,7 +43,7 @@ export default function OrderList() {
   const colSpan = isAdmin ? 6 : 5
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-5">
       {deleteItem && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -101,12 +101,12 @@ export default function OrderList() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Order #</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Date</th>
-              {isAdmin && <th className="py-3 px-4" />}
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Order #</th>
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
+              <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Date</th>
+              {isAdmin && <th className="py-2 px-3" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -131,11 +131,11 @@ export default function OrderList() {
                   onClick={() => navigate(`/orders/${o.id}`)}
                   className="hover:bg-[#F4F4F5] cursor-pointer transition-colors"
                 >
-                  <td className="py-3 px-4 font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</td>
-                  <td className="py-3 px-4 font-medium text-[#111111]">
+                  <td className="py-2 px-3 font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</td>
+                  <td className="py-2 px-3 font-medium text-[#111111]">
                     {o.customerName || <span className="text-[#9A9A9A]">—</span>}
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <StatusBadge status={o.status ?? 'Processing'} />
                       {o.sentToWarehouse && (
@@ -143,10 +143,10 @@ export default function OrderList() {
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-right font-semibold text-[#111111]">{formatCurrency(o.total)}</td>
-                  <td className="py-3 px-4 text-[#9A9A9A]">{formatDate(o.createdAt)}</td>
+                  <td className="py-2 px-3 text-right font-semibold text-[#111111]">{formatCurrency(o.total)}</td>
+                  <td className="py-2 px-3 text-[#9A9A9A]">{formatDate(o.createdAt)}</td>
                   {isAdmin && (
-                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-2 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => setDeleteItem(o)}
                         className="text-xs text-[#D95F5F] hover:underline font-medium">
                         Delete

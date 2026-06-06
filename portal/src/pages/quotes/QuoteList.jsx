@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { deleteDoc, doc } from 'firebase/firestore'
 import { useQuotes } from '../../hooks/useQuotes'
@@ -44,7 +44,7 @@ export default function QuoteList() {
   const colSpan = isAdmin ? 6 : 5
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-5">
       {deleteItem && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -108,12 +108,12 @@ export default function QuoteList() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Quote #</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer / Lead</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Created</th>
-              {isAdmin && <th className="py-3 px-4" />}
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Quote #</th>
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer / Lead</th>
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
+              <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
+              <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Created</th>
+              {isAdmin && <th className="py-2 px-3" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -138,17 +138,17 @@ export default function QuoteList() {
                   onClick={() => navigate(`/quotes/${q.id}`)}
                   className="hover:bg-[#F4F4F5] cursor-pointer transition-colors"
                 >
-                  <td className="py-3 px-4 font-mono text-xs font-semibold text-[#8B6914]">{q.quoteNumber}</td>
-                  <td className="py-3 px-4 font-medium text-[#111111]">
+                  <td className="py-2 px-3 font-mono text-xs font-semibold text-[#8B6914]">{q.quoteNumber}</td>
+                  <td className="py-2 px-3 font-medium text-[#111111]">
                     {q.linkedCustomerName || q.linkedLeadName || <span className="text-[#9A9A9A]">—</span>}
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3">
                     <StatusBadge status={q.status ?? 'Draft'} />
                   </td>
-                  <td className="py-3 px-4 text-right font-semibold text-[#111111]">{formatCurrency(q.total)}</td>
-                  <td className="py-3 px-4 text-[#9A9A9A]">{formatDate(q.createdAt)}</td>
+                  <td className="py-2 px-3 text-right font-semibold text-[#111111]">{formatCurrency(q.total)}</td>
+                  <td className="py-2 px-3 text-[#9A9A9A]">{formatDate(q.createdAt)}</td>
                   {isAdmin && (
-                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-2 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => setDeleteItem(q)}
                         className="text-xs text-[#D95F5F] hover:underline font-medium">
                         Delete

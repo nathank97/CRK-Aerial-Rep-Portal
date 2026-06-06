@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { onSnapshot, updateDoc, query, where, serverTimestamp } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
 import { inventoryCol, ordersCol, orderDoc } from '../../firebase/firestore'
@@ -44,7 +44,7 @@ export default function WarehouseDashboard() {
   ]
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-3 sm:p-5 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[#111111]">Warehouse Dashboard</h1>
@@ -83,12 +83,12 @@ export default function WarehouseDashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Order #</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Reserved</th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Queued</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Order #</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Reserved</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Queued</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -101,16 +101,16 @@ export default function WarehouseDashboard() {
                     .map((o) => (
                       <tr key={o.id} onClick={() => navigate(`/orders/${o.id}`)}
                         className="hover:bg-[#F4F4F5] cursor-pointer transition-colors">
-                        <td className="py-3 px-4 font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</td>
-                        <td className="py-3 px-4 font-medium text-[#111111]">{o.customerName || '—'}</td>
-                        <td className="py-3 px-4"><StatusBadge status={o.status ?? 'Processing'} /></td>
-                        <td className="py-3 px-4">
+                        <td className="py-2 px-3 font-mono text-xs font-semibold text-[#8B6914]">{o.orderNumber}</td>
+                        <td className="py-2 px-3 font-medium text-[#111111]">{o.customerName || '—'}</td>
+                        <td className="py-2 px-3"><StatusBadge status={o.status ?? 'Processing'} /></td>
+                        <td className="py-2 px-3">
                           {o.inventoryReserved
                             ? <span className="text-xs font-semibold text-[#4CAF7D]">✓ Reserved</span>
                             : <span className="text-xs text-[#9A9A9A]">Not reserved</span>}
                         </td>
-                        <td className="py-3 px-4 text-right font-semibold text-[#111111]">{formatCurrency(o.total)}</td>
-                        <td className="py-3 px-4 text-[#9A9A9A] text-xs">{formatDate(o.sentToWarehouseAt ?? o.createdAt)}</td>
+                        <td className="py-2 px-3 text-right font-semibold text-[#111111]">{formatCurrency(o.total)}</td>
+                        <td className="py-2 px-3 text-[#9A9A9A] text-xs">{formatDate(o.sentToWarehouseAt ?? o.createdAt)}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -162,18 +162,18 @@ export default function WarehouseDashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#D95F5F]/5">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">On Hand</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">On Hand</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {negativeStock.map((item) => (
                   <tr key={item.id} onClick={() => navigate('/inventory')}
                     className="hover:bg-[#F4F4F5] cursor-pointer transition-colors">
-                    <td className="py-3 px-4 font-medium text-[#111111]">{item.modelName || '—'}</td>
-                    <td className="py-3 px-4 font-mono text-xs text-[#9A9A9A]">{item.sku || item.serialNumber || '—'}</td>
-                    <td className="py-3 px-4 text-right font-bold text-[#D95F5F]">{item.quantityOnHand}</td>
+                    <td className="py-2 px-3 font-medium text-[#111111]">{item.modelName || '—'}</td>
+                    <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.sku || item.serialNumber || '—'}</td>
+                    <td className="py-2 px-3 text-right font-bold text-[#D95F5F]">{item.quantityOnHand}</td>
                   </tr>
                 ))}
               </tbody>
@@ -195,18 +195,18 @@ export default function WarehouseDashboard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-[#F0A500]/5">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">On Hand</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">SKU</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">On Hand</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {lowStock.map((item) => (
                   <tr key={item.id} onClick={() => navigate('/inventory')}
                     className="hover:bg-[#F4F4F5] cursor-pointer transition-colors">
-                    <td className="py-3 px-4 font-medium text-[#111111]">{item.modelName || '—'}</td>
-                    <td className="py-3 px-4 font-mono text-xs text-[#9A9A9A]">{item.sku || item.serialNumber || '—'}</td>
-                    <td className="py-3 px-4 text-right font-bold text-[#F0A500]">{item.quantityOnHand}</td>
+                    <td className="py-2 px-3 font-medium text-[#111111]">{item.modelName || '—'}</td>
+                    <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.sku || item.serialNumber || '—'}</td>
+                    <td className="py-2 px-3 text-right font-bold text-[#F0A500]">{item.quantityOnHand}</td>
                   </tr>
                 ))}
               </tbody>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCustomers } from '../../hooks/useCustomers'
 import { useDealers } from '../../hooks/useUsers'
@@ -60,7 +60,7 @@ export default function CustomerList() {
   const hasFilters = search || filterDealer || filterTaxExempt
 
   return (
-    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 sm:p-5">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A1A]">Customers</h1>

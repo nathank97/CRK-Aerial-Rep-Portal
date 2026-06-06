@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+﻿import { useState, useMemo, useRef } from 'react'
 import { addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { useCatalog } from '../../hooks/useCatalog'
 import { catalogCol } from '../../firebase/firestore'
@@ -790,7 +790,7 @@ export default function Catalog() {
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
@@ -842,7 +842,7 @@ export default function Catalog() {
                 { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
                 { key: 'actions', label: 'Actions', sortable: false },
               ].map((col) => (
-                <th key={col.key} className="text-left py-2 px-4 align-top">
+                <th key={col.key} className="text-left py-2 px-3 align-top">
                   {col.sortable ? (
                     <button
                       onClick={() => toggleSort(col.key)}
@@ -877,7 +877,7 @@ export default function Catalog() {
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 7 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
@@ -887,7 +887,7 @@ export default function Catalog() {
               </td></tr>
             ) : filtered.map((item) => (
               <tr key={item.id} className="hover:bg-[#FAFAFA] transition-colors">
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt="" onError={(e) => e.target.style.display = 'none'}
@@ -903,22 +903,22 @@ export default function Catalog() {
                     </div>
                   </div>
                 </td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${typeColor[item.type] ?? 'bg-gray-100 text-gray-500'}`}>
                     {item.type}
                   </span>
                 </td>
-                <td className="py-3 px-4 font-mono text-xs text-[#9A9A9A]">{item.sku || '—'}</td>
-                <td className="py-3 px-4 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
-                <td className="py-3 px-4 text-[#9A9A9A]">{item.cost != null ? formatCurrency(item.cost) : '—'}</td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.sku || '—'}</td>
+                <td className="py-2 px-3 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
+                <td className="py-2 px-3 text-[#9A9A9A]">{item.cost != null ? formatCurrency(item.cost) : '—'}</td>
+                <td className="py-2 px-3">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                     item.active !== false ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]' : 'bg-gray-100 text-gray-400'
                   }`}>
                     {item.active !== false ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="py-3 px-4">
+                <td className="py-2 px-3">
                   <div className="flex gap-3">
                     <button onClick={() => setEditItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
                     <button onClick={() => setDeleteItem(item)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>

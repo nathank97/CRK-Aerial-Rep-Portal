@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useAllUsers } from '../../hooks/useUsers'
 import { createDealerAccount, resetPassword } from '../../firebase/auth'
@@ -367,7 +367,7 @@ export default function DealerManagement() {
   const admins = useMemo(() => users.filter((u) => u.role === 'admin'), [users])
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
@@ -402,7 +402,7 @@ export default function DealerManagement() {
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
               {['Territory Rep', 'Location', 'Email', 'Pricing', 'Modules', 'Joined', 'Actions'].map((h) => (
-                <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
@@ -411,7 +411,7 @@ export default function DealerManagement() {
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
                   {Array.from({ length: 7 }).map((__, j) => (
-                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
+                    <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
@@ -422,7 +422,7 @@ export default function DealerManagement() {
               const enabledCount = MODULE_ACCESS.filter((m) => mods[m.key] !== false).length
               return (
                 <tr key={dealer.id} className="hover:bg-[#FAFAFA] transition-colors">
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-[#8B6914]/15 flex items-center justify-center text-xs font-bold text-[#8B6914]">
                         {(dealer.displayName ?? '?')[0].toUpperCase()}
@@ -430,15 +430,15 @@ export default function DealerManagement() {
                       <span className="font-medium text-[#1A1A1A]">{dealer.displayName ?? '—'}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-[#9A9A9A] text-xs">
+                  <td className="py-2 px-3 text-[#9A9A9A] text-xs">
                     {dealer.location ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#4A90B8]/10 text-[#4A90B8]">
                         {dealer.location}
                       </span>
                     ) : '—'}
                   </td>
-                  <td className="py-3 px-4 text-[#9A9A9A]">{dealer.email}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3 text-[#9A9A9A]">{dealer.email}</td>
+                  <td className="py-2 px-3">
                     {(!dealer.pricingTier || dealer.pricingTier === 'margin') ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#8B6914]/10 text-[#8B6914]">
                         {dealer.marginPercent ?? 0}% margin
@@ -449,9 +449,9 @@ export default function DealerManagement() {
                       </span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-[#9A9A9A] text-xs">{enabledCount}/{MODULE_ACCESS.length} enabled</td>
-                  <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(dealer.createdAt)}</td>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3 text-[#9A9A9A] text-xs">{enabledCount}/{MODULE_ACCESS.length} enabled</td>
+                  <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(dealer.createdAt)}</td>
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-3">
                       <button onClick={() => setSelectedDealer(dealer)}
                         className="text-xs text-[#8B6914] hover:underline font-medium">
@@ -484,14 +484,14 @@ export default function DealerManagement() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {['Name', 'Email', 'Joined'].map((h) => (
-                  <th key={h} className="text-left py-3 px-4 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
+                  <th key={h} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {admins.map((a) => (
                 <tr key={a.id}>
-                  <td className="py-3 px-4">
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-[#4A90B8]/15 flex items-center justify-center text-xs font-bold text-[#4A90B8]">
                         {(a.displayName ?? '?')[0].toUpperCase()}
@@ -499,8 +499,8 @@ export default function DealerManagement() {
                       <span className="font-medium text-[#1A1A1A]">{a.displayName ?? '—'}</span>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-[#9A9A9A]">{a.email}</td>
-                  <td className="py-3 px-4 text-xs text-[#9A9A9A]">{formatDate(a.createdAt)}</td>
+                  <td className="py-2 px-3 text-[#9A9A9A]">{a.email}</td>
+                  <td className="py-2 px-3 text-xs text-[#9A9A9A]">{formatDate(a.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

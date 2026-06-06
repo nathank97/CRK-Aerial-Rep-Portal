@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useInvoices } from '../../hooks/useInvoices'
@@ -342,7 +342,7 @@ export default function CalendarPage() {
   // ─── render ─────────────────────────────────────────────
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       {/* Page header */}
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { useTerritories } from '../../../hooks/useTerritories'
@@ -186,7 +186,7 @@ export default function TerritoryList() {
   const inputCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
 
   return (
-    <div className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div className="p-3 md:p-5">
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#1A1A1A]">Territories</h1>

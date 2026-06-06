@@ -1,7 +1,8 @@
-﻿import { useState, useMemo, useRef } from 'react'
+﻿import { useState, useMemo, useRef, useEffect } from 'react'
 import { addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { useCatalog } from '../../hooks/useCatalog'
-import { catalogCol } from '../../firebase/firestore'
+import { useModels } from '../../hooks/useModels'
+import { catalogCol, modelsCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency } from '../../utils/formatters'
 
@@ -468,9 +469,133 @@ function ImportModal({ onClose, existingSkus }) {
   )
 }
 
+// ─── Model Modal (add / edit a managed model) ────────────────────────────────
+
+function ModelModal({ model, onClose }) {
+  const isEdit = !!model?.id
+  const [name, setName] = useState(model?.name ?? '')
+  const [manufacturer, setManufacturer] = useState(model?.manufacturer ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]'
+  const labelCls = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
+
+  async function handleSave() {
+    if (!name.trim()) { setError('Model name is required.'); return }
+    setSaving(true)
+    try {
+      const data = { name: name.trim(), manufacturer: manufacturer.trim() || null, updatedAt: serverTimestamp() }
+      if (isEdit) {
+        await updateDoc(doc(db, 'models', model.id), data)
+      } else {
+        await addDoc(modelsCol, { ...data, createdAt: serverTimestamp() })
+      }
+      onClose()
+    } catch (e) {
+      console.error(e)
+      setError('Save failed. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-base font-bold text-[#1A1A1A]">{isEdit ? 'Edit Model' : 'New Model'}</h2>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <label className={labelCls}>Model Name *</label>
+            <input value={name} onChange={(e) => { setName(e.target.value); setError('') }}
+              className={inputCls} placeholder="e.g. DJI Agras T50" autoFocus />
+          </div>
+          <div>
+            <label className={labelCls}>Manufacturer</label>
+            <input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)}
+              className={inputCls} placeholder="e.g. DJI, XAG, Hylio" />
+          </div>
+          {error && <p className="text-xs text-[#D95F5F]">{error}</p>}
+        </div>
+        <div className="p-5 border-t border-gray-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5]">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#7a5c12] disabled:opacity-50">
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Model'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Compatible Models Combobox ───────────────────────────────────────────────
+
+function ModelCombobox({ value, onChange, models }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = models.filter(
+    (m) => !value.includes(m.name) && m.name.toLowerCase().includes(query.toLowerCase())
+  )
+
+  function add(name) { if (!value.includes(name)) onChange([...value, name]); setQuery(''); setOpen(false) }
+  function remove(name) { onChange(value.filter((v) => v !== name)) }
+
+  return (
+    <div className="relative" ref={ref}>
+      <div
+        className="border border-gray-200 rounded-lg px-3 py-2 focus-within:border-[#8B6914] min-h-[42px] flex flex-wrap gap-1.5 items-center cursor-text"
+        onClick={() => setOpen(true)}
+      >
+        {value.map((m) => (
+          <span key={m} className="inline-flex items-center gap-1 text-xs bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full font-medium">
+            {m}
+            <button type="button" onClick={(e) => { e.stopPropagation(); remove(m) }} className="hover:text-[#D95F5F] leading-none ml-0.5">×</button>
+          </span>
+        ))}
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder={value.length === 0 ? 'Search models…' : 'Add another…'}
+          className="flex-1 min-w-[140px] text-sm outline-none bg-transparent"
+        />
+      </div>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[#9A9A9A]">
+              {models.length === 0 ? 'No models yet — add them in the Models tab.' : query ? 'No matching models.' : 'All models already selected.'}
+            </div>
+          ) : (
+            filtered.map((m) => (
+              <button key={m.id} type="button" onClick={() => add(m.name)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-[#F4F4F5] transition-colors">
+                <span className="font-medium text-[#1A1A1A]">{m.name}</span>
+                {m.manufacturer && <span className="ml-2 text-xs text-[#9A9A9A]">{m.manufacturer}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Item Form Modal ─────────────────────────────────────────────────────────
 
-function ItemModal({ item, onClose }) {
+function ItemModal({ item, models, onClose }) {
   const isEdit = !!item?.id
   const [form, setForm] = useState(isEdit ? {
     name: item.name ?? '',
@@ -580,32 +705,11 @@ function ItemModal({ item, onClose }) {
           {/* Compatible Models */}
           <div>
             <label className={labelCls}>Compatible Models</label>
-            <div className="border border-gray-200 rounded-lg px-3 py-2 focus-within:border-[#8B6914] min-h-[42px] flex flex-wrap gap-1.5 items-center cursor-text">
-              {form.compatibleModels.map((m, i) => (
-                <span key={i} className="inline-flex items-center gap-1 text-xs bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full font-medium">
-                  {m}
-                  <button type="button"
-                    onClick={() => set('compatibleModels', form.compatibleModels.filter((_, j) => j !== i))}
-                    className="hover:text-[#D95F5F] leading-none ml-0.5">×</button>
-                </span>
-              ))}
-              <input
-                type="text"
-                placeholder={form.compatibleModels.length === 0 ? 'Type model name, press Enter to add…' : 'Add another…'}
-                className="flex-1 min-w-[160px] text-sm outline-none bg-transparent"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault()
-                    const val = e.target.value.trim().replace(/,+$/, '')
-                    if (val && !form.compatibleModels.includes(val)) {
-                      set('compatibleModels', [...form.compatibleModels, val])
-                    }
-                    e.target.value = ''
-                  }
-                }}
-              />
-            </div>
-            <p className="text-xs text-[#9A9A9A] mt-1">Press Enter or comma after each model name.</p>
+            <ModelCombobox
+              value={form.compatibleModels}
+              onChange={(v) => set('compatibleModels', v)}
+              models={models}
+            />
           </div>
 
           {/* Sales Price (MSRP) + Cost */}
@@ -704,6 +808,8 @@ function DeleteConfirm({ item, onClose, onConfirm }) {
 
 export default function Catalog() {
   const { catalog, loading } = useCatalog()
+  const { models, loading: modelsLoading } = useModels()
+  const [activeTab, setActiveTab] = useState('catalog')
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [showInactive, setShowInactive] = useState(false)
@@ -713,6 +819,8 @@ export default function Catalog() {
   const [sortCol, setSortCol] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
   const [colFilters, setColFilters] = useState({ type: '', status: '' })
+  const [modelModal, setModelModal] = useState(null)
+  const [deleteModel, setDeleteModel] = useState(null)
 
   const toggleSort = (col) => {
     if (sortCol === col) {
@@ -767,6 +875,12 @@ export default function Catalog() {
     setDeleteItem(null)
   }
 
+  async function handleDeleteModel() {
+    if (!deleteModel) return
+    await deleteDoc(doc(db, 'models', deleteModel.id))
+    setDeleteModel(null)
+  }
+
   function exportCSV() {
     const headers = ['Name','SKU','Type','Manufacturer','MSRP','Cost','Tier 1','Tier 2','Tier 3','Description','Tags','Notes','Image URL','Active']
     const escape = (v) => {
@@ -804,12 +918,82 @@ export default function Catalog() {
 
   return (
     <div className="p-3 md:p-5">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+      {/* Page title */}
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold text-[#1A1A1A]">Product Catalog</h1>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-gray-200">
+        {[{ key: 'catalog', label: 'Catalog' }, { key: 'models', label: 'Models' }].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === tab.key
+                ? 'border-[#8B6914] text-[#8B6914]'
+                : 'border-transparent text-[#9A9A9A] hover:text-[#1A1A1A]'
+            }`}
+          >
+            {tab.label}
+            {tab.key === 'catalog' && <span className="ml-1.5 text-xs text-[#9A9A9A]">({catalog.length})</span>}
+            {tab.key === 'models' && <span className="ml-1.5 text-xs text-[#9A9A9A]">({models.length})</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Models Tab ── */}
+      {activeTab === 'models' && (
         <div>
-          <h1 className="text-2xl font-bold text-[#1A1A1A]">Product Catalog</h1>
-          <p className="text-sm text-[#9A9A9A] mt-0.5">{filtered.length} item{filtered.length !== 1 ? 's' : ''} shown</p>
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-sm text-[#9A9A9A]">Manage the list of aircraft models. Items in the catalog can reference these for compatible model tracking.</p>
+            <button onClick={() => setModelModal({})}
+              className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors whitespace-nowrap ml-4">
+              + Add Model
+            </button>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-[#F4F4F5]">
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model Name</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Manufacturer</th>
+                  <th className="py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {modelsLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i} className="animate-pulse">
+                      {[0,1,2].map((j) => <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>)}
+                    </tr>
+                  ))
+                ) : models.length === 0 ? (
+                  <tr><td colSpan={3} className="py-12 text-center text-[#9A9A9A] text-sm">No models yet. Add the first one above.</td></tr>
+                ) : models.map((m) => (
+                  <tr key={m.id} className="hover:bg-[#FAFAFA] transition-colors">
+                    <td className="py-2 px-3 font-medium text-[#1A1A1A]">{m.name}</td>
+                    <td className="py-2 px-3 text-[#9A9A9A]">{m.manufacturer || '—'}</td>
+                    <td className="py-2 px-3">
+                      <div className="flex gap-3 justify-end">
+                        <button onClick={() => setModelModal(m)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                        <button onClick={() => setDeleteModel(m)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      )}
+
+      {/* ── Catalog Tab ── */}
+      {activeTab === 'catalog' && (<>
+      {/* Header actions */}
+      <div className="flex items-center justify-between mb-5 gap-4 flex-wrap">
+        <p className="text-sm text-[#9A9A9A]">{filtered.length} item{filtered.length !== 1 ? 's' : ''} shown</p>
         <div className="flex gap-2">
           <button onClick={exportCSV} disabled={catalog.length === 0}
             className="border border-gray-200 text-[#1A1A1A] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#F4F4F5] transition-colors disabled:opacity-40">
@@ -956,9 +1140,27 @@ export default function Catalog() {
       </div>
 
       {/* Modals */}
-      {editItem !== null && <ItemModal item={editItem} onClose={() => setEditItem(null)} />}
+      {editItem !== null && <ItemModal item={editItem} models={models} onClose={() => setEditItem(null)} />}
       {deleteItem && <DeleteConfirm item={deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} existingSkus={existingSkus} />}
+      </>)}
+
+      {/* Model modals */}
+      {modelModal !== null && <ModelModal model={modelModal} onClose={() => setModelModal(null)} />}
+      {deleteModel && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-bold text-[#1A1A1A] mb-2">Delete Model?</h3>
+            <p className="text-sm text-[#9A9A9A] mb-5">
+              Are you sure you want to delete <span className="font-semibold text-[#1A1A1A]">{deleteModel.name}</span>? Catalog items referencing this model will not be automatically updated.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteModel(null)} className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors">Cancel</button>
+              <button onClick={handleDeleteModel} className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#c44f4f] transition-colors">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

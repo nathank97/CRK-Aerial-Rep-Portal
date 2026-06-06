@@ -734,6 +734,30 @@ export default function InventoryMaster() {
     return m
   }, [dealers])
 
+  // Maps catalogId → catalog item (for MSRP and tier pricing lookup)
+  const catalogMap = useMemo(() => {
+    const m = {}
+    catalog.forEach((c) => { m[c.id] = c })
+    return m
+  }, [catalog])
+
+  // Outstanding PO units per item key (Ordered / Partially Received POs only)
+  const onOrderByKey = useMemo(() => {
+    const result = {}
+    pos
+      .filter((p) => ['Ordered', 'Partially Received'].includes(p.status))
+      .forEach((p) => {
+        ;(p.items ?? []).filter((i) => !i.cancelled).forEach((item) => {
+          const remaining = Math.max(0, item.orderedQty - (item.receivedQty ?? 0))
+          if (remaining > 0) {
+            const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
+            result[key] = (result[key] ?? 0) + remaining
+          }
+        })
+      })
+    return result
+  }, [pos])
+
   // Unique location names for filter dropdown
   const locationOptions = useMemo(() => {
     const locs = [...new Set(dealers.map((d) => d.location || d.displayName || d.email).filter(Boolean))]
@@ -756,38 +780,42 @@ export default function InventoryMaster() {
     })
   }, [items, search, filterDealer, filterCondition, filterAvail, dealerMap])
 
-  // Summary: group by modelName + condition, sum quantities, collect locations
+  // Summary: group by brand + modelName + condition + category, sum quantities
   const summaryGroups = useMemo(() => {
     const groups = {}
     filtered.forEach((item) => {
       const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
       if (!groups[key]) {
+        const catItem = item.catalogId ? catalogMap[item.catalogId] : null
+        const msrp = catItem?.msrp ?? item.msrp ?? null
         groups[key] = {
+          _key: key,
           brand: item.brand ?? '',
           category: item.category ?? '',
           modelName: item.modelName ?? '—',
           condition: item.condition ?? '',
           totalOnHand: 0,
           totalReserved: 0,
-          locations: [],
-          msrp: item.msrp ?? null,
-          repPrice: item.msrp != null ? getDealerPrice(item, dealerProfileMap[item.dealerId]) : null,
+          msrp,
+          repPrice: msrp != null ? getDealerPrice(catItem ?? { msrp }, profile) : null,
         }
       }
-      const qty = item.quantityOnHand ?? 0
-      groups[key].totalOnHand += qty
-      groups[key].totalReserved += item.quantityReserved ?? 0
-      if (groups[key].msrp == null && item.msrp != null) groups[key].msrp = item.msrp
-      if (groups[key].repPrice == null && item.msrp != null) {
-        groups[key].repPrice = getDealerPrice(item, dealerProfileMap[item.dealerId])
+      const g = groups[key]
+      g.totalOnHand += item.quantityOnHand ?? 0
+      g.totalReserved += item.quantityReserved ?? 0
+      if (g.msrp == null) {
+        const catItem = item.catalogId ? catalogMap[item.catalogId] : null
+        const msrp = catItem?.msrp ?? item.msrp ?? null
+        if (msrp != null) {
+          g.msrp = msrp
+          g.repPrice = getDealerPrice(catItem ?? { msrp }, profile)
+        }
       }
-      const locName = dealerMap[item.dealerId] || 'Unassigned'
-      const existing = groups[key].locations.find((l) => l.name === locName)
-      if (existing) existing.qty += qty
-      else groups[key].locations.push({ name: locName, qty })
     })
-    return Object.values(groups).sort((a, b) => a.modelName.localeCompare(b.modelName))
-  }, [filtered, dealerMap, dealerProfileMap])
+    return Object.values(groups)
+      .map((g) => ({ ...g, totalOnOrder: onOrderByKey[g._key] ?? 0 }))
+      .sort((a, b) => a.modelName.localeCompare(b.modelName))
+  }, [filtered, catalogMap, profile, onOrderByKey])
 
   // By location grouping — keyed by location name so reps at the same location are combined
   const byLocation = useMemo(() => {
@@ -1110,14 +1138,13 @@ export default function InventoryMaster() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
-                  ['Model / Item', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
+                  ['Item', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
                   ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
-                  ['Total On Hand', 'totalOnHand'], ['Total Reserved', 'totalReserved'],
-                  ['Total Available', 'totalAvail'], ['Locations', ''],
-                ].map(([label, key]) => key
-                  ? <SortTh key={label} label={label} sortKey={key} sort={summarySort} onSort={toggleSort(setSummarySort)} />
-                  : <th key={label} className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">{label}</th>
-                )}
+                  ['Total On Hand', 'totalOnHand'], ['Total On-Order', 'totalOnOrder'],
+                  ['Total Reserved', 'totalReserved'], ['Total Available', 'totalAvail'],
+                ].map(([label, key]) => (
+                  <SortTh key={label} label={label} sortKey={key} sort={summarySort} onSort={toggleSort(setSummarySort)} />
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -1144,18 +1171,14 @@ export default function InventoryMaster() {
                       {g.totalOnHand}
                       {isNeg && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}
                     </td>
+                    <td className="py-2 px-3 text-center">
+                      {g.totalOnOrder > 0
+                        ? <span className="text-xs font-semibold text-[#4A90B8]">{g.totalOnOrder}</span>
+                        : <span className="text-xs text-[#9A9A9A]">—</span>}
+                    </td>
                     <td className="py-2 px-3 text-center text-[#9A9A9A]">{g.totalReserved}</td>
                     <td className="py-2 px-3 text-center">
                       <AvailBadge available={totalAvail} threshold={null} />
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex flex-wrap gap-1">
-                        {g.locations.map((l) => (
-                          <span key={l.name} className="text-xs bg-[#F4F4F5] text-[#1A1A1A] px-2 py-0.5 rounded-full">
-                            {l.name}: {l.qty}
-                          </span>
-                        ))}
-                      </div>
                     </td>
                   </tr>
                 )
@@ -1190,10 +1213,14 @@ export default function InventoryMaster() {
                       {g.repPrice != null && <span className="text-[#9A9A9A]">Rep Price/unit: <span className="font-medium text-[#4CAF7D]">{formatCurrency(g.repPrice)}</span></span>}
                     </div>
                   )}
-                  <div className="grid grid-cols-3 gap-2 text-center mb-2">
+                  <div className="grid grid-cols-4 gap-2 text-center">
                     <div className="bg-[#F4F4F5] rounded-lg py-1.5">
                       <p className="text-xs text-[#9A9A9A]">On Hand</p>
                       <p className="font-bold text-[#1A1A1A]">{g.totalOnHand}</p>
+                    </div>
+                    <div className="bg-[#F4F4F5] rounded-lg py-1.5">
+                      <p className="text-xs text-[#9A9A9A]">On Order</p>
+                      <p className={`font-bold ${g.totalOnOrder > 0 ? 'text-[#4A90B8]' : 'text-[#9A9A9A]'}`}>{g.totalOnOrder > 0 ? g.totalOnOrder : '—'}</p>
                     </div>
                     <div className="bg-[#F4F4F5] rounded-lg py-1.5">
                       <p className="text-xs text-[#9A9A9A]">Reserved</p>
@@ -1203,11 +1230,6 @@ export default function InventoryMaster() {
                       <p className="text-xs text-[#9A9A9A]">Available</p>
                       <p className="font-bold text-[#1A1A1A]">{totalAvail}</p>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {g.locations.map((l) => (
-                      <span key={l.name} className="text-xs bg-[#F4F4F5] text-[#1A1A1A] px-2 py-0.5 rounded-full">{l.name}: {l.qty}</span>
-                    ))}
                   </div>
                 </div>
               )

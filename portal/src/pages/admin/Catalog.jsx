@@ -27,6 +27,7 @@ const EMPTY_FORM = {
   notes: '',
   active: true,
   tags: '',
+  compatibleModels: [],
   tier1: '',
   tier2: '',
   tier3: '',
@@ -483,6 +484,7 @@ function ItemModal({ item, onClose }) {
     notes: item.notes ?? '',
     active: item.active !== false,
     tags: item.tags ?? '',
+    compatibleModels: item.compatibleModels ?? [],
     tier1: item.tier1 ?? '',
     tier2: item.tier2 ?? '',
     tier3: item.tier3 ?? '',
@@ -515,6 +517,7 @@ function ItemModal({ item, onClose }) {
         notes: form.notes.trim(),
         active: form.active,
         tags: form.tags.trim() || null,
+        compatibleModels: form.compatibleModels,
         tier1: toPrice(form.tier1),
         tier2: toPrice(form.tier2),
         tier3: toPrice(form.tier3),
@@ -572,6 +575,37 @@ function ItemModal({ item, onClose }) {
           <div>
             <label className={labelCls}>Tags</label>
             <input value={form.tags} onChange={(e) => set('tags', e.target.value)} className={inputCls} placeholder="e.g. Drone, Agricultural, DJI" />
+          </div>
+
+          {/* Compatible Models */}
+          <div>
+            <label className={labelCls}>Compatible Models</label>
+            <div className="border border-gray-200 rounded-lg px-3 py-2 focus-within:border-[#8B6914] min-h-[42px] flex flex-wrap gap-1.5 items-center cursor-text">
+              {form.compatibleModels.map((m, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-xs bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full font-medium">
+                  {m}
+                  <button type="button"
+                    onClick={() => set('compatibleModels', form.compatibleModels.filter((_, j) => j !== i))}
+                    className="hover:text-[#D95F5F] leading-none ml-0.5">×</button>
+                </span>
+              ))}
+              <input
+                type="text"
+                placeholder={form.compatibleModels.length === 0 ? 'Type model name, press Enter to add…' : 'Add another…'}
+                className="flex-1 min-w-[160px] text-sm outline-none bg-transparent"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault()
+                    const val = e.target.value.trim().replace(/,+$/, '')
+                    if (val && !form.compatibleModels.includes(val)) {
+                      set('compatibleModels', [...form.compatibleModels, val])
+                    }
+                    e.target.value = ''
+                  }
+                }}
+              />
+            </div>
+            <p className="text-xs text-[#9A9A9A] mt-1">Press Enter or comma after each model name.</p>
           </div>
 
           {/* Sales Price (MSRP) + Cost */}
@@ -817,6 +851,7 @@ export default function Catalog() {
                 { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
                 { key: 'sku', label: 'SKU', sortable: true },
                 { key: 'tags', label: 'Tags', sortable: true },
+                { key: 'compatibleModels', label: 'Compatible Models', sortable: false },
                 { key: 'msrp', label: 'MSRP', sortable: true },
                 { key: 'cost', label: 'Cost', sortable: true },
                 { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
@@ -856,13 +891,13 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 8 }).map((__, j) => (
+                  {Array.from({ length: 9 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className="py-12 text-center text-[#9A9A9A] text-sm">
+              <tr><td colSpan={9} className="py-12 text-center text-[#9A9A9A] text-sm">
                 {catalog.length === 0 ? 'No catalog items yet. Add the first one above.' : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
@@ -890,6 +925,15 @@ export default function Catalog() {
                 </td>
                 <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.sku || '—'}</td>
                 <td className="py-2 px-3 text-xs text-[#9A9A9A]">{item.tags || '—'}</td>
+                <td className="py-2 px-3">
+                  {item.compatibleModels?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {item.compatibleModels.map((m) => (
+                        <span key={m} className="text-xs bg-[#8B6914]/10 text-[#8B6914] px-2 py-0.5 rounded-full font-medium">{m}</span>
+                      ))}
+                    </div>
+                  ) : <span className="text-[#9A9A9A]">—</span>}
+                </td>
                 <td className="py-2 px-3 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
                 <td className="py-2 px-3 text-[#9A9A9A]">{item.cost != null ? formatCurrency(item.cost) : '—'}</td>
                 <td className="py-2 px-3">

@@ -741,13 +741,16 @@ export default function InventoryMaster() {
     return m
   }, [catalog])
 
-  // Weighted-average cost per item key, derived from all PO received quantities
+  // Weighted-average cost per item key, derived from all PO received quantities.
+  // Keyed by normalized modelName only — PO line items frequently omit brand/condition/category
+  // so a 4-field key would never match the inventory summary group key.
   const avgCostByKey = useMemo(() => {
-    const sumValue = {}  // key → sum(receivedQty * costPrice)
-    const sumQty   = {}  // key → sum(receivedQty)
+    const sumValue = {}
+    const sumQty   = {}
     pos.forEach((p) => {
       ;(p.items ?? []).filter((i) => !i.cancelled && (i.receivedQty ?? 0) > 0 && i.costPrice != null).forEach((item) => {
-        const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
+        const key = (item.modelName ?? '').toLowerCase().trim()
+        if (!key) return
         sumValue[key] = (sumValue[key] ?? 0) + item.receivedQty * item.costPrice
         sumQty[key]   = (sumQty[key]   ?? 0) + item.receivedQty
       })
@@ -759,7 +762,8 @@ export default function InventoryMaster() {
     return result
   }, [pos])
 
-  // Outstanding PO units per item key (Ordered / Partially Received POs only)
+  // Outstanding PO units per item key (Ordered / Partially Received POs only).
+  // Same normalized-modelName key as avgCostByKey.
   const onOrderByKey = useMemo(() => {
     const result = {}
     pos
@@ -768,8 +772,8 @@ export default function InventoryMaster() {
         ;(p.items ?? []).filter((i) => !i.cancelled).forEach((item) => {
           const remaining = Math.max(0, item.orderedQty - (item.receivedQty ?? 0))
           if (remaining > 0) {
-            const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
-            result[key] = (result[key] ?? 0) + remaining
+            const key = (item.modelName ?? '').toLowerCase().trim()
+            if (key) result[key] = (result[key] ?? 0) + remaining
           }
         })
       })
@@ -832,10 +836,11 @@ export default function InventoryMaster() {
     })
     return Object.values(groups)
       .map((g) => {
-        const avgCost = avgCostByKey[g._key] ?? null
+        const lookupKey = (g.modelName === '—' ? '' : g.modelName).toLowerCase().trim()
+        const avgCost = avgCostByKey[lookupKey] ?? null
         return {
           ...g,
-          totalOnOrder: onOrderByKey[g._key] ?? 0,
+          totalOnOrder: onOrderByKey[lookupKey] ?? 0,
           avgCost,
           totalValue: avgCost != null ? g.totalOnHand * avgCost : null,
         }

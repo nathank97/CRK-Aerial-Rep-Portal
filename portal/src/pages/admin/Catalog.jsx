@@ -1,5 +1,5 @@
 ﻿import { useState, useMemo, useRef, useEffect } from 'react'
-import { addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { addDoc, updateDoc, deleteDoc, doc, serverTimestamp, writeBatch, deleteField } from 'firebase/firestore'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useModels } from '../../hooks/useModels'
 import { catalogCol, modelsCol } from '../../firebase/firestore'
@@ -21,7 +21,6 @@ const EMPTY_FORM = {
   type: 'Drone',
   sku: '',
   msrp: '',
-  cost: '',
   description: '',
   manufacturer: '',
   imageUrl: '',
@@ -602,7 +601,6 @@ function ItemModal({ item, models, onClose }) {
     type: item.type ?? 'Drone',
     sku: item.sku ?? '',
     msrp: item.msrp ?? '',
-    cost: item.cost ?? '',
     description: item.description ?? '',
     manufacturer: item.manufacturer ?? '',
     imageUrl: item.imageUrl ?? '',
@@ -635,7 +633,6 @@ function ItemModal({ item, models, onClose }) {
         type: form.type,
         sku: form.sku.trim(),
         msrp: parseFloat(form.msrp) || 0,
-        cost: toPrice(form.cost),
         description: form.description.trim(),
         manufacturer: form.manufacturer.trim(),
         imageUrl: form.imageUrl.trim(),
@@ -712,19 +709,11 @@ function ItemModal({ item, models, onClose }) {
             />
           </div>
 
-          {/* Sales Price (MSRP) + Cost */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Sales Price / MSRP ($)</label>
-              <input type="number" min="0" step="0.01" value={form.msrp}
-                onChange={(e) => set('msrp', e.target.value)} className={inputCls} placeholder="0.00" />
-            </div>
-            <div>
-              <label className={labelCls}>Cost / Wholesale ($)</label>
-              <input type="number" min="0" step="0.01" value={form.cost}
-                onChange={(e) => set('cost', e.target.value)} className={inputCls} placeholder="0.00" />
-              <p className="text-xs text-[#9A9A9A] mt-1">Internal only — never shown to dealers.</p>
-            </div>
+          {/* Sales Price (MSRP) */}
+          <div>
+            <label className={labelCls}>Sales Price / MSRP ($)</label>
+            <input type="number" min="0" step="0.01" value={form.msrp}
+              onChange={(e) => set('msrp', e.target.value)} className={inputCls} placeholder="0.00" />
           </div>
 
           {/* Description */}
@@ -853,7 +842,6 @@ function BulkEditModal({ itemIds, models, onClose }) {
     manufacturer:     { on: false, value: '' },
     tags:             { on: false, value: '' },
     compatibleModels: { on: false, value: [] },
-    cost:             { on: false, value: '' },
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -871,14 +859,12 @@ function BulkEditModal({ itemIds, models, onClose }) {
 
   async function handleSave() {
     const updates = {}
-    const toPrice = (v) => v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null
 
     if (fields.type.on) updates.type = fields.type.value
     if (fields.active.on) updates.active = fields.active.value
     if (fields.manufacturer.on) updates.manufacturer = fields.manufacturer.value.trim()
     if (fields.tags.on) updates.tags = fields.tags.value.trim() || null
     if (fields.compatibleModels.on) updates.compatibleModels = fields.compatibleModels.value
-    if (fields.cost.on) updates.cost = toPrice(fields.cost.value)
 
     if (Object.keys(updates).length === 0) {
       setError('Check at least one field to update.')
@@ -955,13 +941,6 @@ function BulkEditModal({ itemIds, models, onClose }) {
             </div>
           </BulkFieldRow>
 
-          <BulkFieldRow on={fields.cost.on} onToggle={() => toggle('cost')}>
-            <label className={labelCls}>Cost / Wholesale ($)</label>
-            <input type="number" min="0" step="0.01" value={fields.cost.value}
-              onChange={(e) => setVal('cost', e.target.value)}
-              disabled={!fields.cost.on} className={inputCls} placeholder="0.00" />
-          </BulkFieldRow>
-
           {error && <p className="text-sm text-[#D95F5F]">{error}</p>}
         </div>
 
@@ -999,6 +978,8 @@ export default function Catalog() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [costMigrating, setCostMigrating] = useState(false)
+  const [costMigrated, setCostMigrated] = useState(false)
 
   const toggleSort = (col) => {
     if (sortCol === col) {
@@ -1036,7 +1017,6 @@ export default function Catalog() {
           case 'sku': av = (a.sku ?? '').toLowerCase(); bv = (b.sku ?? '').toLowerCase(); break
           case 'tags': av = (a.tags ?? '').toLowerCase(); bv = (b.tags ?? '').toLowerCase(); break
           case 'msrp': av = a.msrp ?? 0; bv = b.msrp ?? 0; break
-          case 'cost': av = a.cost ?? 0; bv = b.cost ?? 0; break
           case 'status': av = a.active !== false ? 0 : 1; bv = b.active !== false ? 0 : 1; break
           default: return 0
         }
@@ -1066,6 +1046,21 @@ export default function Catalog() {
     }
   }
 
+  const itemsWithCost = useMemo(() => catalog.filter(i => i.cost != null), [catalog])
+
+  async function removeCostFields() {
+    setCostMigrating(true)
+    const ids = itemsWithCost.map(i => i.id)
+    const CHUNK = 400
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = writeBatch(db)
+      ids.slice(i, i + CHUNK).forEach(id => batch.update(doc(db, 'catalog', id), { cost: deleteField() }))
+      await batch.commit()
+    }
+    setCostMigrating(false)
+    setCostMigrated(true)
+  }
+
   async function handleBulkDelete() {
     const ids = [...selectedIds]
     const CHUNK = 400
@@ -1091,7 +1086,7 @@ export default function Catalog() {
   }
 
   function exportCSV() {
-    const headers = ['Name','SKU','Type','Manufacturer','MSRP','Cost','Tier 1','Tier 2','Tier 3','Description','Tags','Notes','Image URL','Active']
+    const headers = ['Name','SKU','Type','Manufacturer','MSRP','Tier 1','Tier 2','Tier 3','Description','Tags','Notes','Image URL','Active']
     const escape = (v) => {
       if (v == null) return ''
       const s = String(v)
@@ -1103,7 +1098,6 @@ export default function Catalog() {
       item.type ?? '',
       item.manufacturer ?? '',
       item.msrp ?? '',
-      item.cost ?? '',
       item.tier1 ?? '',
       item.tier2 ?? '',
       item.tier3 ?? '',
@@ -1200,6 +1194,19 @@ export default function Catalog() {
 
       {/* ── Catalog Tab ── */}
       {activeTab === 'catalog' && (<>
+      {/* One-time cost field migration banner */}
+      {!costMigrated && itemsWithCost.length > 0 && (
+        <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-[#E6A817]/10 border border-[#E6A817]/30 rounded-xl flex-wrap">
+          <span className="text-sm text-[#1A1A1A]">
+            <span className="font-semibold">{itemsWithCost.length} item{itemsWithCost.length !== 1 ? 's' : ''}</span> still have legacy cost data stored. Remove it now to complete the cleanup.
+          </span>
+          <button onClick={removeCostFields} disabled={costMigrating}
+            className="ml-auto px-3 py-1.5 bg-[#E6A817] text-white rounded-lg text-xs font-medium hover:bg-[#ca9414] transition-colors disabled:opacity-50 whitespace-nowrap">
+            {costMigrating ? 'Removing…' : 'Remove Cost Data'}
+          </button>
+        </div>
+      )}
+
       {/* Header actions */}
       <div className="flex items-center justify-between mb-5 gap-4 flex-wrap">
         <p className="text-sm text-[#9A9A9A]">{filtered.length} item{filtered.length !== 1 ? 's' : ''} shown</p>
@@ -1271,7 +1278,6 @@ export default function Catalog() {
                 { key: 'tags', label: 'Tags', sortable: true },
                 { key: 'compatibleModels', label: 'Compatible Models', sortable: false },
                 { key: 'msrp', label: 'MSRP', sortable: true },
-                { key: 'cost', label: 'Cost', sortable: true },
                 { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
                 { key: 'actions', label: 'Actions', sortable: false },
               ].map((col) => (
@@ -1309,13 +1315,13 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 10 }).map((__, j) => (
+                  {Array.from({ length: 9 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">
+              <tr><td colSpan={9} className="py-12 text-center text-[#9A9A9A] text-sm">
                 {catalog.length === 0 ? 'No catalog items yet. Add the first one above.' : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
@@ -1360,7 +1366,6 @@ export default function Catalog() {
                   ) : <span className="text-[#9A9A9A]">—</span>}
                 </td>
                 <td className="py-2 px-3 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
-                <td className="py-2 px-3 text-[#9A9A9A]">{item.cost != null ? formatCurrency(item.cost) : '—'}</td>
                 <td className="py-2 px-3">
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                     item.active !== false ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]' : 'bg-gray-100 text-gray-400'

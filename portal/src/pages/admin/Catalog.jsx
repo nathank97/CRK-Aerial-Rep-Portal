@@ -848,12 +848,10 @@ function BulkFieldRow({ on, onToggle, children }) {
 function BulkEditModal({ itemIds, models, onClose }) {
   const count = itemIds.size
   const [fields, setFields] = useState({
-    type:             { on: false, value: 'Drone' },
     active:           { on: false, value: true },
     manufacturer:     { on: false, value: '' },
     tags:             { on: false, value: '' },
     compatibleModels: { on: false, value: [] },
-    msrp:             { on: false, value: '' },
     cost:             { on: false, value: '' },
   })
   const [saving, setSaving] = useState(false)
@@ -874,12 +872,10 @@ function BulkEditModal({ itemIds, models, onClose }) {
     const updates = {}
     const toPrice = (v) => v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null
 
-    if (fields.type.on) updates.type = fields.type.value
     if (fields.active.on) updates.active = fields.active.value
     if (fields.manufacturer.on) updates.manufacturer = fields.manufacturer.value.trim()
     if (fields.tags.on) updates.tags = fields.tags.value.trim() || null
     if (fields.compatibleModels.on) updates.compatibleModels = fields.compatibleModels.value
-    if (fields.msrp.on) updates.msrp = parseFloat(fields.msrp.value) || 0
     if (fields.cost.on) updates.cost = toPrice(fields.cost.value)
 
     if (Object.keys(updates).length === 0) {
@@ -916,14 +912,6 @@ function BulkEditModal({ itemIds, models, onClose }) {
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-3">
-          <BulkFieldRow on={fields.type.on} onToggle={() => toggle('type')}>
-            <label className={labelCls}>Type</label>
-            <select value={fields.type.value} onChange={(e) => setVal('type', e.target.value)}
-              disabled={!fields.type.on} className={inputCls}>
-              {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
-          </BulkFieldRow>
-
           <BulkFieldRow on={fields.active.on} onToggle={() => toggle('active')}>
             <label className={labelCls}>Status</label>
             <select value={fields.active.value ? 'active' : 'inactive'}
@@ -955,13 +943,6 @@ function BulkEditModal({ itemIds, models, onClose }) {
                 models={models}
               />
             </div>
-          </BulkFieldRow>
-
-          <BulkFieldRow on={fields.msrp.on} onToggle={() => toggle('msrp')}>
-            <label className={labelCls}>Sales Price / MSRP ($)</label>
-            <input type="number" min="0" step="0.01" value={fields.msrp.value}
-              onChange={(e) => setVal('msrp', e.target.value)}
-              disabled={!fields.msrp.on} className={inputCls} placeholder="0.00" />
           </BulkFieldRow>
 
           <BulkFieldRow on={fields.cost.on} onToggle={() => toggle('cost')}>

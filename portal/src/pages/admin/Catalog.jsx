@@ -848,6 +848,7 @@ function BulkFieldRow({ on, onToggle, children }) {
 function BulkEditModal({ itemIds, models, onClose }) {
   const count = itemIds.size
   const [fields, setFields] = useState({
+    type:             { on: false, value: 'Drone' },
     active:           { on: false, value: true },
     manufacturer:     { on: false, value: '' },
     tags:             { on: false, value: '' },
@@ -872,6 +873,7 @@ function BulkEditModal({ itemIds, models, onClose }) {
     const updates = {}
     const toPrice = (v) => v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null
 
+    if (fields.type.on) updates.type = fields.type.value
     if (fields.active.on) updates.active = fields.active.value
     if (fields.manufacturer.on) updates.manufacturer = fields.manufacturer.value.trim()
     if (fields.tags.on) updates.tags = fields.tags.value.trim() || null
@@ -912,6 +914,14 @@ function BulkEditModal({ itemIds, models, onClose }) {
         </div>
 
         <div className="overflow-y-auto flex-1 p-5 space-y-3">
+          <BulkFieldRow on={fields.type.on} onToggle={() => toggle('type')}>
+            <label className={labelCls}>Type</label>
+            <select value={fields.type.value} onChange={(e) => setVal('type', e.target.value)}
+              disabled={!fields.type.on} className={inputCls}>
+              {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </BulkFieldRow>
+
           <BulkFieldRow on={fields.active.on} onToggle={() => toggle('active')}>
             <label className={labelCls}>Status</label>
             <select value={fields.active.value ? 'active' : 'inactive'}

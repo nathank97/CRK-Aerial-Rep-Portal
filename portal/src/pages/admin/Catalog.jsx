@@ -804,6 +804,190 @@ function DeleteConfirm({ item, onClose, onConfirm }) {
   )
 }
 
+// ─── Bulk Delete Confirm ──────────────────────────────────────────────────────
+
+function BulkDeleteConfirm({ count, onClose, onConfirm }) {
+  const [deleting, setDeleting] = useState(false)
+  async function confirm() {
+    setDeleting(true)
+    await onConfirm()
+  }
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <h3 className="text-lg font-bold text-[#1A1A1A] mb-2">Delete {count} Item{count !== 1 ? 's' : ''}?</h3>
+        <p className="text-sm text-[#9A9A9A] mb-5">
+          This will permanently delete <span className="font-semibold text-[#1A1A1A]">{count} item{count !== 1 ? 's' : ''}</span>. This cannot be undone and may affect quotes and inventory.
+        </p>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors">
+            Cancel
+          </button>
+          <button onClick={confirm} disabled={deleting}
+            className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#c44f4f] transition-colors disabled:opacity-50">
+            {deleting ? 'Deleting…' : `Delete ${count} Item${count !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Bulk Edit Modal ──────────────────────────────────────────────────────────
+
+function BulkFieldRow({ on, onToggle, children }) {
+  return (
+    <div className={`flex gap-3 items-start p-3 rounded-lg border transition-colors ${on ? 'border-[#8B6914]/30 bg-[#8B6914]/5' : 'border-gray-100 bg-[#F4F4F5]/50'}`}>
+      <input type="checkbox" checked={on} onChange={onToggle}
+        className="accent-[#8B6914] cursor-pointer mt-1 flex-shrink-0" />
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  )
+}
+
+function BulkEditModal({ itemIds, models, onClose }) {
+  const count = itemIds.size
+  const [fields, setFields] = useState({
+    type:             { on: false, value: 'Drone' },
+    active:           { on: false, value: true },
+    manufacturer:     { on: false, value: '' },
+    tags:             { on: false, value: '' },
+    compatibleModels: { on: false, value: [] },
+    msrp:             { on: false, value: '' },
+    cost:             { on: false, value: '' },
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] disabled:bg-[#F4F4F5] disabled:text-[#9A9A9A]'
+  const labelCls = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
+
+  function toggle(field) {
+    setFields(prev => ({ ...prev, [field]: { ...prev[field], on: !prev[field].on } }))
+  }
+
+  function setVal(field, value) {
+    setFields(prev => ({ ...prev, [field]: { ...prev[field], value, on: true } }))
+  }
+
+  async function handleSave() {
+    const updates = {}
+    const toPrice = (v) => v !== '' && !isNaN(parseFloat(v)) ? parseFloat(v) : null
+
+    if (fields.type.on) updates.type = fields.type.value
+    if (fields.active.on) updates.active = fields.active.value
+    if (fields.manufacturer.on) updates.manufacturer = fields.manufacturer.value.trim()
+    if (fields.tags.on) updates.tags = fields.tags.value.trim() || null
+    if (fields.compatibleModels.on) updates.compatibleModels = fields.compatibleModels.value
+    if (fields.msrp.on) updates.msrp = parseFloat(fields.msrp.value) || 0
+    if (fields.cost.on) updates.cost = toPrice(fields.cost.value)
+
+    if (Object.keys(updates).length === 0) {
+      setError('Check at least one field to update.')
+      return
+    }
+    updates.updatedAt = serverTimestamp()
+    setSaving(true)
+    try {
+      const ids = [...itemIds]
+      const CHUNK = 400
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const batch = writeBatch(db)
+        ids.slice(i, i + CHUNK).forEach(id => batch.update(doc(db, 'catalog', id), updates))
+        await batch.commit()
+      }
+      onClose()
+    } catch (e) {
+      console.error(e)
+      setError('Save failed. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-[#1A1A1A]">Bulk Edit</h2>
+            <p className="text-xs text-[#9A9A9A] mt-0.5">Check the fields you want to update across {count} item{count !== 1 ? 's' : ''}</p>
+          </div>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-3">
+          <BulkFieldRow on={fields.type.on} onToggle={() => toggle('type')}>
+            <label className={labelCls}>Type</label>
+            <select value={fields.type.value} onChange={(e) => setVal('type', e.target.value)}
+              disabled={!fields.type.on} className={inputCls}>
+              {ITEM_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </BulkFieldRow>
+
+          <BulkFieldRow on={fields.active.on} onToggle={() => toggle('active')}>
+            <label className={labelCls}>Status</label>
+            <select value={fields.active.value ? 'active' : 'inactive'}
+              onChange={(e) => setVal('active', e.target.value === 'active')}
+              disabled={!fields.active.on} className={inputCls}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </BulkFieldRow>
+
+          <BulkFieldRow on={fields.manufacturer.on} onToggle={() => toggle('manufacturer')}>
+            <label className={labelCls}>Manufacturer</label>
+            <input value={fields.manufacturer.value} onChange={(e) => setVal('manufacturer', e.target.value)}
+              disabled={!fields.manufacturer.on} className={inputCls} placeholder="e.g. DJI, XAG, Hylio…" />
+          </BulkFieldRow>
+
+          <BulkFieldRow on={fields.tags.on} onToggle={() => toggle('tags')}>
+            <label className={labelCls}>Tags</label>
+            <input value={fields.tags.value} onChange={(e) => setVal('tags', e.target.value)}
+              disabled={!fields.tags.on} className={inputCls} placeholder="e.g. Drone, Agricultural, DJI" />
+          </BulkFieldRow>
+
+          <BulkFieldRow on={fields.compatibleModels.on} onToggle={() => toggle('compatibleModels')}>
+            <label className={labelCls}>Compatible Models</label>
+            <div className={!fields.compatibleModels.on ? 'opacity-50 pointer-events-none' : ''}>
+              <ModelCombobox
+                value={fields.compatibleModels.value}
+                onChange={(v) => setVal('compatibleModels', v)}
+                models={models}
+              />
+            </div>
+          </BulkFieldRow>
+
+          <BulkFieldRow on={fields.msrp.on} onToggle={() => toggle('msrp')}>
+            <label className={labelCls}>Sales Price / MSRP ($)</label>
+            <input type="number" min="0" step="0.01" value={fields.msrp.value}
+              onChange={(e) => setVal('msrp', e.target.value)}
+              disabled={!fields.msrp.on} className={inputCls} placeholder="0.00" />
+          </BulkFieldRow>
+
+          <BulkFieldRow on={fields.cost.on} onToggle={() => toggle('cost')}>
+            <label className={labelCls}>Cost / Wholesale ($)</label>
+            <input type="number" min="0" step="0.01" value={fields.cost.value}
+              onChange={(e) => setVal('cost', e.target.value)}
+              disabled={!fields.cost.on} className={inputCls} placeholder="0.00" />
+          </BulkFieldRow>
+
+          {error && <p className="text-sm text-[#D95F5F]">{error}</p>}
+        </div>
+
+        <div className="p-5 border-t border-gray-100 flex gap-3 flex-shrink-0">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2.5 text-sm hover:bg-[#F4F4F5] transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2.5 text-sm font-medium hover:bg-[#7a5c12] transition-colors disabled:opacity-50">
+            {saving ? 'Saving…' : `Update ${count} Item${count !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Catalog() {
@@ -821,6 +1005,9 @@ export default function Catalog() {
   const [colFilters, setColFilters] = useState({ type: '', status: '' })
   const [modelModal, setModelModal] = useState(null)
   const [deleteModel, setDeleteModel] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
 
   const toggleSort = (col) => {
     if (sortCol === col) {
@@ -868,6 +1055,37 @@ export default function Catalog() {
     }
     return items
   }, [catalog, search, filterType, showInactive, sortCol, sortDir, colFilters])
+
+  const allVisibleSelected = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id))
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(i => i.id)))
+    }
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds]
+    const CHUNK = 400
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = writeBatch(db)
+      ids.slice(i, i + CHUNK).forEach(id => batch.delete(doc(db, 'catalog', id)))
+      await batch.commit()
+    }
+    setSelectedIds(new Set())
+    setShowBulkDelete(false)
+  }
 
   async function handleDelete() {
     if (!deleteItem) return
@@ -1025,11 +1243,36 @@ export default function Catalog() {
         </label>
       </div>
 
+      {/* Selection action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-[#8B6914]/5 border border-[#8B6914]/20 rounded-xl flex-wrap">
+          <span className="text-sm font-semibold text-[#8B6914]">{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected</span>
+          <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[#9A9A9A] hover:text-[#1A1A1A] transition-colors">Clear</button>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => setShowBulkEdit(true)}
+              className="px-3 py-1.5 bg-[#8B6914] text-white rounded-lg text-xs font-medium hover:bg-[#7a5c12] transition-colors">
+              Edit {selectedIds.size} Item{selectedIds.size !== 1 ? 's' : ''}
+            </button>
+            <button onClick={() => setShowBulkDelete(true)}
+              className="px-3 py-1.5 bg-[#D95F5F] text-white rounded-lg text-xs font-medium hover:bg-[#c44f4f] transition-colors">
+              Delete {selectedIds.size} Item{selectedIds.size !== 1 ? 's' : ''}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
+              <th className="py-2 px-3 w-8">
+                <input type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAll}
+                  className="accent-[#8B6914] cursor-pointer"
+                />
+              </th>
               {[
                 { key: 'name', label: 'Item', sortable: true },
                 { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
@@ -1075,17 +1318,24 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 9 }).map((__, j) => (
+                  {Array.from({ length: 10 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="py-12 text-center text-[#9A9A9A] text-sm">
+              <tr><td colSpan={10} className="py-12 text-center text-[#9A9A9A] text-sm">
                 {catalog.length === 0 ? 'No catalog items yet. Add the first one above.' : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
-              <tr key={item.id} className="hover:bg-[#FAFAFA] transition-colors">
+              <tr key={item.id} className={`transition-colors ${selectedIds.has(item.id) ? 'bg-[#8B6914]/5 hover:bg-[#8B6914]/10' : 'hover:bg-[#FAFAFA]'}`}>
+                <td className="py-2 px-3">
+                  <input type="checkbox"
+                    checked={selectedIds.has(item.id)}
+                    onChange={() => toggleSelect(item.id)}
+                    className="accent-[#8B6914] cursor-pointer"
+                  />
+                </td>
                 <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     {item.imageUrl ? (
@@ -1143,6 +1393,8 @@ export default function Catalog() {
       {editItem !== null && <ItemModal item={editItem} models={models} onClose={() => setEditItem(null)} />}
       {deleteItem && <DeleteConfirm item={deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} existingSkus={existingSkus} />}
+      {showBulkDelete && <BulkDeleteConfirm count={selectedIds.size} onClose={() => setShowBulkDelete(false)} onConfirm={handleBulkDelete} />}
+      {showBulkEdit && <BulkEditModal itemIds={selectedIds} models={models} onClose={() => { setShowBulkEdit(false); setSelectedIds(new Set()) }} />}
       </>)}
 
       {/* Model modals */}

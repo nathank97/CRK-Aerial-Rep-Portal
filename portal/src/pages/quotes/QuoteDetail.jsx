@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
@@ -63,8 +63,14 @@ function ConvertModal({ quote, onClose, onConfirm, saving }) {
 export default function QuoteDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { quote, loading } = useQuote(id)
+
+  useEffect(() => {
+    if (!loading && quote && !isAdmin && quote.dealerId !== user?.uid) {
+      navigate('/quotes', { replace: true })
+    }
+  }, [quote, loading, isAdmin, user?.uid])
 
   const { template: emailTemplate } = useEmailTemplate()
   const [editMode, setEditMode] = useState(false)

@@ -21,8 +21,14 @@ import LineItemBuilder from '../../components/quotes/LineItemBuilder'
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { invoice, loading } = useInvoice(id)
+
+  useEffect(() => {
+    if (!loading && invoice && !isAdmin && invoice.dealerId !== user?.uid) {
+      navigate('/invoices', { replace: true })
+    }
+  }, [invoice, loading, isAdmin, user?.uid])
   const { template: emailTemplate } = useEmailTemplate()
 
   const [saving, setSaving] = useState(false)

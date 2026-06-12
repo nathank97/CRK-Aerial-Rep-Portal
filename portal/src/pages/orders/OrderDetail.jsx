@@ -191,6 +191,12 @@ export default function OrderDetail() {
   const [pendingStatus, setPendingStatus] = useState(null)
   const [undoing, setUndoing] = useState(false)
 
+  useEffect(() => {
+    if (!loading && order && !isAdmin && !isWarehouseManager && order.dealerId !== user?.uid) {
+      navigate('/orders', { replace: true })
+    }
+  }, [order, loading, isAdmin, isWarehouseManager, user?.uid])
+
   const flash = (msg) => {
     setActionMsg(msg)
     setTimeout(() => setActionMsg(''), 3000)

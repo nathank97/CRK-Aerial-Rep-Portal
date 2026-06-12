@@ -220,7 +220,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/admin/catalog',
-        element: <RequireWarehouseOrAdmin><Catalog /></RequireWarehouseOrAdmin>,
+        element: <Catalog />,
       },
       {
         path: '/admin/tax-rates',

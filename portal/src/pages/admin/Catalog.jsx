@@ -5,6 +5,7 @@ import { useModels } from '../../hooks/useModels'
 import { catalogCol, modelsCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency } from '../../utils/formatters'
+import { useAuth } from '../../context/AuthContext'
 
 const ITEM_TYPES = ['Drone', 'Part', 'Accessory', 'Service', 'Other']
 
@@ -961,6 +962,8 @@ function BulkEditModal({ itemIds, models, onClose }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Catalog() {
+  const { isAdmin, isWarehouseManager } = useAuth()
+  const canEdit = isAdmin || isWarehouseManager
   const { catalog, loading } = useCatalog()
   const { models, loading: modelsLoading } = useModels()
   const [activeTab, setActiveTab] = useState('catalog')
@@ -1150,10 +1153,12 @@ export default function Catalog() {
         <div>
           <div className="flex items-center justify-between mb-5">
             <p className="text-sm text-[#9A9A9A]">Manage the list of aircraft models. Items in the catalog can reference these for compatible model tracking.</p>
-            <button onClick={() => setModelModal({})}
-              className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors whitespace-nowrap ml-4">
-              + Add Model
-            </button>
+            {canEdit && (
+              <button onClick={() => setModelModal({})}
+                className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors whitespace-nowrap ml-4">
+                + Add Model
+              </button>
+            )}
           </div>
 
           <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -1162,7 +1167,7 @@ export default function Catalog() {
                 <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                   <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Model Name</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Manufacturer</th>
-                  <th className="py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider"></th>
+                  {canEdit && <th className="py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider"></th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -1173,17 +1178,19 @@ export default function Catalog() {
                     </tr>
                   ))
                 ) : models.length === 0 ? (
-                  <tr><td colSpan={3} className="py-12 text-center text-[#9A9A9A] text-sm">No models yet. Add the first one above.</td></tr>
+                  <tr><td colSpan={canEdit ? 3 : 2} className="py-12 text-center text-[#9A9A9A] text-sm">No models yet.</td></tr>
                 ) : models.map((m) => (
                   <tr key={m.id} className="hover:bg-[#FAFAFA] transition-colors">
                     <td className="py-2 px-3 font-medium text-[#1A1A1A]">{m.name}</td>
                     <td className="py-2 px-3 text-[#9A9A9A]">{m.manufacturer || '—'}</td>
-                    <td className="py-2 px-3">
-                      <div className="flex gap-3 justify-end">
-                        <button onClick={() => setModelModal(m)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
-                        <button onClick={() => setDeleteModel(m)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
-                      </div>
-                    </td>
+                    {canEdit && (
+                      <td className="py-2 px-3">
+                        <div className="flex gap-3 justify-end">
+                          <button onClick={() => setModelModal(m)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                          <button onClick={() => setDeleteModel(m)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -1195,7 +1202,7 @@ export default function Catalog() {
       {/* ── Catalog Tab ── */}
       {activeTab === 'catalog' && (<>
       {/* One-time cost field migration banner */}
-      {!costMigrated && itemsWithCost.length > 0 && (
+      {canEdit && !costMigrated && itemsWithCost.length > 0 && (
         <div className="flex items-center gap-3 mb-5 px-4 py-3 bg-[#E6A817]/10 border border-[#E6A817]/30 rounded-xl flex-wrap">
           <span className="text-sm text-[#1A1A1A]">
             <span className="font-semibold">{itemsWithCost.length} item{itemsWithCost.length !== 1 ? 's' : ''}</span> still have legacy cost data stored. Remove it now to complete the cleanup.
@@ -1210,20 +1217,22 @@ export default function Catalog() {
       {/* Header actions */}
       <div className="flex items-center justify-between mb-5 gap-4 flex-wrap">
         <p className="text-sm text-[#9A9A9A]">{filtered.length} item{filtered.length !== 1 ? 's' : ''} shown</p>
-        <div className="flex gap-2">
-          <button onClick={exportCSV} disabled={catalog.length === 0}
-            className="border border-gray-200 text-[#1A1A1A] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#F4F4F5] transition-colors disabled:opacity-40">
-            ↓ Export CSV
-          </button>
-          <button onClick={() => setShowImport(true)}
-            className="border border-[#8B6914] text-[#8B6914] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#8B6914]/5 transition-colors">
-            ↑ Import CSV
-          </button>
-          <button onClick={() => setEditItem({})}
-            className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
-            + Add Item
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <button onClick={exportCSV} disabled={catalog.length === 0}
+              className="border border-gray-200 text-[#1A1A1A] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#F4F4F5] transition-colors disabled:opacity-40">
+              ↓ Export CSV
+            </button>
+            <button onClick={() => setShowImport(true)}
+              className="border border-[#8B6914] text-[#8B6914] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#8B6914]/5 transition-colors">
+              ↑ Import CSV
+            </button>
+            <button onClick={() => setEditItem({})}
+              className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
+              + Add Item
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -1235,14 +1244,16 @@ export default function Catalog() {
           <option value="">All Types</option>
           {ITEM_TYPES.map((t) => <option key={t}>{t}</option>)}
         </select>
-        <label className="flex items-center gap-2 text-sm text-[#9A9A9A] cursor-pointer">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="accent-[#8B6914]" />
-          Show inactive
-        </label>
+        {canEdit && (
+          <label className="flex items-center gap-2 text-sm text-[#9A9A9A] cursor-pointer">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="accent-[#8B6914]" />
+            Show inactive
+          </label>
+        )}
       </div>
 
       {/* Selection action bar */}
-      {selectedIds.size > 0 && (
+      {canEdit && selectedIds.size > 0 && (
         <div className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-[#8B6914]/5 border border-[#8B6914]/20 rounded-xl flex-wrap">
           <span className="text-sm font-semibold text-[#8B6914]">{selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected</span>
           <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[#9A9A9A] hover:text-[#1A1A1A] transition-colors">Clear</button>
@@ -1264,13 +1275,15 @@ export default function Catalog() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
-              <th className="py-2 px-3 w-8">
-                <input type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={toggleSelectAll}
-                  className="accent-[#8B6914] cursor-pointer"
-                />
-              </th>
+              {canEdit && (
+                <th className="py-2 px-3 w-8">
+                  <input type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAll}
+                    className="accent-[#8B6914] cursor-pointer"
+                  />
+                </th>
+              )}
               {[
                 { key: 'name', label: 'Item', sortable: true },
                 { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
@@ -1278,8 +1291,10 @@ export default function Catalog() {
                 { key: 'tags', label: 'Tags', sortable: true },
                 { key: 'compatibleModels', label: 'Compatible Models', sortable: false },
                 { key: 'msrp', label: 'MSRP', sortable: true },
-                { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
-                { key: 'actions', label: 'Actions', sortable: false },
+                ...(canEdit ? [
+                  { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
+                  { key: 'actions', label: 'Actions', sortable: false },
+                ] : []),
               ].map((col) => (
                 <th key={col.key} className="text-left py-2 px-3 align-top">
                   {col.sortable ? (
@@ -1315,24 +1330,26 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 9 }).map((__, j) => (
+                  {Array.from({ length: canEdit ? 9 : 6 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="py-12 text-center text-[#9A9A9A] text-sm">
-                {catalog.length === 0 ? 'No catalog items yet. Add the first one above.' : 'No items match your filters.'}
+              <tr><td colSpan={canEdit ? 9 : 6} className="py-12 text-center text-[#9A9A9A] text-sm">
+                {catalog.length === 0 ? (canEdit ? 'No catalog items yet. Add the first one above.' : 'No catalog items yet.') : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
               <tr key={item.id} className={`transition-colors ${selectedIds.has(item.id) ? 'bg-[#8B6914]/5 hover:bg-[#8B6914]/10' : 'hover:bg-[#FAFAFA]'}`}>
-                <td className="py-2 px-3">
-                  <input type="checkbox"
-                    checked={selectedIds.has(item.id)}
-                    onChange={() => toggleSelect(item.id)}
-                    className="accent-[#8B6914] cursor-pointer"
-                  />
-                </td>
+                {canEdit && (
+                  <td className="py-2 px-3">
+                    <input type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                      className="accent-[#8B6914] cursor-pointer"
+                    />
+                  </td>
+                )}
                 <td className="py-2 px-3">
                   <div className="flex items-center gap-3">
                     {item.imageUrl ? (
@@ -1366,19 +1383,23 @@ export default function Catalog() {
                   ) : <span className="text-[#9A9A9A]">—</span>}
                 </td>
                 <td className="py-2 px-3 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
-                <td className="py-2 px-3">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    item.active !== false ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]' : 'bg-gray-100 text-gray-400'
-                  }`}>
-                    {item.active !== false ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td className="py-2 px-3">
-                  <div className="flex gap-3">
-                    <button onClick={() => setEditItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
-                    <button onClick={() => setDeleteItem(item)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
-                  </div>
-                </td>
+                {canEdit && (
+                  <>
+                    <td className="py-2 px-3">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        item.active !== false ? 'bg-[#4CAF7D]/10 text-[#4CAF7D]' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        {item.active !== false ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <div className="flex gap-3">
+                        <button onClick={() => setEditItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                        <button onClick={() => setDeleteItem(item)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                      </div>
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>

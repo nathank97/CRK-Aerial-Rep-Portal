@@ -16,6 +16,7 @@ const ADMIN_NAV = [
   { to: '/service', label: 'Service', icon: '🔧' },
   { to: '/documents', label: 'Documents', icon: '📁' },
   { to: '/map', label: 'Map', icon: '🗺️' },
+  { to: '/admin/catalog', label: 'Catalog', icon: '📂' },
   { to: '/calendar', label: 'Calendar', icon: '📅' },
   { to: '/feedback', label: 'Feedback', icon: '💬' },
 ]
@@ -23,7 +24,6 @@ const ADMIN_NAV = [
 const ADMIN_ONLY_NAV = [
   { to: '/admin/users', label: 'User Management', icon: '👤' },
   { to: '/admin/rep-management', label: 'Rep Management', icon: '👥' },
-  { to: '/admin/catalog', label: 'Catalog', icon: '📂' },
   { to: '/admin/preset-quotes', label: 'Preset Quotes', icon: '📑' },
   { to: '/admin/tax-rates', label: 'Tax Rates', icon: '💲' },
   { to: '/admin/territories', label: 'Territories', icon: '🗾' },

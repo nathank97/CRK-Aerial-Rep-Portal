@@ -192,10 +192,10 @@ export default function OrderDetail() {
   const [undoing, setUndoing] = useState(false)
 
   useEffect(() => {
-    if (!loading && order && !isAdmin && !isWarehouseManager && order.dealerId !== user?.uid) {
+    if (!loading && order && !isAdmin && !isWarehouseManager && order.dealerId !== profile?.id) {
       navigate('/orders', { replace: true })
     }
-  }, [order, loading, isAdmin, isWarehouseManager, user?.uid])
+  }, [order, loading, isAdmin, isWarehouseManager, profile?.id])
 
   const flash = (msg) => {
     setActionMsg(msg)

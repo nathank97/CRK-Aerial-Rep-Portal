@@ -67,10 +67,10 @@ export default function QuoteDetail() {
   const { quote, loading } = useQuote(id)
 
   useEffect(() => {
-    if (!loading && quote && !isAdmin && quote.dealerId !== user?.uid) {
+    if (!loading && quote && !isAdmin && quote.dealerId !== profile?.id) {
       navigate('/quotes', { replace: true })
     }
-  }, [quote, loading, isAdmin, user?.uid])
+  }, [quote, loading, isAdmin, profile?.id])
 
   const { template: emailTemplate } = useEmailTemplate()
   const [editMode, setEditMode] = useState(false)

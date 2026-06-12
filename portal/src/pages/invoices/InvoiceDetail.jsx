@@ -25,10 +25,10 @@ export default function InvoiceDetail() {
   const { invoice, loading } = useInvoice(id)
 
   useEffect(() => {
-    if (!loading && invoice && !isAdmin && invoice.dealerId !== user?.uid) {
+    if (!loading && invoice && !isAdmin && invoice.dealerId !== profile?.id) {
       navigate('/invoices', { replace: true })
     }
-  }, [invoice, loading, isAdmin, user?.uid])
+  }, [invoice, loading, isAdmin, profile?.id])
   const { template: emailTemplate } = useEmailTemplate()
 
   const [saving, setSaving] = useState(false)

@@ -5,21 +5,22 @@ import { quotesCol } from '../firebase/firestore'
 import { db } from '../firebase/config'
 
 export function useQuotes() {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) return
+    const dealerId = profile?.id
     const q = isAdmin
       ? query(quotesCol, orderBy('createdAt', 'desc'))
-      : query(quotesCol, where('dealerId', '==', user.uid), orderBy('createdAt', 'desc'))
+      : query(quotesCol, where('dealerId', '==', dealerId), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
     })
     return unsub
-  }, [user?.uid, isAdmin])
+  }, [user?.uid, profile?.id, isAdmin])
 
   return { quotes, loading }
 }

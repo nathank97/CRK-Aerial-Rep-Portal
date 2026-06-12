@@ -5,21 +5,22 @@ import { ordersCol } from '../firebase/firestore'
 import { db } from '../firebase/config'
 
 export function useOrders() {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) return
+    const dealerId = profile?.id
     const q = isAdmin
       ? query(ordersCol, orderBy('createdAt', 'desc'))
-      : query(ordersCol, where('dealerId', '==', user.uid), orderBy('createdAt', 'desc'))
+      : query(ordersCol, where('dealerId', '==', dealerId), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
     })
     return unsub
-  }, [user?.uid, isAdmin])
+  }, [user?.uid, profile?.id, isAdmin])
 
   return { orders, loading }
 }

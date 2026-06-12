@@ -5,21 +5,22 @@ import { invoicesCol } from '../firebase/firestore'
 import { db } from '../firebase/config'
 
 export function useInvoices() {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) return
+    const dealerId = profile?.id
     const q = isAdmin
       ? query(invoicesCol, orderBy('createdAt', 'desc'))
-      : query(invoicesCol, where('dealerId', '==', user.uid), orderBy('createdAt', 'desc'))
+      : query(invoicesCol, where('dealerId', '==', dealerId), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setInvoices(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
     })
     return unsub
-  }, [user?.uid, isAdmin])
+  }, [user?.uid, profile?.id, isAdmin])
 
   return { invoices, loading }
 }

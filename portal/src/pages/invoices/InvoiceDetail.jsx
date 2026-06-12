@@ -240,6 +240,7 @@ export default function InvoiceDetail() {
       const vars = {
         invoiceNumber: invoice.invoiceNumber ?? '',
         customerName: invoice.customerName ?? '',
+        customerFirstName: (invoice.customerName ?? '').split(' ')[0] || invoice.customerName ?? '',
         total: formatCurrency(invoice.total),
         balanceDue: formatCurrency(invoice.balanceDue ?? invoice.total),
         paymentTerms: invoice.paymentTerms ?? 'Net 30',

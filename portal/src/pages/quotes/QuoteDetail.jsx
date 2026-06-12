@@ -142,9 +142,11 @@ export default function QuoteDetail() {
     }
     setSaving(true)
     try {
+      const fullName = quote.linkedCustomerName || quote.linkedLeadName || ''
       const vars = {
         quoteNumber: quote.quoteNumber ?? '',
-        customerName: quote.linkedCustomerName || quote.linkedLeadName || '',
+        customerName: fullName,
+        customerFirstName: fullName.split(' ')[0] || fullName,
         projectName: quote.projectName || '',
         total: formatCurrency(quote.total),
         dealerName: quote.dealerName || profile?.displayName || '',

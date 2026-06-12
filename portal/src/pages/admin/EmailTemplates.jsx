@@ -13,7 +13,8 @@ const labelCls = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-
 
 const QUOTE_PLACEHOLDERS = [
   { key: '{{quoteNumber}}', desc: 'Quote number (e.g. Q-0001)' },
-  { key: '{{customerName}}', desc: 'Customer or lead name' },
+  { key: '{{customerFirstName}}', desc: "Customer's first name only (e.g. Justin)" },
+  { key: '{{customerName}}', desc: 'Customer full name (e.g. Justin Burke)' },
   { key: '{{projectName}}', desc: 'Project name' },
   { key: '{{total}}', desc: 'Quote total' },
   { key: '{{dealerName}}', desc: "Rep's display name" },
@@ -31,7 +32,8 @@ const ORDER_PLACEHOLDERS = [
 
 const INVOICE_PLACEHOLDERS = [
   { key: '{{invoiceNumber}}', desc: 'Invoice number (e.g. INV-0001)' },
-  { key: '{{customerName}}', desc: 'Customer name' },
+  { key: '{{customerFirstName}}', desc: "Customer's first name only (e.g. Justin)" },
+  { key: '{{customerName}}', desc: 'Customer full name (e.g. Justin Burke)' },
   { key: '{{total}}', desc: 'Invoice total' },
   { key: '{{balanceDue}}', desc: 'Remaining balance' },
   { key: '{{paymentTerms}}', desc: 'Payment terms (e.g. Net 30)' },

@@ -3,7 +3,7 @@ import { onSnapshot } from 'firebase/firestore'
 import { emailTemplatesDoc } from '../firebase/firestore'
 
 export const DEFAULT_QUOTE_SUBJECT = 'Quote {{quoteNumber}} from CRK Aerial'
-export const DEFAULT_QUOTE_BODY = `Hi {{customerName}},
+export const DEFAULT_QUOTE_BODY = `Hi {{customerFirstName}},
 
 Please find your quote {{quoteNumber}} attached for review.
 
@@ -38,7 +38,7 @@ Please process this order at your earliest convenience and reply to confirm rece
 CRK Aerial`
 
 export const DEFAULT_INVOICE_SUBJECT = 'Invoice {{invoiceNumber}} from CRK Aerial'
-export const DEFAULT_INVOICE_BODY = `Hi {{customerName}},
+export const DEFAULT_INVOICE_BODY = `Hi {{customerFirstName}},
 
 Please find your invoice {{invoiceNumber}} attached.
 

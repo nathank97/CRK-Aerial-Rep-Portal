@@ -10,7 +10,7 @@ import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters'
 import { nextOrderNumber } from '../../utils/numbering'
-import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
+import LineItemBuilder, { calcTotals, calcLineTotal } from '../../components/quotes/LineItemBuilder'
 import QuotePDF from '../../components/quotes/QuotePDF'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
@@ -423,48 +423,77 @@ export default function QuoteDetail() {
           <>
             {(quote.lineItems ?? []).length === 0 ? (
               <p className="text-sm text-[#9A9A9A] text-center py-8">No line items.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[500px]">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
-                      <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-16">Qty</th>
-                      <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
-                      <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {quote.lineItems.map((item, i) => (
-                      <tr key={item.id ?? i}>
-                        <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
-                        <td className="py-2 px-2 text-right text-[#9A9A9A]">{item.quantity}</td>
-                        <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>
-                        <td className="py-2 pl-2 text-right font-semibold text-[#111111]">{formatCurrency((item.quantity ?? 1) * (item.unitPrice ?? 0))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            ) : (() => {
+              const hasDiscount = quote.lineItems.some((item) => item.discount > 0)
+              const grossSubtotal = quote.lineItems.reduce((sum, item) => sum + (item.quantity ?? 1) * (item.unitPrice ?? 0), 0)
+              const discountAmount = grossSubtotal - (quote.subtotal ?? 0)
+              return (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[500px]">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
+                          <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-16">Qty</th>
+                          <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
+                          {hasDiscount && <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Discount</th>}
+                          <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {quote.lineItems.map((item, i) => (
+                          <tr key={item.id ?? i}>
+                            <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
+                            <td className="py-2 px-2 text-right text-[#9A9A9A]">{item.quantity}</td>
+                            <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>
+                            {hasDiscount && (
+                              <td className="py-2 px-2 text-right text-[#4CAF7D]">
+                                {item.discount > 0
+                                  ? item.discountType === 'percent'
+                                    ? `${item.discount}%`
+                                    : formatCurrency(item.discount)
+                                  : '—'}
+                              </td>
+                            )}
+                            <td className="py-2 pl-2 text-right font-semibold text-[#111111]">{formatCurrency(calcLineTotal(item))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-            {/* Totals block */}
-            <div className="mt-5 pt-4 border-t border-gray-100 flex justify-end">
-              <div className="w-64 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-[#9A9A9A]">Subtotal</span>
-                  <span className="font-medium text-[#111111]">{formatCurrency(quote.subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#9A9A9A]">Tax ({quote.taxRate ?? 0}%){quote.taxExempt ? ' — Exempt' : ''}</span>
-                  <span className="font-medium text-[#111111]">{formatCurrency(quote.taxAmount)}</span>
-                </div>
-                <div className="flex justify-between font-bold border-t border-gray-200 pt-2">
-                  <span className="text-[#111111]">Total</span>
-                  <span className="text-[#8B6914] text-base">{formatCurrency(quote.total)}</span>
-                </div>
-              </div>
-            </div>
+                  {/* Totals block */}
+                  <div className="mt-5 pt-4 border-t border-gray-100 flex justify-end">
+                    <div className="w-64 space-y-1.5 text-sm">
+                      {hasDiscount && (
+                        <div className="flex justify-between">
+                          <span className="text-[#9A9A9A]">Gross Subtotal</span>
+                          <span className="font-medium text-[#111111]">{formatCurrency(grossSubtotal)}</span>
+                        </div>
+                      )}
+                      {hasDiscount && (
+                        <div className="flex justify-between">
+                          <span className="text-[#9A9A9A]">Discount</span>
+                          <span className="font-medium text-[#4CAF7D]">−{formatCurrency(discountAmount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-[#9A9A9A]">Subtotal</span>
+                        <span className="font-medium text-[#111111]">{formatCurrency(quote.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[#9A9A9A]">Tax ({quote.taxRate ?? 0}%){quote.taxExempt ? ' — Exempt' : ''}</span>
+                        <span className="font-medium text-[#111111]">{formatCurrency(quote.taxAmount)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold border-t border-gray-200 pt-2">
+                        <span className="text-[#111111]">Total</span>
+                        <span className="text-[#8B6914] text-base">{formatCurrency(quote.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
           </>
         )}
       </div>

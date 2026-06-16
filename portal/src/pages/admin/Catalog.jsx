@@ -975,7 +975,7 @@ export default function Catalog() {
   const [showImport, setShowImport] = useState(false)
   const [sortCol, setSortCol] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
-  const [colFilters, setColFilters] = useState({ type: '', status: '' })
+  const [colFilters, setColFilters] = useState({ type: '', status: '', compatibleModels: '' })
   const [modelModal, setModelModal] = useState(null)
   const [deleteModel, setDeleteModel] = useState(null)
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -999,6 +999,12 @@ export default function Catalog() {
     [catalog]
   )
 
+  const allCatalogModelNames = useMemo(() => {
+    const names = new Set()
+    catalog.forEach((item) => (item.compatibleModels ?? []).forEach((m) => names.add(m)))
+    return [...names].sort()
+  }, [catalog])
+
   const filtered = useMemo(() => {
     let items = catalog.filter((item) => {
       if (!colFilters.status && !showInactive && item.active === false) return false
@@ -1006,9 +1012,11 @@ export default function Catalog() {
       const matchColType = !colFilters.type || item.type === colFilters.type
       const matchColStatus = !colFilters.status ||
         (colFilters.status === 'Active' ? item.active !== false : item.active === false)
+      const matchColModel = !colFilters.compatibleModels ||
+        (item.compatibleModels ?? []).includes(colFilters.compatibleModels)
       const matchSearch = !search || [item.name, item.sku, item.manufacturer, item.description]
         .some((v) => v?.toLowerCase().includes(search.toLowerCase()))
-      return matchType && matchColType && matchColStatus && matchSearch
+      return matchType && matchColType && matchColStatus && matchColModel && matchSearch
     })
     if (sortCol) {
       const dir = sortDir === 'asc' ? 1 : -1
@@ -1021,6 +1029,10 @@ export default function Catalog() {
           case 'tags': av = (a.tags ?? '').toLowerCase(); bv = (b.tags ?? '').toLowerCase(); break
           case 'msrp': av = a.msrp ?? 0; bv = b.msrp ?? 0; break
           case 'status': av = a.active !== false ? 0 : 1; bv = b.active !== false ? 0 : 1; break
+          case 'compatibleModels':
+            av = (a.compatibleModels ?? [])[0]?.toLowerCase() ?? ''
+            bv = (b.compatibleModels ?? [])[0]?.toLowerCase() ?? ''
+            break
           default: return 0
         }
         if (typeof av === 'number') return (av - bv) * dir
@@ -1289,7 +1301,7 @@ export default function Catalog() {
                 { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
                 { key: 'sku', label: 'SKU', sortable: true },
                 { key: 'tags', label: 'Tags', sortable: true },
-                { key: 'compatibleModels', label: 'Compatible Models', sortable: false },
+                { key: 'compatibleModels', label: 'Compatible Models', sortable: true, options: ['All Models', ...allCatalogModelNames] },
                 { key: 'msrp', label: 'MSRP', sortable: true },
                 ...(canEdit ? [
                   { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
@@ -1318,7 +1330,7 @@ export default function Catalog() {
                       className="mt-1 block w-full text-[10px] border border-gray-200 rounded px-1.5 py-0.5 bg-white text-[#9A9A9A] focus:outline-none focus:border-[#8B6914] cursor-pointer"
                     >
                       {col.options.map((o) => (
-                        <option key={o} value={o === 'All Types' || o === 'All' ? '' : o}>{o}</option>
+                        <option key={o} value={o === 'All Types' || o === 'All' || o === 'All Models' ? '' : o}>{o}</option>
                       ))}
                     </select>
                   )}

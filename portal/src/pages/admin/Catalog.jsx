@@ -981,6 +981,8 @@ export default function Catalog() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [costMigrating, setCostMigrating] = useState(false)
   const [costMigrated, setCostMigrated] = useState(false)
 
@@ -1006,6 +1008,8 @@ export default function Catalog() {
   }, [catalog])
 
   const filtered = useMemo(() => {
+    const fromMs = filterDateFrom ? new Date(filterDateFrom).getTime() : null
+    const toMs = filterDateTo ? new Date(filterDateTo).getTime() + 86399999 : null // inclusive end-of-day
     let items = catalog.filter((item) => {
       if (!colFilters.status && !showInactive && item.active === false) return false
       const matchType = !filterType || item.type === filterType
@@ -1016,7 +1020,10 @@ export default function Catalog() {
         (item.compatibleModels ?? []).includes(colFilters.compatibleModels)
       const matchSearch = !search || [item.name, item.sku, item.manufacturer, item.description]
         .some((v) => v?.toLowerCase().includes(search.toLowerCase()))
-      return matchType && matchColType && matchColStatus && matchColModel && matchSearch
+      const itemMs = item.createdAt?.toDate ? item.createdAt.toDate().getTime() : null
+      const matchDateFrom = !fromMs || (itemMs != null && itemMs >= fromMs)
+      const matchDateTo = !toMs || (itemMs != null && itemMs <= toMs)
+      return matchType && matchColType && matchColStatus && matchColModel && matchSearch && matchDateFrom && matchDateTo
     })
     if (sortCol) {
       const dir = sortDir === 'asc' ? 1 : -1
@@ -1033,6 +1040,10 @@ export default function Catalog() {
             av = (a.compatibleModels ?? [])[0]?.toLowerCase() ?? ''
             bv = (b.compatibleModels ?? [])[0]?.toLowerCase() ?? ''
             break
+          case 'createdAt':
+            av = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0
+            bv = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0
+            break
           default: return 0
         }
         if (typeof av === 'number') return (av - bv) * dir
@@ -1040,7 +1051,7 @@ export default function Catalog() {
       })
     }
     return items
-  }, [catalog, search, filterType, showInactive, sortCol, sortDir, colFilters])
+  }, [catalog, search, filterType, showInactive, sortCol, sortDir, colFilters, filterDateFrom, filterDateTo])
 
   const allVisibleSelected = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id))
 
@@ -1256,6 +1267,18 @@ export default function Catalog() {
           <option value="">All Types</option>
           {ITEM_TYPES.map((t) => <option key={t}>{t}</option>)}
         </select>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider whitespace-nowrap">Date Added</span>
+          <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)}
+            className={inputCls} title="From date" />
+          <span className="text-xs text-[#9A9A9A]">–</span>
+          <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)}
+            className={inputCls} title="To date" />
+          {(filterDateFrom || filterDateTo) && (
+            <button onClick={() => { setFilterDateFrom(''); setFilterDateTo('') }}
+              className="text-xs text-[#9A9A9A] hover:text-[#1A1A1A] transition-colors">✕</button>
+          )}
+        </div>
         {canEdit && (
           <label className="flex items-center gap-2 text-sm text-[#9A9A9A] cursor-pointer">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="accent-[#8B6914]" />
@@ -1303,6 +1326,7 @@ export default function Catalog() {
                 { key: 'tags', label: 'Tags', sortable: true },
                 { key: 'compatibleModels', label: 'Compatible Models', sortable: true, options: ['All Models', ...allCatalogModelNames] },
                 { key: 'msrp', label: 'MSRP', sortable: true },
+                { key: 'createdAt', label: 'Date Added', sortable: true },
                 ...(canEdit ? [
                   { key: 'status', label: 'Status', sortable: true, options: ['All', 'Active', 'Inactive'] },
                   { key: 'actions', label: 'Actions', sortable: false },
@@ -1342,13 +1366,13 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: canEdit ? 9 : 6 }).map((__, j) => (
+                  {Array.from({ length: canEdit ? 10 : 7 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={canEdit ? 9 : 6} className="py-12 text-center text-[#9A9A9A] text-sm">
+              <tr><td colSpan={canEdit ? 10 : 7} className="py-12 text-center text-[#9A9A9A] text-sm">
                 {catalog.length === 0 ? (canEdit ? 'No catalog items yet. Add the first one above.' : 'No catalog items yet.') : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
@@ -1395,6 +1419,11 @@ export default function Catalog() {
                   ) : <span className="text-[#9A9A9A]">—</span>}
                 </td>
                 <td className="py-2 px-3 font-semibold text-[#1A1A1A]">{formatCurrency(item.msrp)}</td>
+                <td className="py-2 px-3 text-xs text-[#9A9A9A] whitespace-nowrap">
+                  {item.createdAt?.toDate
+                    ? item.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : '—'}
+                </td>
                 {canEdit && (
                   <>
                     <td className="py-2 px-3">

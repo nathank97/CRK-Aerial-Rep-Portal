@@ -534,6 +534,136 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
   )
 }
 
+// ── PO Preview Modal ─────────────────────────────────────────────────────────
+function POPreviewModal({ po, dealerMap, onClose, onEdit }) {
+  function fmt(n) {
+    if (n == null) return '—'
+    return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  const subtotal = (po.items ?? []).filter((i) => !i.cancelled).reduce((s, i) => {
+    return s + (i.orderedQty ?? 0) * (i.costPrice ?? 0)
+  }, 0)
+  const freight = po.freightCost ?? 0
+  const grandTotal = subtotal + freight
+  const statusColor = {
+    Draft: 'bg-gray-100 text-gray-500',
+    Ordered: 'bg-[#4A90B8]/15 text-[#4A90B8]',
+    'Partially Received': 'bg-[#E6A817]/15 text-[#E6A817]',
+    'Fully Received': 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
+    Cancelled: 'bg-gray-100 text-gray-400',
+  }[po.status] ?? 'bg-gray-100 text-gray-500'
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-6 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mb-6">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-[#1A1A1A]">
+              {po.supplierName}{po.poNumber ? ` · PO ${po.poNumber}` : ''}
+            </h2>
+            <div className="mt-1">
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusColor}`}>{po.status}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+
+        <div className="px-6 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 text-sm">
+            <div>
+              <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-0.5">Order Date</p>
+              <p className="text-[#1A1A1A] font-medium">{po.orderDate || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-0.5">Exp. Delivery</p>
+              <p className="text-[#1A1A1A] font-medium">{po.expectedDelivery || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-0.5">Location</p>
+              <p className="text-[#1A1A1A] font-medium">{dealerMap[po.dealerId] || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-0.5">Created By</p>
+              <p className="text-[#1A1A1A] font-medium">{po.createdBy || '—'}</p>
+            </div>
+            {po.notes && (
+              <div className="col-span-2 md:col-span-4">
+                <p className="text-xs text-[#9A9A9A] font-semibold uppercase tracking-wider mb-0.5">Notes</p>
+                <p className="text-[#1A1A1A]">{po.notes}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border border-gray-200 mb-4">
+            <table className="w-full text-sm" style={{ minWidth: 640 }}>
+              <thead>
+                <tr className="bg-[#F4F4F5] border-b border-gray-200">
+                  {['#', 'Model', 'Brand', 'SKU', 'Condition', 'Ordered', 'Received', 'Cost / Unit', 'Line Total'].map((h) => (
+                    <th key={h} className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(po.items ?? []).map((item, idx) => {
+                  const lineTotal = (item.orderedQty ?? 0) * (item.costPrice ?? 0)
+                  const isCancelled = item.cancelled
+                  const fullyReceived = (item.receivedQty ?? 0) >= item.orderedQty
+                  return (
+                    <tr key={item.id ?? idx} className={isCancelled ? 'opacity-50 bg-gray-50' : fullyReceived ? 'bg-[#4CAF7D]/5' : ''}>
+                      <td className="px-3 py-2 text-xs text-[#9A9A9A] text-center">
+                        {isCancelled
+                          ? <span className="text-[9px] font-bold bg-gray-200 text-gray-500 px-1 py-0.5 rounded">CXL</span>
+                          : fullyReceived
+                          ? <span className="text-[9px] font-bold bg-[#4CAF7D]/20 text-[#4CAF7D] px-1 py-0.5 rounded">RCV</span>
+                          : idx + 1}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-[#1A1A1A]">{item.modelName || '—'}</td>
+                      <td className="px-3 py-2 text-[#9A9A9A]">{item.brand || '—'}</td>
+                      <td className="px-3 py-2 text-[#9A9A9A]">{item.sku || '—'}</td>
+                      <td className="px-3 py-2 text-[#9A9A9A]">{item.condition || '—'}</td>
+                      <td className="px-3 py-2 text-center font-medium text-[#1A1A1A]">{item.orderedQty ?? 0}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`font-medium ${fullyReceived ? 'text-[#4CAF7D]' : (item.receivedQty ?? 0) > 0 ? 'text-[#E6A817]' : 'text-[#9A9A9A]'}`}>
+                          {item.receivedQty ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-[#9A9A9A]">{item.costPrice != null ? fmt(item.costPrice) : '—'}</td>
+                      <td className="px-3 py-2 font-medium text-[#1A1A1A]">{item.costPrice != null ? fmt(lineTotal) : '—'}</td>
+                    </tr>
+                  )
+                })}
+                {(po.items ?? []).length === 0 && (
+                  <tr><td colSpan={9} className="py-6 text-center text-[#9A9A9A] text-sm">No items on this order.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-end">
+            <div className="bg-[#F4F4F5] rounded-lg px-5 py-3 space-y-1 text-sm min-w-[220px]">
+              <div className="flex justify-between gap-8"><span className="text-[#9A9A9A]">Subtotal</span><span className="font-medium text-[#1A1A1A]">{fmt(subtotal)}</span></div>
+              <div className="flex justify-between gap-8"><span className="text-[#9A9A9A]">Freight</span><span className="font-medium text-[#1A1A1A]">{freight > 0 ? fmt(freight) : '—'}</span></div>
+              <div className="flex justify-between gap-8 border-t border-gray-300 pt-1 mt-1">
+                <span className="font-semibold text-[#1A1A1A]">Grand Total</span>
+                <span className="font-bold text-[#8B6914]">{fmt(grandTotal)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="border border-gray-200 text-[#1A1A1A] text-sm font-medium py-2 px-5 rounded-lg hover:bg-[#F4F4F5]">
+            Close
+          </button>
+          <button onClick={onEdit} className="bg-[#8B6914] text-white text-sm font-semibold py-2 px-5 rounded-lg hover:bg-[#7a5c11] transition-colors">
+            Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function InventoryMaster() {
   const { user, profile, isAdmin, isWarehouseManager } = useAuth()
@@ -567,6 +697,7 @@ export default function InventoryMaster() {
   const [receivePO, setReceivePO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
   const [deletingPO, setDeletingPO] = useState(false)
+  const [previewPO, setPreviewPO] = useState(null)
 
   // One-time migration: inventoryBatches → purchaseOrders
   useEffect(() => {
@@ -933,6 +1064,14 @@ export default function InventoryMaster() {
           po={receivePO}
           dealerMap={dealerMap}
           onClose={() => setReceivePO(null)}
+        />
+      )}
+      {previewPO && (
+        <POPreviewModal
+          po={previewPO}
+          dealerMap={dealerMap}
+          onClose={() => setPreviewPO(null)}
+          onEdit={() => { setEditPO(previewPO); setPreviewPO(null) }}
         />
       )}
       {deletePO && (
@@ -1456,7 +1595,7 @@ export default function InventoryMaster() {
                   const canReceive = ['Ordered', 'Partially Received'].includes(p.status)
                   const canEdit = true
                   return (
-                    <tr key={p.id} className="hover:bg-[#FAFAFA] transition-colors">
+                    <tr key={p.id} onClick={() => setPreviewPO(p)} className="hover:bg-[#FAFAFA] transition-colors cursor-pointer">
                       <td className="py-2 px-3 font-medium text-[#1A1A1A]">{p.supplierName}</td>
                       <td className="py-2 px-3 text-[#9A9A9A]">{p.poNumber || '—'}</td>
                       <td className="py-2 px-3 text-[#9A9A9A] whitespace-nowrap">{p.orderDate || '—'}</td>
@@ -1479,7 +1618,7 @@ export default function InventoryMaster() {
                         {p.freightCost != null ? formatCurrency(p.freightCost) : '—'}
                       </td>
                       <td className="py-2 px-3 text-[#9A9A9A]">{p.createdBy || '—'}</td>
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-3 whitespace-nowrap">
                           {canReceive && (
                             <button onClick={() => setReceivePO(p)} className="text-xs font-semibold text-[#4CAF7D] hover:underline">Receive</button>
@@ -1516,7 +1655,7 @@ export default function InventoryMaster() {
                 'Fully Received': 'bg-[#4CAF7D]/15 text-[#4CAF7D]',
               }[p.status] ?? 'bg-gray-100 text-gray-500'
               return (
-                <div key={p.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                <div key={p.id} onClick={() => setPreviewPO(p)} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm cursor-pointer hover:border-[#8B6914]/30 transition-colors">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <p className="font-semibold text-[#1A1A1A]">{p.supplierName}</p>
@@ -1532,7 +1671,7 @@ export default function InventoryMaster() {
                     {p.freightCost != null && <span>Freight: {formatCurrency(p.freightCost)}</span>}
                     {outstanding > 0 && <span className="text-[#E6A817] font-medium">{outstanding} outstanding</span>}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                     {['Ordered', 'Partially Received'].includes(p.status) && (
                       <button onClick={() => setReceivePO(p)}
                         className="flex-1 text-sm border border-[#4CAF7D] text-[#4CAF7D] rounded-lg py-1.5 hover:bg-[#4CAF7D]/5 transition-colors font-medium">

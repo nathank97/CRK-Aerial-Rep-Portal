@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { updateDoc, addDoc, getDocs, getDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../hooks/useOrders'
+import { useCatalog } from '../../hooks/useCatalog'
 import { orderDoc, invoicesCol, inventoryCol } from '../../firebase/firestore'
 import { matchAndReserve, releaseReservation } from '../../utils/inventoryReservation'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
@@ -175,6 +176,8 @@ export default function OrderDetail() {
   const navigate = useNavigate()
   const { user, profile, isAdmin, isWarehouseManager } = useAuth()
   const { order, loading } = useOrder(id)
+  const { catalog } = useCatalog()
+  const catalogMap = useMemo(() => Object.fromEntries(catalog.map((c) => [c.id, c])), [catalog])
   const { template: emailTemplate } = useEmailTemplate()
 
   const [saving, setSaving] = useState(false)
@@ -723,24 +726,29 @@ export default function OrderDetail() {
           <p className="text-sm text-[#9A9A9A] text-center py-8">No line items on this order.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[400px]">
+            <table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
+                  <th className="text-left py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Compatible Models</th>
                   <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-16">Qty</th>
                   <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
                   <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-24">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {order.lineItems.map((item, i) => (
+                {order.lineItems.map((item, i) => {
+                  const models = item.catalogId ? (catalogMap[item.catalogId]?.compatibleModels ?? []) : []
+                  return (
                   <tr key={item.id ?? i}>
                     <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
+                    <td className="py-2 px-2 text-xs text-[#9A9A9A]">{models.length > 0 ? models.join(', ') : '—'}</td>
                     <td className="py-2 px-2 text-right text-[#9A9A9A]">{item.quantity}</td>
                     <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>
                     <td className="py-2 pl-2 text-right font-semibold text-[#111111]">{formatCurrency((item.quantity ?? 1) * (item.unitPrice ?? 0))}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

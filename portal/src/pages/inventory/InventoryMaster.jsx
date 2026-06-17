@@ -535,7 +535,7 @@ function AddStockModal({ dealers, catalog, onClose, fixedDealerId }) {
 }
 
 // ── PO Preview Modal ─────────────────────────────────────────────────────────
-function POPreviewModal({ po, dealerMap, onClose, onEdit }) {
+function POPreviewModal({ po, dealerMap, catalogMap, onClose, onEdit }) {
   function fmt(n) {
     if (n == null) return '—'
     return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -598,7 +598,7 @@ function POPreviewModal({ po, dealerMap, onClose, onEdit }) {
             <table className="w-full text-sm" style={{ minWidth: 640 }}>
               <thead>
                 <tr className="bg-[#F4F4F5] border-b border-gray-200">
-                  {['#', 'Model', 'Brand', 'SKU', 'Condition', 'Ordered', 'Received', 'Cost / Unit', 'Line Total'].map((h) => (
+                  {['#', 'Model', 'Compatible Models', 'Brand', 'SKU', 'Condition', 'Ordered', 'Received', 'Cost / Unit', 'Line Total'].map((h) => (
                     <th key={h} className="text-left px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -618,6 +618,12 @@ function POPreviewModal({ po, dealerMap, onClose, onEdit }) {
                           : idx + 1}
                       </td>
                       <td className="px-3 py-2 font-medium text-[#1A1A1A]">{item.modelName || '—'}</td>
+                      <td className="px-3 py-2 text-[#9A9A9A] text-xs">
+                        {(() => {
+                          const models = item.catalogId ? (catalogMap[item.catalogId]?.compatibleModels ?? []) : []
+                          return models.length > 0 ? models.join(', ') : '—'
+                        })()}
+                      </td>
                       <td className="px-3 py-2 text-[#9A9A9A]">{item.brand || '—'}</td>
                       <td className="px-3 py-2 text-[#9A9A9A]">{item.sku || '—'}</td>
                       <td className="px-3 py-2 text-[#9A9A9A]">{item.condition || '—'}</td>
@@ -633,7 +639,7 @@ function POPreviewModal({ po, dealerMap, onClose, onEdit }) {
                   )
                 })}
                 {(po.items ?? []).length === 0 && (
-                  <tr><td colSpan={9} className="py-6 text-center text-[#9A9A9A] text-sm">No items on this order.</td></tr>
+                  <tr><td colSpan={10} className="py-6 text-center text-[#9A9A9A] text-sm">No items on this order.</td></tr>
                 )}
               </tbody>
             </table>
@@ -1070,6 +1076,7 @@ export default function InventoryMaster() {
         <POPreviewModal
           po={previewPO}
           dealerMap={dealerMap}
+          catalogMap={catalogMap}
           onClose={() => setPreviewPO(null)}
           onEdit={() => { setEditPO(previewPO); setPreviewPO(null) }}
         />

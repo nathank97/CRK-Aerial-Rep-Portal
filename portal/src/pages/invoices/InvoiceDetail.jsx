@@ -1,9 +1,10 @@
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
 import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
 import { useAuth } from '../../context/AuthContext'
 import { useInvoice, computePaymentStatus } from '../../hooks/useInvoices'
+import { useCatalog } from '../../hooks/useCatalog'
 import { invoiceDoc, invoicesCol } from '../../firebase/firestore'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
@@ -23,6 +24,8 @@ export default function InvoiceDetail() {
   const navigate = useNavigate()
   const { user, profile, isAdmin } = useAuth()
   const { invoice, loading } = useInvoice(id)
+  const { catalog } = useCatalog()
+  const catalogMap = useMemo(() => Object.fromEntries(catalog.map((c) => [c.id, c])), [catalog])
 
   useEffect(() => {
     if (!loading && invoice && !isAdmin && invoice.dealerId !== profile?.id) {
@@ -602,10 +605,11 @@ export default function InvoiceDetail() {
             {(() => {
               const hasDiscounts = invoice.lineItems.some((i) => (i.discount ?? 0) > 0)
               return (
-                <table className="w-full text-sm min-w-[450px]">
+                <table className="w-full text-sm min-w-[550px]">
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Description</th>
+                      <th className="text-left py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Compatible Models</th>
                       <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-16">Qty</th>
                       <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-28">Unit Price</th>
                       {hasDiscounts && (
@@ -623,9 +627,11 @@ export default function InvoiceDetail() {
                           ? base * (1 - item.discount / 100)
                           : Math.max(0, base - item.discount)
                         : base
+                      const models = item.catalogId ? (catalogMap[item.catalogId]?.compatibleModels ?? []) : []
                       return (
                         <tr key={item.id ?? i}>
                           <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
+                          <td className="py-2 px-2 text-xs text-[#9A9A9A]">{models.length > 0 ? models.join(', ') : '—'}</td>
                           <td className="py-2 px-2 text-right text-[#9A9A9A]">{qty}</td>
                           <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>
                           {hasDiscounts && (

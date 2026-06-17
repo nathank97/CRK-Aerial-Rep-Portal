@@ -1309,7 +1309,8 @@ export default function InventoryMaster() {
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
                   ['Item', 'modelName'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
-                  ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'], ['Avg Cost', 'avgCost'], ['Total Value', 'totalValue'],
+                  ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
+                  ...(isAdmin ? [['Avg Cost', 'avgCost'], ['Total Value', 'totalValue']] : []),
                   ['Total On Hand', 'totalOnHand'], ['Total On-Order', 'totalOnOrder'],
                   ['Total Reserved', 'totalReserved'], ['Total Available', 'totalAvail'],
                 ].map(([label, key]) => (
@@ -1319,9 +1320,9 @@ export default function InventoryMaster() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={8} />)
+                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 8 : 6} />)
               ) : visibleSummary.length === 0 ? (
-                <tr><td colSpan={12} className="py-12 text-center text-[#9A9A9A] text-sm">No items match the current filters.</td></tr>
+                <tr><td colSpan={isAdmin ? 12 : 10} className="py-12 text-center text-[#9A9A9A] text-sm">No items match the current filters.</td></tr>
               ) : visibleSummary.map((g, i) => {
                 const totalAvail = g.totalOnHand - g.totalReserved
                 const isNeg = g.totalOnHand < 0
@@ -1337,8 +1338,8 @@ export default function InventoryMaster() {
                     </td>
                     <td className="py-2 px-3 text-[#9A9A9A]">{g.msrp != null ? formatCurrency(g.msrp) : '—'}</td>
                     <td className="py-2 px-3 font-medium text-[#4CAF7D]">{g.repPrice != null ? formatCurrency(g.repPrice) : '—'}</td>
-                    <td className="py-2 px-3 text-[#9A9A9A]">{g.avgCost != null ? formatCurrency(g.avgCost) : '—'}</td>
-                    <td className="py-2 px-3 font-medium text-[#8B6914]">{g.totalValue != null ? formatCurrency(g.totalValue) : '—'}</td>
+                    {isAdmin && <td className="py-2 px-3 text-[#9A9A9A]">{g.avgCost != null ? formatCurrency(g.avgCost) : '—'}</td>}
+                    {isAdmin && <td className="py-2 px-3 font-medium text-[#8B6914]">{g.totalValue != null ? formatCurrency(g.totalValue) : '—'}</td>}
                     <td className={`py-2 px-3 text-center font-semibold ${isNeg ? 'text-[#D95F5F]' : 'text-[#1A1A1A]'}`}>
                       {g.totalOnHand}
                       {isNeg && <span className="ml-1 text-[9px] font-bold bg-[#D95F5F]/20 text-[#D95F5F] px-1 py-0.5 rounded">NEG</span>}

@@ -5,6 +5,197 @@ import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
 import { writeTx } from '../../utils/inventoryTransactions'
 
+export function EditReceptionModal({ po, dealerMap, onClose }) {
+  const { profile, user } = useAuth()
+  const [quantities, setQuantities] = useState(() => {
+    const init = {}
+    po.items?.forEach((item) => { init[item.id] = String(item.receivedQty ?? 0) })
+    return init
+  })
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const locationName = dealerMap[po.dealerId] || po.dealerId || '—'
+
+  const changedItems = (po.items ?? []).filter((item) => {
+    if (item.cancelled) return false
+    const newQty = parseInt(quantities[item.id])
+    return !isNaN(newQty) && newQty !== (item.receivedQty ?? 0)
+  })
+  const hasChanges = changedItems.length > 0
+
+  async function handleSave() {
+    setError('')
+    for (const item of po.items ?? []) {
+      if (item.cancelled) continue
+      const newQty = parseInt(quantities[item.id])
+      if (isNaN(newQty) || newQty < 0) { setError('All quantities must be 0 or more.'); return }
+      if (newQty > item.orderedQty) {
+        setError(`"${item.modelName}": cannot exceed ordered quantity (${item.orderedQty}).`)
+        return
+      }
+    }
+
+    setSaving(true)
+    const createdBy = profile?.displayName ?? user?.email ?? ''
+
+    try {
+      const updatedItems = await Promise.all(
+        (po.items ?? []).map(async (item) => {
+          if (item.cancelled) return item
+          const newQty = parseInt(quantities[item.id]) ?? (item.receivedQty ?? 0)
+          const oldQty = item.receivedQty ?? 0
+          const delta = newQty - oldQty
+          if (delta === 0) return item
+
+          if (item.inventoryIds?.length > 0) {
+            const invId = item.inventoryIds[0]
+            const invSnap = await getDoc(doc(db, 'inventory', invId))
+            if (invSnap.exists()) {
+              const d = invSnap.data()
+              const newOnHand = Math.max(0, (d.quantityOnHand ?? 0) + delta)
+              await updateDoc(doc(db, 'inventory', invId), {
+                quantityOnHand: newOnHand,
+                quantityAvailable: Math.max(0, newOnHand - (d.quantityReserved ?? 0)),
+                updatedAt: serverTimestamp(),
+              })
+              await writeTx([{
+                type: 'po_adjustment',
+                qty: delta,
+                modelName: item.modelName,
+                brand: item.brand ?? null,
+                sku: item.sku ?? null,
+                category: item.category ?? null,
+                dealerId: po.dealerId,
+                inventoryId: invId,
+                sourceType: 'purchase_order',
+                sourceId: po.id,
+                sourceNumber: po.poNumber || po.supplierName,
+                fromLocation: delta > 0 ? (po.supplierName || 'Supplier') : locationName,
+                toLocation: delta > 0 ? locationName : 'Adjustment',
+                notes: notes.trim() || `Reception edit: ${oldQty} → ${newQty}`,
+                createdBy,
+              }])
+            }
+          }
+
+          return { ...item, receivedQty: newQty }
+        })
+      )
+
+      const newStatus = calcStatus(updatedItems)
+      await updateDoc(doc(db, 'purchaseOrders', po.id), {
+        items: updatedItems,
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      })
+      onClose()
+    } catch (e) {
+      console.error(e)
+      setError('Failed to save. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  const iCls = 'border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] bg-white'
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-[#1A1A1A]">Edit Reception</h2>
+            <p className="text-xs text-[#9A9A9A] mt-0.5">
+              {po.supplierName}{po.poNumber ? ` · PO ${po.poNumber}` : ''} · {locationName}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Adjustment Notes</label>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional — reason for editing received quantities"
+              className={`${iCls} w-full`} />
+          </div>
+
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-[#F4F4F5] border-b border-gray-200">
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Item</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Ordered</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Currently Received</th>
+                  <th className="text-center px-3 py-2.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap">Adjust To</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(po.items ?? []).map((item) => {
+                  if (item.cancelled) {
+                    return (
+                      <tr key={item.id} className="bg-gray-50 opacity-60">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-[#1A1A1A]">{item.modelName}</p>
+                          <p className="text-xs text-[#9A9A9A]">{[item.brand, item.sku].filter(Boolean).join(' · ')}</p>
+                        </td>
+                        <td className="px-3 py-3 text-center text-[#1A1A1A]">{item.orderedQty}</td>
+                        <td className="px-3 py-3 text-center text-[#9A9A9A]">{item.receivedQty ?? 0}</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className="text-xs font-semibold bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">Cancelled</span>
+                        </td>
+                      </tr>
+                    )
+                  }
+                  const newQty = parseInt(quantities[item.id])
+                  const oldQty = item.receivedQty ?? 0
+                  const delta = isNaN(newQty) ? 0 : newQty - oldQty
+                  const changed = !isNaN(newQty) && newQty !== oldQty
+                  return (
+                    <tr key={item.id} className={changed ? (delta > 0 ? 'bg-[#4CAF7D]/5' : 'bg-[#D95F5F]/5') : ''}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-[#1A1A1A]">{item.modelName}</p>
+                        <p className="text-xs text-[#9A9A9A]">{[item.brand, item.sku].filter(Boolean).join(' · ')}</p>
+                      </td>
+                      <td className="px-3 py-3 text-center text-[#1A1A1A]">{item.orderedQty}</td>
+                      <td className="px-3 py-3 text-center">
+                        <span className="font-semibold text-[#4CAF7D]">{oldQty}</span>
+                        {changed && (
+                          <span className={`ml-2 text-xs font-semibold ${delta > 0 ? 'text-[#4CAF7D]' : 'text-[#D95F5F]'}`}>
+                            {delta > 0 ? `+${delta}` : delta}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="number" min="0" max={item.orderedQty}
+                          value={quantities[item.id] ?? ''}
+                          onChange={(e) => setQuantities((p) => ({ ...p, [item.id]: e.target.value }))}
+                          className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-[#8B6914]"
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {error && <p className="text-sm text-[#D95F5F] font-medium">{error}</p>}
+        </div>
+
+        <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="flex-1 border border-gray-200 text-[#1A1A1A] text-sm font-medium py-2.5 rounded-lg hover:bg-[#F4F4F5]">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !hasChanges}
+            className="flex-1 bg-[#4A90B8] text-white text-sm font-semibold py-2.5 rounded-lg hover:bg-[#3d7ea3] disabled:opacity-50 transition-colors">
+            {saving ? 'Saving…' : `Save${changedItems.length > 0 ? ` (${changedItems.length} change${changedItems.length !== 1 ? 's' : ''})` : ' Changes'}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function calcStatus(items) {
   const active = items.filter((i) => !i.cancelled)
   if (active.length === 0) return 'Fully Received'

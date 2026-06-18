@@ -11,7 +11,7 @@ import { SkeletonRow } from '../../components/common/SkeletonCard'
 import { usePurchaseOrders } from '../../hooks/usePurchaseOrders'
 import { useInventoryTransactions } from '../../hooks/useInventoryTransactions'
 import PurchaseOrderModal from './PurchaseOrderModal'
-import ReceivePOModal from './ReceivePOModal'
+import ReceivePOModal, { EditReceptionModal } from './ReceivePOModal'
 import { writeTx } from '../../utils/inventoryTransactions'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
@@ -701,6 +701,7 @@ export default function InventoryMaster() {
   const [cleanupBusy, setCleanupBusy] = useState(false)
   const [cleanupDone, setCleanupDone] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
+  const [editReceptionPO, setEditReceptionPO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
   const [deletingPO, setDeletingPO] = useState(false)
   const [previewPO, setPreviewPO] = useState(null)
@@ -1070,6 +1071,13 @@ export default function InventoryMaster() {
           po={receivePO}
           dealerMap={dealerMap}
           onClose={() => setReceivePO(null)}
+        />
+      )}
+      {editReceptionPO && (
+        <EditReceptionModal
+          po={editReceptionPO}
+          dealerMap={dealerMap}
+          onClose={() => setEditReceptionPO(null)}
         />
       )}
       {previewPO && (
@@ -1631,6 +1639,9 @@ export default function InventoryMaster() {
                           {canReceive && (
                             <button onClick={() => setReceivePO(p)} className="text-xs font-semibold text-[#4CAF7D] hover:underline">Receive</button>
                           )}
+                          {p.status === 'Fully Received' && (
+                            <button onClick={() => setEditReceptionPO(p)} className="text-xs font-semibold text-[#4A90B8] hover:underline">Edit Reception</button>
+                          )}
                           {canEdit && (
                             <button onClick={() => setEditPO(p)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
                           )}
@@ -1686,6 +1697,12 @@ export default function InventoryMaster() {
                         Receive
                       </button>
                     )}
+                    {p.status === 'Fully Received' && (
+                      <button onClick={() => setEditReceptionPO(p)}
+                        className="flex-1 text-sm border border-[#4A90B8] text-[#4A90B8] rounded-lg py-1.5 hover:bg-[#4A90B8]/5 transition-colors font-medium">
+                        Edit Reception
+                      </button>
+                    )}
                     <button onClick={() => setEditPO(p)}
                       className="flex-1 text-sm border border-[#8B6914] text-[#8B6914] rounded-lg py-1.5 hover:bg-[#8B6914]/5 transition-colors">
                       Edit
@@ -1709,6 +1726,7 @@ export default function InventoryMaster() {
           add_stock:      { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'Add Stock' },
           po_ordered:     { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'PO Ordered' },
           po_receipt:     { bg: 'bg-[#4CAF7D]/15', text: 'text-[#4CAF7D]',  label: 'PO Receipt' },
+          po_adjustment:  { bg: 'bg-[#4A90B8]/15', text: 'text-[#4A90B8]',  label: 'PO Adjustment' },
           deduction:      { bg: 'bg-[#D95F5F]/15', text: 'text-[#D95F5F]',  label: 'Deduction' },
           reversal:       { bg: 'bg-[#9B59B6]/15', text: 'text-[#9B59B6]',  label: 'Reversal' },
           adjustment:     { bg: 'bg-[#E6A817]/15', text: 'text-[#E6A817]',  label: 'Adjustment' },

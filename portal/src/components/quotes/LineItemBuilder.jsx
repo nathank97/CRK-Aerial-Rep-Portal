@@ -1,5 +1,8 @@
 import { useState, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
 import { getDealerPrice, isBelowDealerCost } from '../../utils/pricing'
@@ -89,6 +92,140 @@ function CatalogModal({ onSelect, onClose }) {
   )
 }
 
+// ─── Sortable row ─────────────────────────────────────────────────────────────
+
+function SortableRow({
+  item,
+  onUpdate,
+  onRemove,
+  showDealerPricing,
+  profile,
+  inputCls,
+  openDropdown,
+  setOpenDropdown,
+  dropdownSearch,
+  setDropdownSearch,
+  positionDropdown,
+  inputRefs,
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    zIndex: isDragging ? 1 : undefined,
+    position: isDragging ? 'relative' : undefined,
+  }
+
+  const lineTotal = calcLineTotal(item)
+  const belowCost =
+    showDealerPricing &&
+    profile?.role === 'dealer' &&
+    isBelowDealerCost(item.unitPrice, item, profile)
+
+  return (
+    <tr ref={setNodeRef} style={style} className="group">
+      {/* Drag handle */}
+      <td className="py-2 pl-1 pr-2 w-7">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          tabIndex={-1}
+          title="Drag to reorder"
+          className="cursor-grab active:cursor-grabbing text-[#C8C8C8] hover:text-[#9A9A9A] transition-colors touch-none select-none leading-none opacity-0 group-hover:opacity-100"
+        >
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor">
+            <circle cx="3" cy="3"  r="1.5" />
+            <circle cx="9" cy="3"  r="1.5" />
+            <circle cx="3" cy="8"  r="1.5" />
+            <circle cx="9" cy="8"  r="1.5" />
+            <circle cx="3" cy="13" r="1.5" />
+            <circle cx="9" cy="13" r="1.5" />
+          </svg>
+        </button>
+      </td>
+
+      {/* Description */}
+      <td className="py-2 pr-3">
+        <div className="relative">
+          <input
+            ref={el => { inputRefs.current[item.id] = el }}
+            value={item.description}
+            onChange={(e) => {
+              onUpdate(item.id, 'description', e.target.value)
+              setDropdownSearch((p) => ({ ...p, [item.id]: e.target.value }))
+              setOpenDropdown(item.id)
+              positionDropdown(item.id)
+            }}
+            onFocus={() => {
+              setDropdownSearch((p) => ({ ...p, [item.id]: item.description }))
+              setOpenDropdown(item.id)
+              positionDropdown(item.id)
+            }}
+            onBlur={() => setTimeout(() => setOpenDropdown(null), 150)}
+            placeholder="Description… or type to search catalog"
+            className={inputCls}
+          />
+        </div>
+        {item.type === 'catalog' && showDealerPricing && profile?.role === 'dealer' && item.msrp && (
+          <p className="text-xs text-[#9A9A9A] mt-0.5">
+            MSRP: {formatCurrency(item.msrp)} · Your cost: {formatCurrency(item.dealerCost)}
+          </p>
+        )}
+        {belowCost && (
+          <p className="text-xs text-[#E6A817] mt-0.5">⚠️ Price is below your dealer cost</p>
+        )}
+      </td>
+
+      {/* Qty */}
+      <td className="py-2 px-2">
+        <input type="number" min="1" value={item.quantity}
+          onChange={(e) => onUpdate(item.id, 'quantity', parseFloat(e.target.value) || 1)}
+          className={`${inputCls} text-right`} style={{ minWidth: '72px' }} />
+      </td>
+
+      {/* Unit Price */}
+      <td className="py-2 px-2">
+        <input type="number" min="0" step="0.01" value={item.unitPrice}
+          onChange={(e) => onUpdate(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+          className={`${inputCls} text-right ${belowCost ? 'border-[#E6A817]' : ''}`} />
+      </td>
+
+      {/* Discount */}
+      <td className="py-2 px-2">
+        <div className="flex gap-1">
+          <input type="number" min="0" value={item.discount ?? 0}
+            onChange={(e) => onUpdate(item.id, 'discount', parseFloat(e.target.value) || 0)}
+            className={`${inputCls} text-right`} style={{ minWidth: '72px' }} />
+          <select value={item.discountType ?? 'percent'}
+            onChange={(e) => onUpdate(item.id, 'discountType', e.target.value)}
+            className="border border-gray-200 rounded px-1 py-1.5 text-xs focus:outline-none focus:border-[#8B6914] bg-white">
+            <option value="percent">%</option>
+            <option value="flat">$</option>
+          </select>
+        </div>
+      </td>
+
+      {/* Line total */}
+      <td className="py-2 pl-2 text-right font-semibold text-[#1A1A1A] whitespace-nowrap">
+        {formatCurrency(lineTotal)}
+      </td>
+
+      {/* Remove */}
+      <td className="py-2 pl-1">
+        <button onClick={() => onRemove(item.id)}
+          className="text-[#9A9A9A] hover:text-[#D95F5F] transition-colors opacity-0 group-hover:opacity-100 text-lg leading-none">
+          ×
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function LineItemBuilder({ items, onChange, showDealerPricing = true }) {
   const { profile } = useAuth()
   const { catalog } = useCatalog()
@@ -97,6 +234,19 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
   const [dropdownSearch, setDropdownSearch] = useState({})
   const [dropdownAnchor, setDropdownAnchor] = useState(null)
   const inputRefs = useRef({})
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
+
+  function handleDragEnd(event) {
+    const { active, over } = event
+    if (over && active.id !== over.id) {
+      const oldIndex = items.findIndex((i) => i.id === active.id)
+      const newIndex = items.findIndex((i) => i.id === over.id)
+      onChange(arrayMove(items, oldIndex, newIndex))
+    }
+  }
 
   function positionDropdown(itemId) {
     const el = inputRefs.current[itemId]
@@ -165,92 +315,42 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
 
       {items.length > 0 && (
         <div className="mb-3 overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-full">Description</th>
-                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Qty</th>
-                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-28">Unit Price</th>
-                <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-40">Discount</th>
-                <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Total</th>
-                <th className="w-8" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {items.map((item) => {
-                const lineTotal = calcLineTotal(item)
-                const belowCost = showDealerPricing && profile?.role === 'dealer' &&
-                  isBelowDealerCost(item.unitPrice, item, profile)
-
-                return (
-                  <tr key={item.id} className="group">
-                    <td className="py-2 pr-3">
-                      <div className="relative">
-                        <input
-                          ref={el => { inputRefs.current[item.id] = el }}
-                          value={item.description}
-                          onChange={(e) => {
-                            update(item.id, 'description', e.target.value)
-                            setDropdownSearch((p) => ({ ...p, [item.id]: e.target.value }))
-                            setOpenDropdown(item.id)
-                            positionDropdown(item.id)
-                          }}
-                          onFocus={() => {
-                            setDropdownSearch((p) => ({ ...p, [item.id]: item.description }))
-                            setOpenDropdown(item.id)
-                            positionDropdown(item.id)
-                          }}
-                          onBlur={() => setTimeout(() => setOpenDropdown(null), 150)}
-                          placeholder="Description… or type to search catalog"
-                          className={inputCls}
-                        />
-                      </div>
-                      {item.type === 'catalog' && showDealerPricing && profile?.role === 'dealer' && item.msrp && (
-                        <p className="text-xs text-[#9A9A9A] mt-0.5">
-                          MSRP: {formatCurrency(item.msrp)} · Your cost: {formatCurrency(item.dealerCost)}
-                        </p>
-                      )}
-                      {belowCost && (
-                        <p className="text-xs text-[#E6A817] mt-0.5">⚠️ Price is below your dealer cost</p>
-                      )}
-                    </td>
-                    <td className="py-2 px-2">
-                      <input type="number" min="1" value={item.quantity}
-                        onChange={(e) => update(item.id, 'quantity', parseFloat(e.target.value) || 1)}
-                        className={`${inputCls} text-right`} style={{ minWidth: '72px' }} />
-                    </td>
-                    <td className="py-2 px-2">
-                      <input type="number" min="0" step="0.01" value={item.unitPrice}
-                        onChange={(e) => update(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        className={`${inputCls} text-right ${belowCost ? 'border-[#E6A817]' : ''}`} />
-                    </td>
-                    <td className="py-2 px-2">
-                      <div className="flex gap-1">
-                        <input type="number" min="0" value={item.discount ?? 0}
-                          onChange={(e) => update(item.id, 'discount', parseFloat(e.target.value) || 0)}
-                          className={`${inputCls} text-right`} style={{ minWidth: '72px' }} />
-                        <select value={item.discountType ?? 'percent'}
-                          onChange={(e) => update(item.id, 'discountType', e.target.value)}
-                          className="border border-gray-200 rounded px-1 py-1.5 text-xs focus:outline-none focus:border-[#8B6914] bg-white">
-                          <option value="percent">%</option>
-                          <option value="flat">$</option>
-                        </select>
-                      </div>
-                    </td>
-                    <td className="py-2 pl-2 text-right font-semibold text-[#1A1A1A] whitespace-nowrap">
-                      {formatCurrency(lineTotal)}
-                    </td>
-                    <td className="py-2 pl-1">
-                      <button onClick={() => remove(item.id)}
-                        className="text-[#9A9A9A] hover:text-[#D95F5F] transition-colors opacity-0 group-hover:opacity-100 text-lg leading-none">
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="w-7" />
+                  <th className="text-left py-2 pr-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider w-full">Description</th>
+                  <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Qty</th>
+                  <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-28">Unit Price</th>
+                  <th className="text-right py-2 px-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-40">Discount</th>
+                  <th className="text-right py-2 pl-2 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider whitespace-nowrap w-24">Total</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                <tbody className="divide-y divide-gray-50">
+                  {items.map((item) => (
+                    <SortableRow
+                      key={item.id}
+                      item={item}
+                      onUpdate={update}
+                      onRemove={remove}
+                      showDealerPricing={showDealerPricing}
+                      profile={profile}
+                      inputCls={inputCls}
+                      openDropdown={openDropdown}
+                      setOpenDropdown={setOpenDropdown}
+                      dropdownSearch={dropdownSearch}
+                      setDropdownSearch={setDropdownSearch}
+                      positionDropdown={positionDropdown}
+                      inputRefs={inputRefs}
+                    />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </table>
+          </DndContext>
         </div>
       )}
 

@@ -5,6 +5,46 @@ import { createDealerAccount, createUserAccount, resetPassword } from '../../fir
 import { db } from '../../firebase/config'
 import { formatDate } from '../../utils/formatters'
 
+// ─── Pricing constants ───────────────────────────────────────────────────────
+
+const MARGIN_TYPES = [
+  { key: 'Drone',     label: 'Drone Kit' },
+  { key: 'Part',      label: 'Part' },
+  { key: 'Accessory', label: 'Accessory' },
+  { key: 'Service',   label: 'Service' },
+  { key: 'Other',     label: 'Other' },
+]
+
+const DEFAULT_MARGIN_BY_TYPE = { Drone: 12.5, Part: 10, Accessory: 10, Service: 10, Other: 10 }
+
+function MarginByTypeInputs({ value, onChange }) {
+  const cls = 'border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] w-24 text-right pr-7'
+  return (
+    <div className="border border-gray-100 rounded-xl overflow-hidden">
+      <div className="grid grid-cols-2 bg-[#F4F4F5] px-3 py-1.5 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">
+        <span>Item Type</span>
+        <span className="text-right">Margin %</span>
+      </div>
+      {MARGIN_TYPES.map(({ key, label }) => (
+        <div key={key} className="grid grid-cols-2 items-center px-3 py-2 border-t border-gray-100">
+          <span className="text-sm text-[#1A1A1A]">{label}</span>
+          <div className="flex justify-end">
+            <div className="relative">
+              <input
+                type="number" min="0" max="100" step="0.5"
+                value={value[key] ?? ''}
+                onChange={(e) => onChange({ ...value, [key]: e.target.value === '' ? '' : parseFloat(e.target.value) })}
+                className={cls}
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#9A9A9A]">%</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const DASHBOARD_WIDGETS = [
@@ -72,8 +112,8 @@ function NewRepModal({ onClose, onCreated }) {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [tempPassword, setTempPassword] = useState('')
-  const [marginPercent, setMarginPercent] = useState('20')
   const [pricingTier, setPricingTier] = useState('margin')
+  const [marginByType, setMarginByType] = useState({ ...DEFAULT_MARGIN_BY_TYPE })
   const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -85,11 +125,13 @@ function NewRepModal({ onClose, onCreated }) {
     setSaving(true)
     setError('')
     try {
+      const mbt = Object.fromEntries(Object.entries(marginByType).map(([k, v]) => [k, parseFloat(v) || 0]))
       await createDealerAccount({
         email: email.trim(),
         tempPassword: tempPassword.trim(),
         displayName: displayName.trim(),
-        marginPercent: parseFloat(marginPercent) || 0,
+        marginPercent: mbt.Other ?? 0,
+        marginByType: mbt,
         pricingTier,
         location: location.trim(),
       })
@@ -127,7 +169,7 @@ function NewRepModal({ onClose, onCreated }) {
           <div>
             <label className={labelCls}>Pricing Method</label>
             <select value={pricingTier} onChange={(e) => setPricingTier(e.target.value)} className={inputCls}>
-              <option value="margin">Margin % (calculated from MSRP)</option>
+              <option value="margin">Margin % by Item Type</option>
               <option value="tier1">Tier 1 (fixed catalog price)</option>
               <option value="tier2">Tier 2 (fixed catalog price)</option>
               <option value="tier3">Tier 3 (fixed catalog price)</option>
@@ -135,13 +177,9 @@ function NewRepModal({ onClose, onCreated }) {
           </div>
           {pricingTier === 'margin' && (
             <div>
-              <label className={labelCls}>Margin %</label>
-              <div className="relative">
-                <input type="number" min="0" max="100" step="0.5" value={marginPercent}
-                  onChange={(e) => setMarginPercent(e.target.value)} className={inputCls + ' pr-8'} />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
-              </div>
-              <p className="text-xs text-[#9A9A9A] mt-1">Rep Price = MSRP × (1 − Margin%)</p>
+              <label className={labelCls}>Margin % by Item Type</label>
+              <MarginByTypeInputs value={marginByType} onChange={setMarginByType} />
+              <p className="text-xs text-[#9A9A9A] mt-2">Rep Price = MSRP × (1 − Margin%)</p>
             </div>
           )}
           {error && <p className="text-sm text-[#D95F5F]">{error}</p>}
@@ -159,7 +197,7 @@ function NewRepModal({ onClose, onCreated }) {
 }
 
 function RepPanel({ dealer, onClose }) {
-  const [marginPercent, setMarginPercent] = useState(dealer.marginPercent ?? 0)
+  const [marginByType, setMarginByType] = useState(dealer.marginByType ?? { ...DEFAULT_MARGIN_BY_TYPE })
   const [pricingTier, setPricingTier] = useState(dealer.pricingTier ?? 'margin')
   const [location, setLocation] = useState(dealer.location ?? '')
   const [dashVis, setDashVis] = useState(dealer.dashboardVisibility ?? DEFAULT_DASHBOARD_VISIBILITY)
@@ -175,8 +213,10 @@ function RepPanel({ dealer, onClose }) {
   async function save() {
     setSaving(true)
     try {
+      const mbt = Object.fromEntries(Object.entries(marginByType).map(([k, v]) => [k, parseFloat(v) || 0]))
       await updateDoc(doc(db, 'users', dealer.id), {
-        marginPercent: parseFloat(marginPercent) || 0,
+        marginByType: mbt,
+        marginPercent: mbt.Other ?? 0,
         pricingTier,
         location: location.trim(),
         dashboardVisibility: dashVis,
@@ -212,20 +252,15 @@ function RepPanel({ dealer, onClose }) {
             <h3 className="text-sm font-semibold text-[#1A1A1A] mb-3">Pricing Method</h3>
             <select value={pricingTier} onChange={(e) => { setPricingTier(e.target.value); setSaved(false) }}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914] mb-3">
-              <option value="margin">Margin % (calculated from MSRP)</option>
+              <option value="margin">Margin % by Item Type</option>
               <option value="tier1">Tier 1 (fixed catalog price)</option>
               <option value="tier2">Tier 2 (fixed catalog price)</option>
               <option value="tier3">Tier 3 (fixed catalog price)</option>
             </select>
             {pricingTier === 'margin' && (
-              <div className="flex items-center gap-3">
-                <div className="relative w-36">
-                  <input type="number" min="0" max="100" step="0.5" value={marginPercent}
-                    onChange={(e) => { setMarginPercent(e.target.value); setSaved(false) }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:border-[#8B6914]" />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#9A9A9A]">%</span>
-                </div>
-                <p className="text-xs text-[#9A9A9A]">Rep Price = MSRP × (1 − {marginPercent || 0}%)</p>
+              <div>
+                <MarginByTypeInputs value={marginByType} onChange={(v) => { setMarginByType(v); setSaved(false) }} />
+                <p className="text-xs text-[#9A9A9A] mt-2">Rep Price = MSRP × (1 − Margin%)</p>
               </div>
             )}
             {pricingTier !== 'margin' && (

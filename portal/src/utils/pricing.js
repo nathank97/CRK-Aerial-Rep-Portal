@@ -1,13 +1,16 @@
-// Dealer Price = MSRP × (1 - marginPercent / 100)
+// Dealer/Rep Price = MSRP × (1 - marginPercent / 100)
 export const calcDealerPrice = (msrp, marginPercent) => {
   if (msrp == null || marginPercent == null) return msrp
   return msrp * (1 - marginPercent / 100)
 }
 
 /**
- * Returns the correct price for a dealer based on their pricingTier setting.
- * If pricingTier is 'tier1'/'tier2'/'tier3', returns the item's fixed tier price.
- * Otherwise falls back to margin % calculation.
+ * Returns the correct price for a dealer/rep.
+ *
+ * Priority order:
+ *   1. Fixed tier price (tier1/tier2/tier3) if the rep uses that pricing method
+ *   2. Per-type margin from profile.marginByType[item.type]  ← new
+ *   3. Flat profile.marginPercent as the fallback
  */
 export const getDealerPrice = (item, profile) => {
   if (!item) return 0
@@ -15,7 +18,10 @@ export const getDealerPrice = (item, profile) => {
   if (tier === 'tier1' && item.tier1 != null) return item.tier1
   if (tier === 'tier2' && item.tier2 != null) return item.tier2
   if (tier === 'tier3' && item.tier3 != null) return item.tier3
-  return calcDealerPrice(item.msrp, profile?.marginPercent)
+
+  const typeMargin = item.type != null ? profile?.marginByType?.[item.type] : undefined
+  const margin = typeMargin != null ? typeMargin : profile?.marginPercent
+  return calcDealerPrice(item.msrp, margin)
 }
 
 // Check if a price is below dealer cost (with tiny float tolerance)

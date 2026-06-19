@@ -940,11 +940,14 @@ export default function InventoryMaster() {
     })
   }, [items, search, filterDealer, filterCondition, filterAvail, dealerMap])
 
-  // Summary: group by brand + modelName + condition + category, sum quantities
+  // Summary: group by SKU + condition when SKU is present; fall back to brand + modelName + condition + category
   const summaryGroups = useMemo(() => {
     const groups = {}
     filtered.forEach((item) => {
-      const key = `${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
+      const skuKey = item.sku?.trim() ? item.sku.trim().toLowerCase() : null
+      const key = skuKey
+        ? `sku:${skuKey}||${item.condition ?? ''}`
+        : `name:${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
       if (!groups[key]) {
         const catItem = item.catalogId ? catalogMap[item.catalogId] : null
         const msrp = catItem?.msrp ?? item.msrp ?? null
@@ -952,7 +955,7 @@ export default function InventoryMaster() {
           _key: key,
           brand: item.brand ?? '',
           category: item.category ?? '',
-          modelName: item.modelName ?? '—',
+          modelName: catItem?.name ?? item.modelName ?? '—',
           condition: item.condition ?? '',
           totalOnHand: 0,
           totalReserved: 0,
@@ -961,6 +964,12 @@ export default function InventoryMaster() {
         }
       }
       const g = groups[key]
+      // Upgrade display name if a catalog-linked entry provides a better name
+      if (g.modelName === '—' || g.modelName === '') {
+        const catItem = item.catalogId ? catalogMap[item.catalogId] : null
+        if (catItem?.name) g.modelName = catItem.name
+        else if (item.modelName) g.modelName = item.modelName
+      }
       g.totalOnHand += item.quantityOnHand ?? 0
       g.totalReserved += item.quantityReserved ?? 0
       if (g.msrp == null) {

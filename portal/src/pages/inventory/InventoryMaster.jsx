@@ -237,6 +237,136 @@ function EditItemModal({ item, dealers, isAdmin, onClose }) {
   )
 }
 
+// ── Adjust Quantity Modal ────────────────────────────────────────────────────
+function AdjustQtyModal({ item, profile, onClose }) {
+  const [delta, setDelta] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const cls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]'
+  const lbl = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
+
+  async function handleSave() {
+    const d = parseInt(delta)
+    if (isNaN(d) || d === 0) { setError('Enter a non-zero quantity change.'); return }
+    setSaving(true)
+    try {
+      const newOnHand = (item.quantityOnHand ?? 0) + d
+      await updateDoc(doc(db, 'inventory', item.id), {
+        quantityOnHand: newOnHand,
+        quantityAvailable: Math.max(0, newOnHand - (item.quantityReserved ?? 0)),
+        updatedAt: serverTimestamp(),
+      })
+      await writeTx([{
+        type: 'adjustment',
+        qty: d,
+        modelName: item.modelName ?? null,
+        brand: item.brand ?? null,
+        sku: item.sku ?? null,
+        category: item.category ?? null,
+        dealerId: item.dealerId ?? null,
+        inventoryId: item.id,
+        sourceType: 'manual',
+        notes: notes.trim() || null,
+        createdBy: profile?.displayName ?? '',
+      }])
+      onClose()
+    } catch {
+      setError('Failed to save. Please try again.')
+      setSaving(false)
+    }
+  }
+
+  const previewQty = delta && !isNaN(parseInt(delta)) && parseInt(delta) !== 0
+    ? (item.quantityOnHand ?? 0) + parseInt(delta)
+    : null
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-[#1A1A1A]">Adjust Quantity</h2>
+            <p className="text-xs text-[#9A9A9A] mt-0.5">{item.modelName}{item.sku ? ` · ${item.sku}` : ''}</p>
+          </div>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          {error && <p className="text-xs text-[#D95F5F]">{error}</p>}
+          <div>
+            <label className={lbl}>Quantity Change (+ or −) *</label>
+            <input type="number" value={delta} onChange={(e) => setDelta(e.target.value)}
+              placeholder="e.g. 1 or -2" className={cls} autoFocus />
+            <p className="text-xs text-[#9A9A9A] mt-1">
+              Current on hand: <span className="font-semibold text-[#1A1A1A]">{item.quantityOnHand ?? 0}</span>
+              {previewQty != null && (
+                <> → <span className="font-semibold text-[#8B6914]">{previewQty}</span></>
+              )}
+            </p>
+          </div>
+          <div>
+            <label className={lbl}>Reason / Notes</label>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Correction for invoice 0019 reversal" className={cls} />
+          </div>
+        </div>
+        <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+          <button onClick={onClose} disabled={saving}
+            className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#7a5c12] disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Adjustment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Edit Transaction Log Entry Modal ─────────────────────────────────────────
+function EditTxModal({ tx, saving, onSave, onClose }) {
+  const [sku, setSku] = useState(tx.sku ?? '')
+  const [notes, setNotes] = useState(tx.notes ?? '')
+  const cls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]'
+  const lbl = 'block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1'
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-semibold text-[#1A1A1A]">Edit Log Entry</h2>
+            <p className="text-xs text-[#9A9A9A] mt-0.5">{tx.modelName || '—'}</p>
+          </div>
+          <button onClick={onClose} className="text-[#9A9A9A] hover:text-[#1A1A1A] text-xl leading-none">×</button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <label className={lbl}>SKU</label>
+            <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g. 14-007-00363" className={cls} autoFocus />
+          </div>
+          <div>
+            <label className={lbl}>Notes</label>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} className={cls} />
+          </div>
+        </div>
+        <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+          <button onClick={onClose} disabled={saving}
+            className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+            Cancel
+          </button>
+          <button onClick={() => onSave({ sku, notes })} disabled={saving}
+            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#7a5c12] disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Transfer Stock Modal ─────────────────────────────────────────────────────
 function TransferModal({ item, dealers, onClose }) {
   const [toDealerId, setToDealerId] = useState('')
@@ -695,8 +825,11 @@ export default function InventoryMaster() {
   const [cancelPO, setCancelPO] = useState(null)
   const [cancelSel, setCancelSel] = useState({})
   const [cancelBusy, setCancelBusy] = useState(false)
+  const [adjustItem, setAdjustItem] = useState(null)
   const [deletingTx, setDeletingTx] = useState(null)
   const [deletingTxBusy, setDeletingTxBusy] = useState(false)
+  const [editTx, setEditTx] = useState(null)
+  const [editTxSaving, setEditTxSaving] = useState(false)
   const [showCleanup, setShowCleanup] = useState(false)
   const [cleanupBusy, setCleanupBusy] = useState(false)
   const [cleanupDone, setCleanupDone] = useState(false)
@@ -1136,6 +1269,26 @@ export default function InventoryMaster() {
       {editItem && (
         <EditItemModal item={editItem} dealers={dealers} isAdmin={isAdmin} onClose={() => setEditItem(null)} />
       )}
+      {adjustItem && (
+        <AdjustQtyModal item={adjustItem} profile={profile} onClose={() => setAdjustItem(null)} />
+      )}
+      {editTx && (
+        <EditTxModal tx={editTx} saving={editTxSaving}
+          onSave={async ({ sku, notes }) => {
+            setEditTxSaving(true)
+            try {
+              await updateDoc(doc(db, 'inventoryTransactions', editTx.id), {
+                sku: sku.trim() || null,
+                notes: notes.trim() || null,
+              })
+              setEditTx(null)
+            } finally {
+              setEditTxSaving(false)
+            }
+          }}
+          onClose={() => setEditTx(null)}
+        />
+      )}
       {showCleanup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -1510,7 +1663,10 @@ export default function InventoryMaster() {
                           {isAdmin && <td className="py-2 px-3 text-[#9A9A9A]">{item.costPrice != null ? formatCurrency(item.costPrice) : '—'}</td>}
                           {isAdmin && (
                             <td className="py-2 px-3">
-                              <button onClick={() => setTransferItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
+                              <div className="flex gap-3">
+                                <button onClick={() => setAdjustItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Adjust</button>
+                                <button onClick={() => setTransferItem(item)} className="text-xs text-[#8B6914] hover:underline font-medium">Transfer</button>
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -1796,8 +1952,10 @@ export default function InventoryMaster() {
                         <td className="py-2 px-3 text-[#9A9A9A]">{tx.createdBy || '—'}</td>
                         <td className="py-2 px-3 text-[#9A9A9A] text-xs max-w-[160px] truncate">{tx.notes || '—'}</td>
                         <td className="py-2 px-3">
-                          <button onClick={() => setDeletingTx(tx)}
-                            className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                          <div className="flex gap-3">
+                            <button onClick={() => setEditTx(tx)} className="text-xs text-[#8B6914] hover:underline font-medium">Edit</button>
+                            <button onClick={() => setDeletingTx(tx)} className="text-xs text-[#D95F5F] hover:underline font-medium">Delete</button>
+                          </div>
                         </td>
                       </tr>
                     )

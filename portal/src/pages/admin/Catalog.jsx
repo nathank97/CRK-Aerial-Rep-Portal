@@ -21,6 +21,7 @@ const EMPTY_FORM = {
   name: '',
   type: 'Drone',
   sku: '',
+  pkgNumber: '',
   msrp: '',
   description: '',
   manufacturer: '',
@@ -601,6 +602,7 @@ function ItemModal({ item, models, onClose }) {
     name: item.name ?? '',
     type: item.type ?? 'Drone',
     sku: item.sku ?? '',
+    pkgNumber: item.pkgNumber ?? '',
     msrp: item.msrp ?? '',
     description: item.description ?? '',
     manufacturer: item.manufacturer ?? '',
@@ -633,6 +635,7 @@ function ItemModal({ item, models, onClose }) {
         name: form.name.trim(),
         type: form.type,
         sku: form.sku.trim(),
+        pkgNumber: form.pkgNumber.trim() || null,
         msrp: parseFloat(form.msrp) || 0,
         description: form.description.trim(),
         manufacturer: form.manufacturer.trim(),
@@ -682,11 +685,15 @@ function ItemModal({ item, models, onClose }) {
             </div>
           </div>
 
-          {/* SKU + Manufacturer */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* SKU + Pkg # + Manufacturer */}
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>SKU / Part #</label>
               <input value={form.sku} onChange={(e) => set('sku', e.target.value)} className={inputCls} placeholder="SKU-1234" />
+            </div>
+            <div>
+              <label className={labelCls}>Pkg / Box #</label>
+              <input value={form.pkgNumber} onChange={(e) => set('pkgNumber', e.target.value)} className={inputCls} placeholder="02-002-15666" />
             </div>
             <div>
               <label className={labelCls}>Manufacturer</label>
@@ -1018,7 +1025,7 @@ export default function Catalog() {
         (colFilters.status === 'Active' ? item.active !== false : item.active === false)
       const matchColModel = !colFilters.compatibleModels ||
         (item.compatibleModels ?? []).includes(colFilters.compatibleModels)
-      const matchSearch = !search || [item.name, item.sku, item.manufacturer, item.description]
+      const matchSearch = !search || [item.name, item.sku, item.pkgNumber, item.manufacturer, item.description]
         .some((v) => v?.toLowerCase().includes(search.toLowerCase()))
       const itemMs = item.createdAt?.toDate ? item.createdAt.toDate().getTime() : null
       const matchDateFrom = !fromMs || (itemMs != null && itemMs >= fromMs)
@@ -1033,6 +1040,7 @@ export default function Catalog() {
           case 'name': av = (a.name ?? '').toLowerCase(); bv = (b.name ?? '').toLowerCase(); break
           case 'type': av = a.type ?? ''; bv = b.type ?? ''; break
           case 'sku': av = (a.sku ?? '').toLowerCase(); bv = (b.sku ?? '').toLowerCase(); break
+          case 'pkgNumber': av = (a.pkgNumber ?? '').toLowerCase(); bv = (b.pkgNumber ?? '').toLowerCase(); break
           case 'tags': av = (a.tags ?? '').toLowerCase(); bv = (b.tags ?? '').toLowerCase(); break
           case 'msrp': av = a.msrp ?? 0; bv = b.msrp ?? 0; break
           case 'status': av = a.active !== false ? 0 : 1; bv = b.active !== false ? 0 : 1; break
@@ -1112,7 +1120,7 @@ export default function Catalog() {
   }
 
   function exportCSV() {
-    const headers = ['Name','SKU','Type','Manufacturer','MSRP','Tier 1','Tier 2','Tier 3','Description','Tags','Notes','Image URL','Active']
+    const headers = ['Name','SKU','Pkg #','Type','Manufacturer','MSRP','Tier 1','Tier 2','Tier 3','Description','Tags','Notes','Image URL','Active']
     const escape = (v) => {
       if (v == null) return ''
       const s = String(v)
@@ -1121,6 +1129,7 @@ export default function Catalog() {
     const rows = catalog.map((item) => [
       item.name ?? '',
       item.sku ?? '',
+      item.pkgNumber ?? '',
       item.type ?? '',
       item.manufacturer ?? '',
       item.msrp ?? '',
@@ -1322,7 +1331,8 @@ export default function Catalog() {
               {[
                 { key: 'name', label: 'Item', sortable: true },
                 { key: 'type', label: 'Type', sortable: true, options: ['All Types', ...ITEM_TYPES] },
-                { key: 'sku', label: 'SKU', sortable: true },
+                { key: 'sku', label: 'SKU / Part #', sortable: true },
+                { key: 'pkgNumber', label: 'Pkg #', sortable: true },
                 { key: 'tags', label: 'Tags', sortable: true },
                 { key: 'compatibleModels', label: 'Compatible Models', sortable: true, options: ['All Models', ...allCatalogModelNames] },
                 { key: 'msrp', label: 'MSRP', sortable: true },
@@ -1366,13 +1376,13 @@ export default function Catalog() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="animate-pulse">
-                  {Array.from({ length: canEdit ? 10 : 7 }).map((__, j) => (
+                  {Array.from({ length: canEdit ? 11 : 8 }).map((__, j) => (
                     <td key={j} className="py-2 px-3"><div className="h-4 bg-gray-100 rounded w-3/4" /></td>
                   ))}
                 </tr>
               ))
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={canEdit ? 10 : 7} className="py-12 text-center text-[#9A9A9A] text-sm">
+              <tr><td colSpan={canEdit ? 11 : 8} className="py-12 text-center text-[#9A9A9A] text-sm">
                 {catalog.length === 0 ? (canEdit ? 'No catalog items yet. Add the first one above.' : 'No catalog items yet.') : 'No items match your filters.'}
               </td></tr>
             ) : filtered.map((item) => (
@@ -1408,6 +1418,7 @@ export default function Catalog() {
                   </span>
                 </td>
                 <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.sku || '—'}</td>
+                <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{item.pkgNumber || '—'}</td>
                 <td className="py-2 px-3 text-xs text-[#9A9A9A]">{item.tags || '—'}</td>
                 <td className="py-2 px-3">
                   {item.compatibleModels?.length > 0 ? (

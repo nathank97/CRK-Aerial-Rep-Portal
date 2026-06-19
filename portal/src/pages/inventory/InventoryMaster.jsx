@@ -833,6 +833,9 @@ export default function InventoryMaster() {
   const [showCleanup, setShowCleanup] = useState(false)
   const [cleanupBusy, setCleanupBusy] = useState(false)
   const [cleanupDone, setCleanupDone] = useState(false)
+  const [showShortfallCleanup, setShowShortfallCleanup] = useState(false)
+  const [shortfallCleanupBusy, setShortfallCleanupBusy] = useState(false)
+  const [shortfallCleanupDone, setShortfallCleanupDone] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
   const [editReceptionPO, setEditReceptionPO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
@@ -934,6 +937,21 @@ export default function InventoryMaster() {
       console.error('Cancel error:', e)
     } finally {
       setCancelBusy(false)
+    }
+  }
+
+  const shortfallItems = items.filter((i) => i.notes === 'Auto-created: inventory shortfall')
+
+  async function handleShortfallCleanup() {
+    setShortfallCleanupBusy(true)
+    try {
+      await Promise.all(shortfallItems.map((i) => deleteDoc(doc(db, 'inventory', i.id))))
+      setShortfallCleanupDone(true)
+      setShowShortfallCleanup(false)
+    } catch (e) {
+      console.error('Shortfall cleanup error:', e)
+    } finally {
+      setShortfallCleanupBusy(false)
     }
   }
 
@@ -1289,6 +1307,34 @@ export default function InventoryMaster() {
           onClose={() => setEditTx(null)}
         />
       )}
+      {showShortfallCleanup && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Remove Shortfall Records</h2>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <p className="text-sm text-[#1A1A1A]">
+                This will permanently delete <span className="font-semibold text-[#D95F5F]">{shortfallItems.length} auto-created shortfall record{shortfallItems.length !== 1 ? 's' : ''}</span>.
+              </p>
+              <p className="text-sm text-[#9A9A9A]">
+                These are phantom entries created when an invoice deduction couldn't find a matching inventory item. They appear as negative rows in the Summary tab and are safe to remove. Your real inventory records are not affected.
+              </p>
+              <p className="text-sm text-[#9A9A9A]">This cannot be undone.</p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setShowShortfallCleanup(false)} disabled={shortfallCleanupBusy}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleShortfallCleanup} disabled={shortfallCleanupBusy}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#c44f4f] disabled:opacity-50">
+                {shortfallCleanupBusy ? 'Removing…' : 'Remove Shortfalls'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showCleanup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -1404,6 +1450,22 @@ export default function InventoryMaster() {
       {cleanupDone && (
         <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
           ✓ Cleanup complete — only PO-linked inventory remains.
+        </div>
+      )}
+      {isAdmin && !shortfallCleanupDone && shortfallItems.length > 0 && (
+        <div className="mb-4 bg-[#D95F5F]/10 border border-[#D95F5F]/30 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
+          <p className="text-sm text-[#D95F5F] font-medium">
+            {shortfallItems.length} phantom shortfall record{shortfallItems.length !== 1 ? 's' : ''} detected — created when invoice deductions couldn't match an inventory item by SKU. These appear as extra rows in the Summary and can be safely removed.
+          </p>
+          <button onClick={() => setShowShortfallCleanup(true)}
+            className="shrink-0 bg-[#D95F5F] text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#c44f4f] transition-colors whitespace-nowrap">
+            Remove Now
+          </button>
+        </div>
+      )}
+      {shortfallCleanupDone && (
+        <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
+          ✓ Shortfall records removed.
         </div>
       )}
 

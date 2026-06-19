@@ -7,12 +7,14 @@ import { formatCurrency } from '../../utils/formatters'
 
 function autoMatchId(inventory, li, dealerId) {
   const desc = (li.description ?? '').toLowerCase().trim()
+  const liSku = (li.sku ?? '').toLowerCase().trim()
   const scored = inventory
     .map((inv) => {
-      const s = (inv.sku ?? '').toLowerCase().trim()
+      const invSku = (inv.sku ?? '').toLowerCase().trim()
       const m = (inv.modelName ?? '').toLowerCase().trim()
-      const score = li.catalogId && inv.catalogId === li.catalogId ? 4
-        : s && s === desc ? 3
+      const score = li.catalogId && inv.catalogId === li.catalogId ? 5
+        : liSku && invSku && liSku === invSku ? 4          // SKU-to-SKU (primary)
+        : invSku && desc && invSku === desc ? 3             // inv SKU matches description (legacy)
         : m && m === desc ? 2
         : m && desc && (m.includes(desc) || desc.includes(m)) ? 1
         : 0
@@ -90,19 +92,20 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
 
         if (!row.inventoryId) {
           // No inventory selected → create negative shortfall record
+          const liSku = row.lineItem.sku?.trim() || null
           const negRef = await addDoc(inventoryCol, {
             dealerId: dealerId || null,
             modelName: row.lineItem.description,
-            sku: null, brand: null, category: null, condition: 'New',
+            sku: liSku, brand: null, category: null, condition: 'New',
             quantityOnHand: -qty, quantityReserved: 0, quantityAvailable: -qty,
             notes: 'Auto-created: inventory shortfall',
             createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           })
-          details.push({ type: 'shortfall', inventoryId: negRef.id, model: row.lineItem.description, sku: '', qty: -qty })
+          details.push({ type: 'shortfall', inventoryId: negRef.id, model: row.lineItem.description, sku: liSku ?? '', qty: -qty })
           txEntries.push({
             type: 'deduction', qty: -qty,
             modelName: row.lineItem.description,
-            brand: null, sku: null, category: null, dealerId,
+            brand: null, sku: liSku, category: null, dealerId,
             inventoryId: negRef.id,
             sourceType: source?.type ?? null, sourceId: source?.id ?? null, sourceNumber: source?.number ?? null,
             notes: 'Shortfall — negative inventory created',

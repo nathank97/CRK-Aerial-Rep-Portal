@@ -16,12 +16,13 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
     _work: d.data().quantityOnHand ?? 0,
   }))
 
-  // Group by catalogId (best) or normalized description
+  // Group by catalogId (best), then SKU, then normalized description
   const groups = new Map()
   for (const li of lineItems) {
-    const key = li.catalogId || li.description?.toLowerCase().trim() || li.id
+    const liSku = li.sku?.trim().toLowerCase() || ''
+    const key = li.catalogId || (liSku ? `sku:${liSku}` : li.description?.toLowerCase().trim()) || li.id
     if (!groups.has(key)) {
-      groups.set(key, { catalogId: li.catalogId || null, description: li.description || '', totalQty: 0 })
+      groups.set(key, { catalogId: li.catalogId || null, description: li.description || '', sku: li.sku?.trim() || '', totalQty: 0 })
     }
     groups.get(key).totalQty += (li.quantity ?? 1)
   }
@@ -32,15 +33,17 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
   for (const [, group] of groups) {
     let remaining = group.totalQty
 
+    const groupSku = group.sku.toLowerCase()
     const matches = inventory
       .filter((inv) => {
         if (inv._work <= 0) return false
         if (group.catalogId && inv.catalogId === group.catalogId) return true
-        const s = (inv.sku ?? '').toLowerCase().trim()
+        const invSku = (inv.sku ?? '').toLowerCase().trim()
+        if (groupSku && invSku && groupSku === invSku) return true  // SKU-to-SKU (primary)
         const m = (inv.modelName ?? '').toLowerCase().trim()
         const d = group.description.toLowerCase().trim()
         if (!d) return false
-        return (s && s === d) || (m && (m === d || m.includes(d) || d.includes(m)))
+        return (invSku && invSku === d) || (m && (m === d || m.includes(d) || d.includes(m)))
       })
       .sort((a, b) => {
         const ap = a.dealerId === dealerId ? 1 : 0
@@ -78,20 +81,21 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
     }
 
     if (remaining > 0) {
+      const shortfallSku = group.sku || null
       const negRef = await addDoc(inventoryCol, {
         dealerId: dealerId || null,
         modelName: group.description,
-        sku: null, brand: null, category: null, condition: 'New',
+        sku: shortfallSku, brand: null, category: null, condition: 'New',
         quantityOnHand: -remaining, quantityReserved: 0, quantityAvailable: -remaining,
         notes: 'Auto-created: inventory shortfall',
         createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       })
-      details.push({ type: 'shortfall', inventoryId: negRef.id, model: group.description, sku: '', qty: -remaining })
+      details.push({ type: 'shortfall', inventoryId: negRef.id, model: group.description, sku: shortfallSku ?? '', qty: -remaining })
       txEntries.push({
         type: 'deduction',
         qty: -remaining,
         modelName: group.description,
-        brand: null, sku: null, category: null,
+        brand: null, sku: shortfallSku, category: null,
         dealerId,
         inventoryId: negRef.id,
         sourceType: source.type ?? null,

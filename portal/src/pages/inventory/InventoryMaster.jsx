@@ -1108,6 +1108,7 @@ export default function InventoryMaster() {
           brand: item.brand ?? '',
           category: item.category ?? '',
           modelName: catItem?.name ?? item.modelName ?? '—',
+          droneModels: catItem?.compatibleModels ?? [],
           condition: item.condition ?? '',
           totalOnHand: 0,
           totalReserved: 0,
@@ -1548,7 +1549,7 @@ export default function InventoryMaster() {
             <thead>
               <tr className="border-b border-gray-100 bg-[#F4F4F5]">
                 {[
-                  ['Item', 'modelName'], ['Model / SKU', 'sku'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
+                  ['Item', 'modelName'], ['Model / SKU', 'sku'], ['Drone Model', 'droneModels'], ['Brand', 'brand'], ['Category', 'category'], ['Condition', 'condition'],
                   ['MSRP / Unit', 'msrp'], ['Rep Price / Unit', 'repPrice'],
                   ...(isAdmin ? [['Avg Cost', 'avgCost'], ['Total Value', 'totalValue']] : []),
                   ['Total On Hand', 'totalOnHand'], ['Total On-Order', 'totalOnOrder'],
@@ -1560,9 +1561,9 @@ export default function InventoryMaster() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 9 : 7} />)
+                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={isAdmin ? 10 : 8} />)
               ) : visibleSummary.length === 0 ? (
-                <tr><td colSpan={isAdmin ? 13 : 11} className="py-12 text-center text-[#9A9A9A] text-sm">No items match the current filters.</td></tr>
+                <tr><td colSpan={isAdmin ? 14 : 12} className="py-12 text-center text-[#9A9A9A] text-sm">No items match the current filters.</td></tr>
               ) : visibleSummary.map((g, i) => {
                 const totalAvail = g.totalOnHand - g.totalReserved
                 const isNeg = g.totalOnHand < 0
@@ -1570,6 +1571,9 @@ export default function InventoryMaster() {
                   <tr key={i} className={`transition-colors ${isNeg ? 'bg-[#D95F5F]/5 hover:bg-[#D95F5F]/10 border-l-2 border-[#D95F5F]' : 'hover:bg-[#FAFAFA]'}`}>
                     <td className="py-2 px-3 font-medium text-[#1A1A1A]">{g.modelName}</td>
                     <td className="py-2 px-3 font-mono text-xs text-[#9A9A9A]">{g.sku || '—'}</td>
+                    <td className="py-2 px-3 text-[#9A9A9A] text-xs">
+                      {g.droneModels.length > 0 ? g.droneModels.join(', ') : '—'}
+                    </td>
                     <td className="py-2 px-3 text-[#9A9A9A]">{g.brand || '—'}</td>
                     <td className="py-2 px-3 text-[#9A9A9A]">{g.category || '—'}</td>
                     <td className="py-2 px-3">
@@ -1618,6 +1622,7 @@ export default function InventoryMaster() {
                     <div>
                       <p className="font-semibold text-[#1A1A1A]">{g.modelName}</p>
                       {g.sku && <p className="text-xs font-mono text-[#9A9A9A]">{g.sku}</p>}
+                      {g.droneModels.length > 0 && <p className="text-xs text-[#9A9A9A]">{g.droneModels.join(', ')}</p>}
                       {g.brand && <p className="text-xs text-[#9A9A9A]">{g.brand}</p>}
                     </div>
                     {g.condition && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${conditionColor[g.condition] ?? 'bg-gray-100 text-gray-600'}`}>{g.condition}</span>}

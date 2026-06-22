@@ -836,6 +836,10 @@ export default function InventoryMaster() {
   const [showShortfallCleanup, setShowShortfallCleanup] = useState(false)
   const [shortfallCleanupBusy, setShortfallCleanupBusy] = useState(false)
   const [shortfallCleanupDone, setShortfallCleanupDone] = useState(false)
+  const [showFullReset, setShowFullReset] = useState(false)
+  const [fullResetConfirm, setFullResetConfirm] = useState('')
+  const [fullResetBusy, setFullResetBusy] = useState(false)
+  const [fullResetDone, setFullResetDone] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
   const [editReceptionPO, setEditReceptionPO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
@@ -952,6 +956,25 @@ export default function InventoryMaster() {
       console.error('Shortfall cleanup error:', e)
     } finally {
       setShortfallCleanupBusy(false)
+    }
+  }
+
+  async function handleFullReset() {
+    setFullResetBusy(true)
+    try {
+      // Delete every inventory document
+      const invSnap = await getDocs(inventoryCol)
+      await Promise.all(invSnap.docs.map((d) => deleteDoc(d.ref)))
+      // Delete every transaction log document
+      const txSnap = await getDocs(inventoryTxCol)
+      await Promise.all(txSnap.docs.map((d) => deleteDoc(d.ref)))
+      setFullResetDone(true)
+      setShowFullReset(false)
+    } catch (e) {
+      console.error('Full reset error:', e)
+    } finally {
+      setFullResetBusy(false)
+      setFullResetConfirm('')
     }
   }
 
@@ -1309,6 +1332,43 @@ export default function InventoryMaster() {
           onClose={() => setEditTx(null)}
         />
       )}
+      {showFullReset && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#D95F5F]">Full Inventory Reset</h2>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-[#1A1A1A] font-medium">This will permanently delete:</p>
+              <ul className="text-sm text-[#9A9A9A] space-y-1 list-disc pl-4">
+                <li>All <span className="font-semibold text-[#D95F5F]">{items.length} inventory records</span></li>
+                <li>The entire <span className="font-semibold text-[#D95F5F]">transaction log</span></li>
+              </ul>
+              <p className="text-sm text-[#9A9A9A]">
+                Purchase orders, invoices, quotes, and orders are <span className="font-semibold text-[#1A1A1A]">not affected</span>. You can re-receive stock against existing POs after the reset.
+              </p>
+              <p className="text-sm text-[#9A9A9A]">This cannot be undone. Type <span className="font-mono font-bold text-[#D95F5F]">RESET</span> to confirm.</p>
+              <input
+                value={fullResetConfirm}
+                onChange={(e) => setFullResetConfirm(e.target.value)}
+                placeholder="Type RESET to confirm"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#D95F5F] font-mono"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => { setShowFullReset(false); setFullResetConfirm('') }} disabled={fullResetBusy}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleFullReset} disabled={fullResetBusy || fullResetConfirm !== 'RESET'}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-semibold hover:bg-[#c44f4f] disabled:opacity-40 transition-colors">
+                {fullResetBusy ? 'Resetting…' : 'Reset Inventory'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showShortfallCleanup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -1430,11 +1490,24 @@ export default function InventoryMaster() {
           <h1 className="text-2xl font-bold text-[#1A1A1A]">Inventory</h1>
           <p className="text-sm text-[#9A9A9A] mt-0.5">All locations — real-time</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
-          + Add Stock
-        </button>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <button onClick={() => setShowFullReset(true)}
+              className="border border-[#D95F5F] text-[#D95F5F] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#D95F5F]/5 transition-colors">
+              Reset Inventory
+            </button>
+          )}
+          <button onClick={() => setShowAdd(true)}
+            className="bg-[#8B6914] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#7a5c12] transition-colors">
+            + Add Stock
+          </button>
+        </div>
       </div>
+      {fullResetDone && (
+        <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
+          ✓ Inventory reset complete. Receive stock against your existing POs to rebuild.
+        </div>
+      )}
 
       {/* One-time cleanup banner */}
       {isAdmin && !cleanupDone && items.filter((i) => !i.poId).length > 0 && (

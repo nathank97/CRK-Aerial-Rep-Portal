@@ -4,7 +4,7 @@ import { useDealers } from '../../hooks/useUsers'
 import { useCatalog } from '../../hooks/useCatalog'
 import { useAuth } from '../../context/AuthContext'
 import { getDealerPrice } from '../../utils/pricing'
-import { inventoryCol, inventoryBatchesCol, purchaseOrdersCol, inventoryTxCol } from '../../firebase/firestore'
+import { inventoryCol, inventoryBatchesCol, purchaseOrdersCol, inventoryTxCol, invoicesCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency, formatDate } from '../../utils/formatters'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
@@ -844,6 +844,9 @@ export default function InventoryMaster() {
   const [showUnreceiveAll, setShowUnreceiveAll] = useState(false)
   const [unreceiveAllBusy, setUnreceiveAllBusy] = useState(false)
   const [unreceiveAllDone, setUnreceiveAllDone] = useState(false)
+  const [showResetInvoiceDed, setShowResetInvoiceDed] = useState(false)
+  const [resetInvoiceDedBusy, setResetInvoiceDedBusy] = useState(false)
+  const [resetInvoiceDedDone, setResetInvoiceDedDone] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
   const [editReceptionPO, setEditReceptionPO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
@@ -977,6 +980,28 @@ export default function InventoryMaster() {
       console.error('Un-receive error:', e)
     } finally {
       setUnreceiveAllBusy(false)
+    }
+  }
+
+  async function handleResetInvoiceDeductions() {
+    setResetInvoiceDedBusy(true)
+    try {
+      const snap = await getDocs(invoicesCol)
+      const deducted = snap.docs.filter((d) => d.data().inventoryDeducted === true)
+      await Promise.all(deducted.map((d) =>
+        updateDoc(d.ref, {
+          inventoryDeducted: false,
+          inventoryDeductionDetails: [],
+          inventoryDeductedAt: deleteField(),
+          updatedAt: serverTimestamp(),
+        })
+      ))
+      setResetInvoiceDedDone(true)
+      setShowResetInvoiceDed(false)
+    } catch (e) {
+      console.error('Invoice deduction reset error:', e)
+    } finally {
+      setResetInvoiceDedBusy(false)
     }
   }
 
@@ -1411,6 +1436,34 @@ export default function InventoryMaster() {
           </div>
         </div>
       )}
+      {showResetInvoiceDed && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#D95F5F]">Reset Invoice Deductions</h2>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-[#1A1A1A] font-medium">This will clear the deduction status on all invoices:</p>
+              <ul className="text-sm text-[#9A9A9A] space-y-1 list-disc pl-4">
+                <li>Every invoice flagged as <span className="font-semibold text-[#D95F5F]">Inventory Deducted</span> will be reset</li>
+                <li>Inventory quantities are <span className="font-semibold text-[#1A1A1A]">not changed</span></li>
+                <li>The deduction log details are cleared from each invoice</li>
+              </ul>
+              <p className="text-sm text-[#9A9A9A]">After this, each invoice will show the "Deduct Inventory" button again as if it was never run.</p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setShowResetInvoiceDed(false)} disabled={resetInvoiceDedBusy}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleResetInvoiceDeductions} disabled={resetInvoiceDedBusy}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-semibold hover:bg-[#c44f4f] disabled:opacity-40 transition-colors">
+                {resetInvoiceDedBusy ? 'Clearing…' : 'Reset All Invoice Deductions'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showFullReset && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -1577,6 +1630,12 @@ export default function InventoryMaster() {
             </button>
           )}
           {isAdmin && (
+            <button onClick={() => setShowResetInvoiceDed(true)}
+              className="border border-[#D95F5F] text-[#D95F5F] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#D95F5F]/5 transition-colors">
+              Reset Invoice Deductions
+            </button>
+          )}
+          {isAdmin && (
             <button onClick={() => setShowFullReset(true)}
               className="border border-[#D95F5F] text-[#D95F5F] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#D95F5F]/5 transition-colors">
               Reset Inventory
@@ -1591,6 +1650,11 @@ export default function InventoryMaster() {
       {unreceiveAllDone && (
         <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
           ✓ All POs reset to Ordered. You can now receive them fresh against the Purchase Orders tab.
+        </div>
+      )}
+      {resetInvoiceDedDone && (
+        <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
+          ✓ Invoice deductions cleared. All invoices can now be re-deducted fresh.
         </div>
       )}
       {fullResetDone && (

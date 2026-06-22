@@ -37,13 +37,16 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
     const matches = inventory
       .filter((inv) => {
         if (inv._work <= 0) return false
-        if (group.catalogId && inv.catalogId === group.catalogId) return true
         const invSku = (inv.sku ?? '').toLowerCase().trim()
-        if (groupSku && invSku && groupSku === invSku) return true  // SKU-to-SKU (primary)
+        // CatalogId is always authoritative
+        if (group.catalogId && inv.catalogId === group.catalogId) return true
+        // SKU present on line item → ONLY match by SKU, never fall through to name
+        if (groupSku) return invSku === groupSku
+        // No SKU: name match only as last resort
         const m = (inv.modelName ?? '').toLowerCase().trim()
         const d = group.description.toLowerCase().trim()
-        if (!d) return false
-        return (invSku && invSku === d) || (m && (m === d || m.includes(d) || d.includes(m)))
+        if (!m || !d) return false
+        return m === d || m.includes(d) || d.includes(m)
       })
       .sort((a, b) => {
         const ap = a.dealerId === dealerId ? 1 : 0

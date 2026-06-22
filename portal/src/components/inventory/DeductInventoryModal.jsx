@@ -12,12 +12,18 @@ function autoMatchId(inventory, li, dealerId) {
     .map((inv) => {
       const invSku = (inv.sku ?? '').toLowerCase().trim()
       const m = (inv.modelName ?? '').toLowerCase().trim()
-      const score = li.catalogId && inv.catalogId === li.catalogId ? 5
-        : liSku && invSku && liSku === invSku ? 4          // SKU-to-SKU (primary)
-        : invSku && desc && invSku === desc ? 3             // inv SKU matches description (legacy)
-        : m && m === desc ? 2
-        : m && desc && (m.includes(desc) || desc.includes(m)) ? 1
-        : 0
+      let score = 0
+      if (li.catalogId && inv.catalogId === li.catalogId) {
+        score = 5  // catalogId always wins
+      } else if (liSku) {
+        // Line item has SKU — only accept a SKU match, never fall to name
+        score = (invSku && liSku === invSku) ? 4 : 0
+      } else {
+        // No SKU — name matching as last resort
+        score = m && m === desc ? 2
+          : m && desc && (m.includes(desc) || desc.includes(m)) ? 1
+          : 0
+      }
       return { inv, score, preferred: inv.dealerId === dealerId ? 1 : 0 }
     })
     .filter((x) => x.score > 0)

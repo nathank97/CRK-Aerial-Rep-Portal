@@ -987,8 +987,7 @@ export default function InventoryMaster() {
     setResetInvoiceDedBusy(true)
     try {
       const snap = await getDocs(invoicesCol)
-      const deducted = snap.docs.filter((d) => d.data().inventoryDeducted === true)
-      await Promise.all(deducted.map((d) =>
+      await Promise.all(snap.docs.map((d) =>
         updateDoc(d.ref, {
           inventoryDeducted: false,
           inventoryDeductionDetails: [],

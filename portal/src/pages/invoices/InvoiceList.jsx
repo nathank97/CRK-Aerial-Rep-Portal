@@ -51,7 +51,7 @@ export default function InvoiceList() {
     }
   }
 
-  const colSpan = isAdmin ? 7 : 6
+  const colSpan = isAdmin ? 8 : 7
 
   return (
     <div className="p-3 sm:p-5">
@@ -124,6 +124,7 @@ export default function InvoiceList() {
               <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
               <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Balance Due</th>
               <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Due Date</th>
+              <th className="text-center py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Inv. Deducted</th>
               {isAdmin && <th className="py-2 px-3" />}
             </tr>
           </thead>
@@ -163,6 +164,11 @@ export default function InvoiceList() {
                     <td className="py-2 px-3 text-right font-semibold text-[#111111]">{formatCurrency(balanceDue)}</td>
                     <td className={`py-2 px-3 ${overdue ? 'text-[#D95F5F] font-semibold' : 'text-[#9A9A9A]'}`}>
                       {formatDate(inv.dueDate)}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {inv.inventoryDeducted
+                        ? <span className="text-xs font-semibold text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-0.5 rounded-full">✓ Yes</span>
+                        : <span className="text-xs text-[#9A9A9A]">No</span>}
                     </td>
                     {isAdmin && (
                       <td className="py-2 px-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -222,6 +228,11 @@ export default function InvoiceList() {
                     )}
                   </div>
                 </div>
+                {inv.inventoryDeducted && (
+                  <div className="mt-2">
+                    <span className="text-xs font-semibold text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-0.5 rounded-full">✓ Inventory Deducted</span>
+                  </div>
+                )}
                 {isAdmin && (
                   <div className="mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => setDeleteItem(inv)}

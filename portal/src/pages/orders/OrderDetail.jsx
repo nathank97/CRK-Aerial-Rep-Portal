@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters'
 import { nextInvoiceNumber } from '../../utils/numbering'
 import { getTaxRate } from '../../utils/taxService'
 import { computePaymentStatus } from '../../hooks/useInvoices'
+import LineItemBuilder, { calcTotals } from '../../components/quotes/LineItemBuilder'
 
 const ORDER_STATUSES = ['Processing', 'Fulfilled', 'Shipped', 'Delivered', 'Cancelled']
 
@@ -194,6 +195,17 @@ export default function OrderDetail() {
   const [pendingStatus, setPendingStatus] = useState(null)
   const [undoing, setUndoing] = useState(false)
 
+  // Full edit mode
+  const [editMode, setEditMode] = useState(false)
+  const [editCustomerName, setEditCustomerName] = useState('')
+  const [editCustomerEmail, setEditCustomerEmail] = useState('')
+  const [editCustomerAddress, setEditCustomerAddress] = useState('')
+  const [editCustomerState, setEditCustomerState] = useState('')
+  const [editTaxRate, setEditTaxRate] = useState('')
+  const [editTaxExempt, setEditTaxExempt] = useState(false)
+  const [editNotes, setEditNotes] = useState('')
+  const [editLineItems, setEditLineItems] = useState([])
+
   useEffect(() => {
     if (!loading && order && !isAdmin && !isWarehouseManager && order.dealerId !== profile?.id) {
       navigate('/orders', { replace: true })
@@ -203,6 +215,64 @@ export default function OrderDetail() {
   const flash = (msg) => {
     setActionMsg(msg)
     setTimeout(() => setActionMsg(''), 3000)
+  }
+
+  const enterEdit = () => {
+    setEditCustomerName(order.customerName ?? '')
+    setEditCustomerEmail(order.customerEmail ?? '')
+    setEditCustomerAddress(order.customerAddress ?? '')
+    setEditCustomerState(order.customerState ?? '')
+    setEditTaxRate(String(order.taxRate ?? 0))
+    setEditTaxExempt(order.taxExempt ?? false)
+    setEditNotes(order.notes ?? '')
+    setEditLineItems((order.lineItems ?? []).map((item) => ({
+      id: item.id ?? crypto.randomUUID(),
+      type: item.type ?? 'custom',
+      catalogId: item.catalogId ?? null,
+      description: item.description ?? '',
+      quantity: item.quantity ?? 1,
+      unitPrice: item.unitPrice ?? 0,
+      discount: item.discount ?? 0,
+      discountType: item.discountType ?? 'percent',
+      sku: item.sku ?? null,
+      msrp: item.msrp ?? null,
+    })))
+    setEditMode(true)
+  }
+
+  const saveEdit = async () => {
+    setSaving(true)
+    try {
+      const rate = parseFloat(editTaxRate) || 0
+      const { subtotal, taxAmount, total } = calcTotals(editLineItems, rate, editTaxExempt)
+      const lineItems = editLineItems.map((item) => ({
+        ...item,
+        quantity: parseFloat(item.quantity) || 1,
+        unitPrice: parseFloat(item.unitPrice) || 0,
+        discount: parseFloat(item.discount) || 0,
+      }))
+      await updateDoc(orderDoc(id), {
+        customerName: editCustomerName.trim(),
+        customerEmail: editCustomerEmail.trim(),
+        customerAddress: editCustomerAddress.trim(),
+        customerState: editCustomerState.trim(),
+        taxRate: rate,
+        taxExempt: editTaxExempt,
+        taxAmount,
+        subtotal,
+        total,
+        lineItems,
+        notes: editNotes.trim(),
+        updatedAt: serverTimestamp(),
+      })
+      setEditMode(false)
+      flash(order.inventoryDeducted ? 'Order updated. Inventory was previously deducted — re-deduct if quantities changed.' : 'Order updated.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to save changes.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleStatusChange = async (e) => {
@@ -607,11 +677,17 @@ export default function OrderDetail() {
           </div>
 
           <div className="flex flex-wrap gap-2 items-start">
+            {!editMode && isAdmin && (
+              <button onClick={enterEdit} disabled={saving}
+                className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60">
+                Edit Order
+              </button>
+            )}
             <select
               value={order.status ?? 'Processing'}
               onChange={handleStatusChange}
-              disabled={saving}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white"
+              disabled={saving || editMode}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white disabled:opacity-60"
             >
               {ORDER_STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -718,6 +794,95 @@ export default function OrderDetail() {
           )}
         </div>
       </div>
+
+      {/* Edit mode panel */}
+      {editMode && (
+        <div className="bg-white rounded-xl border border-[#8B6914]/30 shadow-sm p-5 mb-5">
+          <h2 className="text-sm font-semibold text-[#111111] mb-4">Edit Order</h2>
+
+          {/* Customer info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+            <div>
+              <label className={labelCls}>Customer Name</label>
+              <input value={editCustomerName} onChange={(e) => setEditCustomerName(e.target.value)} className={inputCls} placeholder="Customer name" />
+            </div>
+            <div>
+              <label className={labelCls}>Customer Email</label>
+              <input type="email" value={editCustomerEmail} onChange={(e) => setEditCustomerEmail(e.target.value)} className={inputCls} placeholder="email@example.com" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={labelCls}>Shipping Address</label>
+              <input value={editCustomerAddress} onChange={(e) => setEditCustomerAddress(e.target.value)} className={inputCls} placeholder="123 Main St, City, State ZIP" />
+            </div>
+            <div>
+              <label className={labelCls}>State (for tax)</label>
+              <input value={editCustomerState} onChange={(e) => setEditCustomerState(e.target.value)} className={inputCls} placeholder="e.g. TX" maxLength={2} />
+            </div>
+            <div>
+              <label className={labelCls}>Tax Rate (%)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number" min={0} max={30} step={0.01}
+                  value={editTaxRate}
+                  onChange={(e) => setEditTaxRate(e.target.value)}
+                  disabled={editTaxExempt}
+                  className={`${inputCls} disabled:opacity-50`}
+                  placeholder="0.00"
+                />
+                <label className="flex items-center gap-1.5 text-xs text-[#9A9A9A] font-medium cursor-pointer whitespace-nowrap">
+                  <input type="checkbox" checked={editTaxExempt} onChange={(e) => setEditTaxExempt(e.target.checked)} className="accent-[#8B6914]" />
+                  Tax Exempt
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-3">Line Items</h3>
+            <LineItemBuilder items={editLineItems} onChange={setEditLineItems} />
+            {(() => {
+              const rate = parseFloat(editTaxRate) || 0
+              const { subtotal, taxAmount, total } = calcTotals(editLineItems, rate, editTaxExempt)
+              return (
+                <div className="mt-4 flex justify-end">
+                  <div className="w-64 space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-[#9A9A9A]">Subtotal</span>
+                      <span className="font-medium text-[#111111]">{formatCurrency(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#9A9A9A]">Tax ({rate}%){editTaxExempt ? ' — Exempt' : ''}</span>
+                      <span className="font-medium text-[#111111]">{formatCurrency(taxAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t border-gray-200 pt-2">
+                      <span className="text-[#111111]">Total</span>
+                      <span className="text-[#8B6914] text-base">{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Notes */}
+          <div className="border-t border-gray-100 pt-5 mt-5">
+            <label className={labelCls}>Notes</label>
+            <textarea rows={3} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className={inputCls} placeholder="Order notes…" />
+          </div>
+
+          <div className="flex gap-3 mt-5 border-t border-gray-100 pt-5">
+            <button onClick={() => setEditMode(false)} disabled={saving}
+              className="flex-1 border border-gray-200 text-[#111111] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] transition-colors disabled:opacity-50">
+              Cancel
+            </button>
+            <button onClick={saveEdit} disabled={saving}
+              className="flex-1 bg-[#8B6914] hover:bg-[#7a5c12] text-white rounded-lg py-2 text-sm font-semibold transition-colors disabled:opacity-50">
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Line items */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-5">

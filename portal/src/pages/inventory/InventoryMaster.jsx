@@ -840,6 +840,9 @@ export default function InventoryMaster() {
   const [fullResetConfirm, setFullResetConfirm] = useState('')
   const [fullResetBusy, setFullResetBusy] = useState(false)
   const [fullResetDone, setFullResetDone] = useState(false)
+  const [showUnreceiveAll, setShowUnreceiveAll] = useState(false)
+  const [unreceiveAllBusy, setUnreceiveAllBusy] = useState(false)
+  const [unreceiveAllDone, setUnreceiveAllDone] = useState(false)
   const [receivePO, setReceivePO] = useState(null)
   const [editReceptionPO, setEditReceptionPO] = useState(null)
   const [deletePO, setDeletePO] = useState(null)
@@ -945,6 +948,35 @@ export default function InventoryMaster() {
   }
 
   const shortfallItems = items.filter((i) => i.notes === 'Auto-created: inventory shortfall')
+
+  async function handleUnreceiveAll() {
+    setUnreceiveAllBusy(true)
+    try {
+      const snap = await getDocs(purchaseOrdersCol)
+      await Promise.all(snap.docs.map(async (poDoc) => {
+        const po = poDoc.data()
+        // Reset every item: zero receivedQty, clear inventoryIds
+        const resetItems = (po.items ?? []).map((item) => ({
+          ...item,
+          receivedQty: 0,
+          inventoryIds: [],
+        }))
+        await updateDoc(poDoc.ref, {
+          items: resetItems,
+          status: 'Ordered',
+          lastReceivedDate: deleteField(),
+          lastReceivedBy: deleteField(),
+          updatedAt: serverTimestamp(),
+        })
+      }))
+      setUnreceiveAllDone(true)
+      setShowUnreceiveAll(false)
+    } catch (e) {
+      console.error('Un-receive error:', e)
+    } finally {
+      setUnreceiveAllBusy(false)
+    }
+  }
 
   async function handleShortfallCleanup() {
     setShortfallCleanupBusy(true)
@@ -1332,6 +1364,34 @@ export default function InventoryMaster() {
           onClose={() => setEditTx(null)}
         />
       )}
+      {showUnreceiveAll && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-[#D95F5F]">Un-Receive All POs</h2>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-[#1A1A1A] font-medium">This will reset every purchase order:</p>
+              <ul className="text-sm text-[#9A9A9A] space-y-1 list-disc pl-4">
+                <li>All <span className="font-semibold text-[#D95F5F]">{pos.length} POs</span> set back to <span className="font-semibold">Ordered</span></li>
+                <li>All received quantities reset to <span className="font-semibold">0</span></li>
+                <li>Inventory links cleared so each PO can be received fresh</li>
+              </ul>
+              <p className="text-sm text-[#9A9A9A]">Order lines, quantities ordered, and PO details are not changed. This cannot be undone.</p>
+            </div>
+            <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setShowUnreceiveAll(false)} disabled={unreceiveAllBusy}
+                className="flex-1 border border-gray-200 text-[#1A1A1A] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleUnreceiveAll} disabled={unreceiveAllBusy}
+                className="flex-1 bg-[#D95F5F] text-white rounded-lg py-2 text-sm font-semibold hover:bg-[#c44f4f] disabled:opacity-40 transition-colors">
+                {unreceiveAllBusy ? 'Resetting POs…' : 'Un-Receive All POs'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showFullReset && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -1492,6 +1552,12 @@ export default function InventoryMaster() {
         </div>
         <div className="flex gap-2">
           {isAdmin && (
+            <button onClick={() => setShowUnreceiveAll(true)}
+              className="border border-[#D95F5F] text-[#D95F5F] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#D95F5F]/5 transition-colors">
+              Un-Receive All POs
+            </button>
+          )}
+          {isAdmin && (
             <button onClick={() => setShowFullReset(true)}
               className="border border-[#D95F5F] text-[#D95F5F] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#D95F5F]/5 transition-colors">
               Reset Inventory
@@ -1503,6 +1569,11 @@ export default function InventoryMaster() {
           </button>
         </div>
       </div>
+      {unreceiveAllDone && (
+        <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
+          ✓ All POs reset to Ordered. You can now receive them fresh against the Purchase Orders tab.
+        </div>
+      )}
       {fullResetDone && (
         <div className="mb-4 bg-[#4CAF7D]/10 border border-[#4CAF7D]/30 rounded-lg px-4 py-3 text-sm text-[#4CAF7D] font-medium">
           ✓ Inventory reset complete. Receive stock against your existing POs to rebuild.

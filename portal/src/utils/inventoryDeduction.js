@@ -84,6 +84,7 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
       const shortfallSku = group.sku || null
       const negRef = await addDoc(inventoryCol, {
         dealerId: dealerId || null,
+        catalogId: group.catalogId || null,
         modelName: group.description,
         sku: shortfallSku, brand: null, category: null, condition: 'New',
         quantityOnHand: -remaining, quantityReserved: 0, quantityAvailable: -remaining,

@@ -95,6 +95,7 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
           const liSku = row.lineItem.sku?.trim() || null
           const negRef = await addDoc(inventoryCol, {
             dealerId: dealerId || null,
+            catalogId: row.lineItem.catalogId ?? null,
             modelName: row.lineItem.description,
             sku: liSku, brand: null, category: null, condition: 'New',
             quantityOnHand: -qty, quantityReserved: 0, quantityAvailable: -qty,

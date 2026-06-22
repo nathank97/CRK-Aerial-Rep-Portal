@@ -1119,6 +1119,13 @@ export default function InventoryMaster() {
     return m
   }, [catalog])
 
+  // Tertiary lookup: catalog item by normalized name (last-resort for shortfall records)
+  const catalogNameMap = useMemo(() => {
+    const m = {}
+    catalog.forEach((c) => { if (c.name?.trim()) m[c.name.trim().toLowerCase()] = c })
+    return m
+  }, [catalog])
+
   // Weighted-average cost per item key, derived from all PO received quantities.
   // Keyed by normalized modelName only — PO line items frequently omit brand/condition/category
   // so a 4-field key would never match the inventory summary group key.
@@ -1185,6 +1192,7 @@ export default function InventoryMaster() {
     const resolveCatItem = (item) =>
       (item.catalogId ? catalogMap[item.catalogId] : null)
       ?? (item.sku?.trim() ? catalogSkuMap[item.sku.trim().toLowerCase()] : null)
+      ?? (item.modelName?.trim() ? catalogNameMap[item.modelName.trim().toLowerCase()] : null)
 
     const groups = {}
     filtered.forEach((item) => {
@@ -1245,7 +1253,7 @@ export default function InventoryMaster() {
         }
       })
       .sort((a, b) => a.modelName.localeCompare(b.modelName))
-  }, [filtered, catalogMap, catalogSkuMap, profile, onOrderByKey, avgCostByKey])
+  }, [filtered, catalogMap, catalogSkuMap, catalogNameMap, profile, onOrderByKey, avgCostByKey])
 
   // By location grouping — keyed by location name so reps at the same location are combined
   const byLocation = useMemo(() => {

@@ -1086,6 +1086,13 @@ export default function InventoryMaster() {
     return m
   }, [catalog])
 
+  // Secondary lookup: catalog item by normalized SKU (for items that have no catalogId)
+  const catalogSkuMap = useMemo(() => {
+    const m = {}
+    catalog.forEach((c) => { if (c.sku?.trim()) m[c.sku.trim().toLowerCase()] = c })
+    return m
+  }, [catalog])
+
   // Weighted-average cost per item key, derived from all PO received quantities.
   // Keyed by normalized modelName only — PO line items frequently omit brand/condition/category
   // so a 4-field key would never match the inventory summary group key.
@@ -1149,6 +1156,10 @@ export default function InventoryMaster() {
 
   // Summary: group by SKU + condition when SKU is present; fall back to brand + modelName + condition + category
   const summaryGroups = useMemo(() => {
+    const resolveCatItem = (item) =>
+      (item.catalogId ? catalogMap[item.catalogId] : null)
+      ?? (item.sku?.trim() ? catalogSkuMap[item.sku.trim().toLowerCase()] : null)
+
     const groups = {}
     filtered.forEach((item) => {
       const skuKey = item.sku?.trim() ? item.sku.trim().toLowerCase() : null
@@ -1156,7 +1167,7 @@ export default function InventoryMaster() {
         ? `sku:${skuKey}||${item.condition ?? ''}`
         : `name:${item.brand ?? ''}||${item.modelName ?? ''}||${item.condition ?? ''}||${item.category ?? ''}`
       if (!groups[key]) {
-        const catItem = item.catalogId ? catalogMap[item.catalogId] : null
+        const catItem = resolveCatItem(item)
         const msrp = catItem?.msrp ?? item.msrp ?? null
         groups[key] = {
           _key: key,
@@ -1173,16 +1184,20 @@ export default function InventoryMaster() {
         }
       }
       const g = groups[key]
-      // Upgrade display name if a catalog-linked entry provides a better name
-      if (g.modelName === '—' || g.modelName === '') {
-        const catItem = item.catalogId ? catalogMap[item.catalogId] : null
-        if (catItem?.name) g.modelName = catItem.name
-        else if (item.modelName) g.modelName = item.modelName
+      // Upgrade name and drone models if a catalog item is now resolved
+      if (g.modelName === '—' || g.modelName === '' || g.droneModels.length === 0) {
+        const catItem = resolveCatItem(item)
+        if (catItem) {
+          if (g.modelName === '—' || g.modelName === '') g.modelName = catItem.name ?? g.modelName
+          if (g.droneModels.length === 0) g.droneModels = catItem.compatibleModels ?? []
+        } else if ((g.modelName === '—' || g.modelName === '') && item.modelName) {
+          g.modelName = item.modelName
+        }
       }
       g.totalOnHand += item.quantityOnHand ?? 0
       g.totalReserved += item.quantityReserved ?? 0
       if (g.msrp == null) {
-        const catItem = item.catalogId ? catalogMap[item.catalogId] : null
+        const catItem = resolveCatItem(item)
         const msrp = catItem?.msrp ?? item.msrp ?? null
         if (msrp != null) {
           g.msrp = msrp
@@ -1202,7 +1217,7 @@ export default function InventoryMaster() {
         }
       })
       .sort((a, b) => a.modelName.localeCompare(b.modelName))
-  }, [filtered, catalogMap, profile, onOrderByKey, avgCostByKey])
+  }, [filtered, catalogMap, catalogSkuMap, profile, onOrderByKey, avgCostByKey])
 
   // By location grouping — keyed by location name so reps at the same location are combined
   const byLocation = useMemo(() => {

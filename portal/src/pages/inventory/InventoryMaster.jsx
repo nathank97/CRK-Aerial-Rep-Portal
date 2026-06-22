@@ -16,6 +16,7 @@ import { writeTx } from '../../utils/inventoryTransactions'
 
 const CONDITIONS = ['New', 'Demo', 'Refurbished']
 const CATEGORIES = ['Drone Kit', 'Parts', 'Accessory', 'Other']
+const CATALOG_CATEGORY = { Drone: 'Drone Kit', Part: 'Parts', Accessory: 'Accessory', Service: 'Other', Other: 'Other' }
 
 function SortTh({ label, sortKey, sort, onSort, className = '' }) {
   const active = sort.key === sortKey
@@ -1172,8 +1173,8 @@ export default function InventoryMaster() {
         groups[key] = {
           _key: key,
           sku: item.sku?.trim() || '',
-          brand: item.brand ?? '',
-          category: item.category ?? '',
+          brand: catItem?.manufacturer || item.brand || '',
+          category: (catItem && CATALOG_CATEGORY[catItem.type]) || item.category || '',
           modelName: catItem?.name ?? item.modelName ?? '—',
           droneModels: catItem?.compatibleModels ?? [],
           condition: item.condition ?? '',
@@ -1184,12 +1185,14 @@ export default function InventoryMaster() {
         }
       }
       const g = groups[key]
-      // Upgrade name and drone models if a catalog item is now resolved
-      if (g.modelName === '—' || g.modelName === '' || g.droneModels.length === 0) {
+      // Upgrade display fields if a catalog item is now resolved for this item
+      if (g.modelName === '—' || g.modelName === '' || g.droneModels.length === 0 || !g.brand || !g.category) {
         const catItem = resolveCatItem(item)
         if (catItem) {
           if (g.modelName === '—' || g.modelName === '') g.modelName = catItem.name ?? g.modelName
           if (g.droneModels.length === 0) g.droneModels = catItem.compatibleModels ?? []
+          if (!g.brand && catItem.manufacturer?.trim()) g.brand = catItem.manufacturer.trim()
+          if (!g.category && catItem.type) g.category = CATALOG_CATEGORY[catItem.type] ?? g.category
         } else if ((g.modelName === '—' || g.modelName === '') && item.modelName) {
           g.modelName = item.modelName
         }

@@ -235,6 +235,7 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
           // Already has inventory — sync fields only
           await Promise.all(item.inventoryIds.map((invId) =>
             updateDoc(doc(db, 'inventory', invId), {
+              catalogId: item.catalogId ?? null,
               brand: item.brand ?? null,
               modelName: item.modelName,
               sku: item.sku ?? null,
@@ -252,6 +253,7 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
         const invRef = await addDoc(inventoryCol, {
           poId,
           poItemId: item.id,
+          catalogId: item.catalogId ?? null,
           inventoryStatus: 'on_order',
           dealerId,
           brand: item.brand ?? null,
@@ -324,6 +326,7 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
       for (const item of items) {
         if (!item.inventoryIds?.length) continue
         const patch = {
+          catalogId: item.catalogId ?? null,
           brand: item.brand ?? null,
           modelName: item.modelName,
           sku: item.sku ?? null,

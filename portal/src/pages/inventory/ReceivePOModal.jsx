@@ -308,6 +308,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
               // Legacy flow: create new inventory record
               const invRef = await addDoc(inventoryCol, {
                 poId: po.id,
+                catalogId: item.catalogId ?? null,
                 inventoryStatus: 'in_stock',
                 dealerId: po.dealerId,
                 brand: item.brand ?? null,

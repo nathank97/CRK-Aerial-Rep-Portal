@@ -6,6 +6,7 @@ import { catalogCol, modelsCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { formatCurrency } from '../../utils/formatters'
 import { useAuth } from '../../context/AuthContext'
+import { syncCatalogChanges } from '../../utils/syncCatalogChanges'
 
 const ITEM_TYPES = ['Drone', 'Part', 'Accessory', 'Service', 'Other']
 
@@ -651,6 +652,7 @@ function ItemModal({ item, models, onClose }) {
       }
       if (isEdit) {
         await updateDoc(doc(db, 'catalog', item.id), data)
+        syncCatalogChanges(item.id, data).catch((e) => console.error('Catalog sync failed:', e))
       } else {
         await addDoc(catalogCol, { ...data, createdAt: serverTimestamp() })
       }
@@ -842,7 +844,7 @@ function BulkFieldRow({ on, onToggle, children }) {
   )
 }
 
-function BulkEditModal({ itemIds, models, onClose }) {
+function BulkEditModal({ itemIds, models, catalog, onClose }) {
   const count = itemIds.size
   const [fields, setFields] = useState({
     type:             { on: false, value: 'Drone' },
@@ -887,6 +889,14 @@ function BulkEditModal({ itemIds, models, onClose }) {
         const batch = writeBatch(db)
         ids.slice(i, i + CHUNK).forEach(id => batch.update(doc(db, 'catalog', id), updates))
         await batch.commit()
+      }
+      // Propagate type/manufacturer changes to inventory (fire-and-forget)
+      if (fields.type.on || fields.manufacturer.on) {
+        for (const id of ids) {
+          const catItem = catalog.find(c => c.id === id)
+          if (!catItem) continue
+          syncCatalogChanges(id, { ...catItem, ...updates }).catch(e => console.error('Bulk sync failed:', e))
+        }
       }
       onClose()
     } catch (e) {
@@ -1463,7 +1473,7 @@ export default function Catalog() {
       {deleteItem && <DeleteConfirm item={deleteItem} onClose={() => setDeleteItem(null)} onConfirm={handleDelete} />}
       {showImport && <ImportModal onClose={() => setShowImport(false)} existingSkus={existingSkus} />}
       {showBulkDelete && <BulkDeleteConfirm count={selectedIds.size} onClose={() => setShowBulkDelete(false)} onConfirm={handleBulkDelete} />}
-      {showBulkEdit && <BulkEditModal itemIds={selectedIds} models={models} onClose={() => { setShowBulkEdit(false); setSelectedIds(new Set()) }} />}
+      {showBulkEdit && <BulkEditModal itemIds={selectedIds} models={models} catalog={catalog} onClose={() => { setShowBulkEdit(false); setSelectedIds(new Set()) }} />}
       </>)}
 
       {/* Model modals */}

@@ -898,7 +898,8 @@ export default function InventoryMaster() {
   }, [posLoading])
   const [summarySort, setSummarySort] = useState({ key: '', dir: 'asc' })
   const [locationSort, setLocationSort] = useState({ key: '', dir: 'asc' })
-  const [summaryFilterBrand, setSummaryFilterBrand] = useState('')
+  const [summaryFilterBrands, setSummaryFilterBrands] = useState(new Set())
+  const [summaryBrandOpen, setSummaryBrandOpen] = useState(false)
   const [summaryFilterCategory, setSummaryFilterCategory] = useState('')
 
   const toggleSort = (setter) => (key) =>
@@ -1230,10 +1231,10 @@ export default function InventoryMaster() {
   )
 
   const visibleSummary = useMemo(() => sortedSummary.filter((g) => {
-    const matchBrand = !summaryFilterBrand || g.brand === summaryFilterBrand
+    const matchBrand = summaryFilterBrands.size === 0 || summaryFilterBrands.has(g.brand)
     const matchCat = !summaryFilterCategory || g.category === summaryFilterCategory
     return matchBrand && matchCat
-  }), [sortedSummary, summaryFilterBrand, summaryFilterCategory])
+  }), [sortedSummary, summaryFilterBrands, summaryFilterCategory])
 
   const sortLocItems = (locItems) => {
     const getVal = (item, k) => {
@@ -1670,16 +1671,53 @@ export default function InventoryMaster() {
         <>
         {/* Summary filters */}
         <div className="flex flex-wrap gap-3 mb-3">
-          <select value={summaryFilterBrand} onChange={(e) => setSummaryFilterBrand(e.target.value)} className={inputCls}>
-            <option value="">All Brands</option>
-            {summaryBrands.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
+          {/* Multi-select brand picker */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setSummaryBrandOpen((o) => !o)}
+              onBlur={() => setTimeout(() => setSummaryBrandOpen(false), 150)}
+              className={`${inputCls} flex items-center gap-2 min-w-[160px] text-left`}>
+              <span className="flex-1 truncate">
+                {summaryFilterBrands.size === 0
+                  ? 'All Brands'
+                  : summaryFilterBrands.size === 1
+                    ? [...summaryFilterBrands][0]
+                    : `${[...summaryFilterBrands].slice(0, 2).join(', ')}${summaryFilterBrands.size > 2 ? ` +${summaryFilterBrands.size - 2}` : ''}`}
+              </span>
+              {summaryFilterBrands.size > 0 && (
+                <span className="shrink-0 text-[10px] font-bold bg-[#8B6914] text-white px-1.5 py-0.5 rounded-full leading-none">
+                  {summaryFilterBrands.size}
+                </span>
+              )}
+              <span className="shrink-0 text-[#9A9A9A] text-xs">▾</span>
+            </button>
+            {summaryBrandOpen && (
+              <div className="absolute z-20 top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg min-w-[200px] max-h-64 overflow-y-auto py-1">
+                {summaryBrands.map((b) => (
+                  <label key={b} className="flex items-center gap-2.5 px-3 py-2 hover:bg-[#F4F4F5] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={summaryFilterBrands.has(b)}
+                      onChange={() => setSummaryFilterBrands((prev) => {
+                        const next = new Set(prev)
+                        next.has(b) ? next.delete(b) : next.add(b)
+                        return next
+                      })}
+                      className="w-4 h-4 rounded border-gray-300 text-[#8B6914] cursor-pointer"
+                    />
+                    <span className="text-sm text-[#1A1A1A]">{b}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <select value={summaryFilterCategory} onChange={(e) => setSummaryFilterCategory(e.target.value)} className={inputCls}>
             <option value="">All Categories</option>
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          {(summaryFilterBrand || summaryFilterCategory) && (
-            <button onClick={() => { setSummaryFilterBrand(''); setSummaryFilterCategory('') }}
+          {(summaryFilterBrands.size > 0 || summaryFilterCategory) && (
+            <button onClick={() => { setSummaryFilterBrands(new Set()); setSummaryFilterCategory('') }}
               className="text-xs text-[#9A9A9A] hover:text-[#1A1A1A] border border-gray-200 px-3 py-2 rounded-lg transition-colors">
               Clear filters
             </button>

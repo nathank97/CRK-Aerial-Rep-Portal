@@ -280,14 +280,13 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
               if (invSnap.exists()) {
                 const d = invSnap.data()
 
-                // Find a matching shortfall to absorb (by catalogId, then SKU)
+                // Find a matching shortfall to absorb — SKU is the only match key
                 const itemSkuNorm = (item.sku ?? '').toLowerCase().trim()
                 const shortfall = allInventory.find((inv) => {
                   if (inv.id === invId) return false
                   if (inv.notes !== 'Auto-created: inventory shortfall') return false
-                  if (item.catalogId && inv.catalogId === item.catalogId) return true
-                  if (itemSkuNorm) return (inv.sku ?? '').toLowerCase().trim() === itemSkuNorm
-                  return false
+                  if (!itemSkuNorm) return false
+                  return (inv.sku ?? '').toLowerCase().trim() === itemSkuNorm
                 })
                 const shortfallAbs = shortfall && (shortfall.quantityOnHand ?? 0) < 0
                   ? Math.abs(shortfall.quantityOnHand)
@@ -340,13 +339,12 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
               }
               if (!isCancellingNow) return { ...item, receivedQty: newReceivedQty }
             } else {
-              // Legacy flow: reconcile against an existing shortfall if one matches, else create new record
+              // Legacy flow: reconcile against an existing shortfall by SKU only
               const itemSku = (item.sku ?? '').toLowerCase().trim()
               const shortfall = allInventory.find((inv) => {
                 if (inv.notes !== 'Auto-created: inventory shortfall') return false
-                if (item.catalogId && inv.catalogId === item.catalogId) return true
-                if (itemSku) return (inv.sku ?? '').toLowerCase().trim() === itemSku
-                return false
+                if (!itemSku) return false
+                return (inv.sku ?? '').toLowerCase().trim() === itemSku
               })
 
               let targetId

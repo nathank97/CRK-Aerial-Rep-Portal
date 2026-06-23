@@ -3,41 +3,29 @@ import { getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/fires
 import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { writeTx } from '../../utils/inventoryTransactions'
-import { formatCurrency } from '../../utils/formatters'
 
 const CATALOG_CATEGORY = { Drone: 'Drone Kit', Part: 'Parts', Accessory: 'Accessory', Service: 'Other', Other: 'Other' }
 
-function autoMatchId(inventory, li, dealerId) {
-  const desc = (li.description ?? '').toLowerCase().trim()
-  const liSku = (li.sku ?? '').toLowerCase().trim()
-  const scored = inventory
-    .map((inv) => {
-      const invSku = (inv.sku ?? '').toLowerCase().trim()
-      const m = (inv.modelName ?? '').toLowerCase().trim()
-      let score = 0
-      if (li.catalogId && inv.catalogId === li.catalogId) {
-        score = 5  // catalogId always wins
-      } else if (liSku) {
-        // Line item has SKU — only accept a SKU match, never fall to name
-        score = (invSku && liSku === invSku) ? 4 : 0
-      } else {
-        // No SKU — name matching as last resort
-        score = m && m === desc ? 2
-          : m && desc && (m.includes(desc) || desc.includes(m)) ? 1
-          : 0
-      }
-      return { inv, score, preferred: inv.dealerId === dealerId ? 1 : 0 }
-    })
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.preferred - a.preferred || b.score - a.score)
-  return scored[0]?.inv.id ?? ''
+/** Match inventory to a line item by SKU only — catalog is the sole authority. */
+function autoMatchId(inventory, li) {
+  const liSku = (li.sku ?? '').trim().toLowerCase()
+  if (!liSku) return ''
+  const match = inventory
+    .filter((inv) => (inv.sku ?? '').trim().toLowerCase() === liSku)
+    .sort((a, b) => (b.quantityOnHand ?? 0) - (a.quantityOnHand ?? 0))[0]
+  return match?.id ?? ''
 }
 
 export default function DeductInventoryModal({ lineItems, dealerId, title, alreadyDeducted, source, onClose, onDone, catalogMap = {} }) {
+  // Catalog items (have sku, type === 'catalog') → tracked in inventory
+  // Custom items (type === 'custom' or no sku) → not deducted
+  const catalogItems = lineItems.filter((li) => li.type === 'catalog' && li.sku?.trim())
+  const customItems = lineItems.filter((li) => li.type !== 'catalog' || !li.sku?.trim())
+
   const [inventory, setInventory] = useState([])
   const [loadingInv, setLoadingInv] = useState(true)
   const [rows, setRows] = useState(() =>
-    lineItems.map((li) => ({ lineItem: li, source: 'warehouse', inventoryId: '' }))
+    catalogItems.map((li) => ({ lineItem: li, source: 'warehouse', inventoryId: '' }))
   )
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState(null)
@@ -50,7 +38,7 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
       setRows((prev) =>
         prev.map((row) => ({
           ...row,
-          inventoryId: autoMatchId(inv, row.lineItem, dealerId),
+          inventoryId: autoMatchId(inv, row.lineItem),
         }))
       )
       setLoadingInv(false)
@@ -66,7 +54,7 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
       prev.map((row) => ({
         ...row,
         source: 'warehouse',
-        inventoryId: autoMatchId(inventory, row.lineItem, dealerId),
+        inventoryId: autoMatchId(inventory, row.lineItem),
       }))
     )
   }
@@ -80,7 +68,7 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
       prev.map((r) => ({
         ...r,
         source: 'warehouse',
-        inventoryId: r.inventoryId || autoMatchId(inventory, r.lineItem, dealerId),
+        inventoryId: r.inventoryId || autoMatchId(inventory, r.lineItem),
       }))
     )
   }
@@ -88,7 +76,8 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
   async function handleConfirm() {
     setError('')
     const warehouseRows = rows.filter((r) => r.source === 'warehouse')
-    if (warehouseRows.length === 0) { onDone([]); return }
+    if (warehouseRows.length === 0 && catalogItems.length > 0) { onDone([]); return }
+    if (catalogItems.length === 0) { onDone([]); return }
 
     setRunning(true)
     try {
@@ -97,23 +86,29 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
 
       for (const row of warehouseRows) {
         const qty = row.lineItem.quantity ?? 1
+        const liSku = (row.lineItem.sku ?? '').trim()
+        const catItem = row.lineItem.catalogId ? (catalogMap[row.lineItem.catalogId] ?? null) : null
+        const resolvedSku = catItem?.sku?.trim() || liSku
+        const resolvedBrand = catItem?.manufacturer?.trim() || null
+        const resolvedCategory = catItem ? (CATALOG_CATEGORY[catItem.type] ?? null) : null
+        const resolvedModelName = catItem?.name?.trim() || row.lineItem.description
 
         if (!row.inventoryId) {
-          // No inventory selected → create negative shortfall record
-          const liSku = row.lineItem.sku?.trim() || null
-          const catItem = row.lineItem.catalogId ? (catalogMap[row.lineItem.catalogId] ?? null) : null
-          const resolvedSku = catItem?.sku?.trim() || liSku
-          const resolvedBrand = catItem?.manufacturer?.trim() || null
-          const resolvedCategory = catItem ? (CATALOG_CATEGORY[catItem.type] ?? null) : null
-          const resolvedModelName = catItem?.name?.trim() || row.lineItem.description
+          // No inventory record matched — create a shortfall (requires SKU, already filtered above)
           const negRef = await addDoc(inventoryCol, {
             dealerId: dealerId || null,
             catalogId: row.lineItem.catalogId ?? null,
             modelName: resolvedModelName,
-            sku: resolvedSku, brand: resolvedBrand, category: resolvedCategory, condition: 'New',
-            quantityOnHand: -qty, quantityReserved: 0, quantityAvailable: -qty,
+            sku: resolvedSku || null,
+            brand: resolvedBrand,
+            category: resolvedCategory,
+            condition: 'New',
+            quantityOnHand: -qty,
+            quantityReserved: 0,
+            quantityAvailable: -qty,
             notes: 'Auto-created: inventory shortfall',
-            createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
           })
           details.push({ type: 'shortfall', inventoryId: negRef.id, model: resolvedModelName, sku: resolvedSku ?? '', qty: -qty })
           txEntries.push({
@@ -135,13 +130,15 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
           })
           details.push({
             type: 'deducted', inventoryId: row.inventoryId,
-            model: inv?.modelName || row.lineItem.description,
-            sku: inv?.sku || '', qty,
+            model: inv?.modelName || resolvedModelName,
+            sku: inv?.sku || resolvedSku || '', qty,
           })
           txEntries.push({
             type: 'deduction', qty: -qty,
-            modelName: inv?.modelName || row.lineItem.description,
-            brand: inv?.brand ?? null, sku: inv?.sku ?? null, category: inv?.category ?? null,
+            modelName: inv?.modelName || resolvedModelName,
+            brand: inv?.brand ?? resolvedBrand ?? null,
+            sku: inv?.sku ?? resolvedSku ?? null,
+            category: inv?.category ?? resolvedCategory ?? null,
             dealerId: inv?.dealerId ?? dealerId,
             inventoryId: row.inventoryId,
             sourceType: source?.type ?? null, sourceId: source?.id ?? null, sourceNumber: source?.number ?? null,
@@ -178,97 +175,126 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
                 </div>
               )}
 
-              {/* Quick actions */}
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={matchAll} disabled={loadingInv}
-                  className="text-xs border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5 px-3 py-1.5 rounded-lg font-medium disabled:opacity-40">
-                  Auto-match All
-                </button>
-                <button onClick={allWarehouse}
-                  className="text-xs border border-gray-200 text-[#1A1A1A] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg">
-                  All From Warehouse
-                </button>
-                <button onClick={allOem}
-                  className="text-xs border border-gray-200 text-[#9A9A9A] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg">
-                  All OEM Direct
-                </button>
-              </div>
-
-              {/* Items */}
-              {loadingInv ? (
-                <p className="text-sm text-[#9A9A9A] text-center py-6 animate-pulse">Loading inventory…</p>
-              ) : (
-                <div className="space-y-3">
-                  {rows.map((row) => {
-                    const qty = row.lineItem.quantity ?? 1
-                    const selInv = row.inventoryId ? inventory.find((i) => i.id === row.inventoryId) : null
-                    const wouldGoNeg = selInv && row.source === 'warehouse' && (selInv.quantityOnHand ?? 0) < qty
-                    return (
-                      <div key={row.lineItem.id} className={`border rounded-lg p-3 space-y-2 ${wouldGoNeg ? 'border-[#D95F5F]/40 bg-[#D95F5F]/5' : 'border-gray-200'}`}>
-                        {/* Item header */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-[#1A1A1A] truncate">{row.lineItem.description}</p>
-                            <p className="text-xs text-[#9A9A9A]">Qty: {qty}</p>
-                          </div>
-                          {/* Source toggle */}
-                          <div className="flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
-                            <button
-                              onClick={() => setRowField(row.lineItem.id, 'source', 'warehouse')}
-                              className={`text-xs px-2.5 py-1 font-medium transition-colors ${row.source === 'warehouse' ? 'bg-[#8B6914] text-white' : 'text-[#9A9A9A] hover:bg-[#F4F4F5]'}`}>
-                              Warehouse
-                            </button>
-                            <button
-                              onClick={() => { setRowField(row.lineItem.id, 'source', 'oem'); setRowField(row.lineItem.id, 'inventoryId', '') }}
-                              className={`text-xs px-2.5 py-1 font-medium transition-colors border-l border-gray-200 ${row.source === 'oem' ? 'bg-[#4A90B8] text-white' : 'text-[#9A9A9A] hover:bg-[#F4F4F5]'}`}>
-                              OEM Direct
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Inventory selector */}
-                        {row.source === 'warehouse' && (
-                          <div className="space-y-1">
-                            <select
-                              value={row.inventoryId}
-                              onChange={(e) => setRowField(row.lineItem.id, 'inventoryId', e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white">
-                              <option value="">— No inventory match (will create negative entry) —</option>
-                              {inventory
-                                .slice()
-                                .sort((a, b) => {
-                                  const ap = a.dealerId === dealerId ? 1 : 0
-                                  const bp = b.dealerId === dealerId ? 1 : 0
-                                  return bp - ap || (b.quantityOnHand ?? 0) - (a.quantityOnHand ?? 0)
-                                })
-                                .map((inv) => (
-                                  <option key={inv.id} value={inv.id}>
-                                    {inv.modelName || inv.sku || inv.id}
-                                    {inv.sku ? ` (${inv.sku})` : ''}
-                                    {' · On Hand: '}{inv.quantityOnHand ?? 0}
-                                    {inv.dealerId === dealerId ? ' ★' : ''}
-                                  </option>
-                                ))}
-                            </select>
-                            {wouldGoNeg && (
-                              <p className="text-xs text-[#D95F5F] font-medium">
-                                ⚠ Only {selInv.quantityOnHand ?? 0} on hand — deducting {qty} will create negative stock
-                              </p>
-                            )}
-                            {!row.inventoryId && (
-                              <p className="text-xs text-[#9A9A9A]">
-                                No record selected — a negative inventory entry will be created for this item
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {row.source === 'oem' && (
-                          <p className="text-xs text-[#4A90B8]">Ships directly from manufacturer — no inventory deduction</p>
-                        )}
-                      </div>
-                    )
-                  })}
+              {/* Custom / untracked items */}
+              {customItems.length > 0 && (
+                <div className="bg-[#F4F4F5] border border-gray-200 rounded-lg px-4 py-3 text-sm">
+                  <p className="font-medium text-[#9A9A9A] mb-1 text-xs uppercase tracking-wider">Not tracked in inventory</p>
+                  {customItems.map((li) => (
+                    <p key={li.id} className="text-xs text-[#9A9A9A] mt-0.5">
+                      · {li.description} — custom line item, no inventory deduction
+                    </p>
+                  ))}
                 </div>
+              )}
+
+              {catalogItems.length === 0 ? (
+                <p className="text-sm text-[#9A9A9A] text-center py-6">
+                  No catalog items to deduct — all line items are custom.
+                </p>
+              ) : (
+                <>
+                  {/* Quick actions */}
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={matchAll} disabled={loadingInv}
+                      className="text-xs border border-[#8B6914] text-[#8B6914] hover:bg-[#8B6914]/5 px-3 py-1.5 rounded-lg font-medium disabled:opacity-40">
+                      Auto-match All
+                    </button>
+                    <button onClick={allWarehouse}
+                      className="text-xs border border-gray-200 text-[#1A1A1A] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg">
+                      All From Warehouse
+                    </button>
+                    <button onClick={allOem}
+                      className="text-xs border border-gray-200 text-[#9A9A9A] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg">
+                      All OEM Direct
+                    </button>
+                  </div>
+
+                  {loadingInv ? (
+                    <p className="text-sm text-[#9A9A9A] text-center py-6 animate-pulse">Loading inventory…</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {rows.map((row) => {
+                        const qty = row.lineItem.quantity ?? 1
+                        const liSkuNorm = (row.lineItem.sku ?? '').trim().toLowerCase()
+                        // Only show inventory records matching this item's SKU
+                        const skuInventory = inventory.filter((inv) =>
+                          liSkuNorm && (inv.sku ?? '').trim().toLowerCase() === liSkuNorm
+                        )
+                        const selInv = row.inventoryId ? inventory.find((i) => i.id === row.inventoryId) : null
+                        const wouldGoNeg = selInv && row.source === 'warehouse' && (selInv.quantityOnHand ?? 0) < qty
+                        return (
+                          <div key={row.lineItem.id} className={`border rounded-lg p-3 space-y-2 ${wouldGoNeg ? 'border-[#D95F5F]/40 bg-[#D95F5F]/5' : 'border-gray-200'}`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-[#1A1A1A] truncate">{row.lineItem.description}</p>
+                                <p className="text-xs text-[#9A9A9A]">
+                                  Qty: {qty}
+                                  {row.lineItem.sku && <span className="ml-2 font-mono">· SKU: {row.lineItem.sku}</span>}
+                                </p>
+                              </div>
+                              <div className="flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
+                                <button
+                                  onClick={() => setRowField(row.lineItem.id, 'source', 'warehouse')}
+                                  className={`text-xs px-2.5 py-1 font-medium transition-colors ${row.source === 'warehouse' ? 'bg-[#8B6914] text-white' : 'text-[#9A9A9A] hover:bg-[#F4F4F5]'}`}>
+                                  Warehouse
+                                </button>
+                                <button
+                                  onClick={() => { setRowField(row.lineItem.id, 'source', 'oem'); setRowField(row.lineItem.id, 'inventoryId', '') }}
+                                  className={`text-xs px-2.5 py-1 font-medium transition-colors border-l border-gray-200 ${row.source === 'oem' ? 'bg-[#4A90B8] text-white' : 'text-[#9A9A9A] hover:bg-[#F4F4F5]'}`}>
+                                  OEM Direct
+                                </button>
+                              </div>
+                            </div>
+
+                            {row.source === 'warehouse' && (
+                              <div className="space-y-1">
+                                <select
+                                  value={row.inventoryId}
+                                  onChange={(e) => setRowField(row.lineItem.id, 'inventoryId', e.target.value)}
+                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-[#8B6914] bg-white">
+                                  <option value="">— No inventory match (will create shortfall) —</option>
+                                  {skuInventory
+                                    .slice()
+                                    .sort((a, b) => {
+                                      const ap = a.dealerId === dealerId ? 1 : 0
+                                      const bp = b.dealerId === dealerId ? 1 : 0
+                                      return bp - ap || (b.quantityOnHand ?? 0) - (a.quantityOnHand ?? 0)
+                                    })
+                                    .map((inv) => (
+                                      <option key={inv.id} value={inv.id}>
+                                        {inv.modelName || inv.sku}
+                                        {` · On Hand: ${inv.quantityOnHand ?? 0}`}
+                                        {inv.condition ? ` · ${inv.condition}` : ''}
+                                        {inv.dealerId === dealerId ? ' ★' : ''}
+                                      </option>
+                                    ))}
+                                </select>
+                                {skuInventory.length === 0 && (
+                                  <p className="text-xs text-[#E6A817] font-medium">
+                                    No inventory found for SKU {row.lineItem.sku} — a shortfall entry will be created
+                                  </p>
+                                )}
+                                {wouldGoNeg && (
+                                  <p className="text-xs text-[#D95F5F] font-medium">
+                                    ⚠ Only {selInv.quantityOnHand ?? 0} on hand — deducting {qty} will create negative stock
+                                  </p>
+                                )}
+                                {row.inventoryId && !wouldGoNeg && (
+                                  <p className="text-xs text-[#4CAF7D]">
+                                    Matched by SKU · {selInv?.quantityOnHand ?? 0} on hand
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {row.source === 'oem' && (
+                              <p className="text-xs text-[#4A90B8]">Ships directly from manufacturer — no inventory deduction</p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </>
               )}
               {error && <p className="text-sm text-[#D95F5F] font-medium">{error}</p>}
             </>
@@ -284,7 +310,7 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
                   <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm border ${d.type === 'shortfall' ? 'bg-[#D95F5F]/5 border-[#D95F5F]/20' : 'bg-[#4CAF7D]/5 border-[#4CAF7D]/20'}`}>
                     <div>
                       <p className="font-medium text-[#1A1A1A]">{d.model}</p>
-                      {d.sku && <p className="text-xs text-[#9A9A9A]">SKU: {d.sku}</p>}
+                      {d.sku && <p className="text-xs text-[#9A9A9A] font-mono">SKU: {d.sku}</p>}
                     </div>
                     <span className={`font-semibold shrink-0 ${d.type === 'shortfall' ? 'text-[#D95F5F]' : 'text-[#4CAF7D]'}`}>
                       {d.type === 'shortfall' ? `${d.qty} (negative entry)` : `−${d.qty} deducted`}
@@ -306,9 +332,12 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
                 className="flex-1 border border-gray-200 text-[#1A1A1A] text-sm font-medium py-2 rounded-lg hover:bg-[#F4F4F5] disabled:opacity-50">
                 Cancel
               </button>
-              <button onClick={handleConfirm} disabled={running || loadingInv}
+              <button onClick={handleConfirm} disabled={running || loadingInv || catalogItems.length === 0}
                 className="flex-1 bg-[#8B6914] text-white text-sm font-semibold py-2 rounded-lg hover:bg-[#7a5c11] disabled:opacity-50 transition-colors">
-                {running ? 'Deducting…' : `Deduct${warehouseCount > 0 ? ` (${warehouseCount} from warehouse)` : ''}`}
+                {catalogItems.length === 0
+                  ? 'No catalog items to deduct'
+                  : running ? 'Deducting…'
+                  : `Deduct${warehouseCount > 0 ? ` (${warehouseCount} from warehouse)` : ''}`}
               </button>
             </>
           ) : (

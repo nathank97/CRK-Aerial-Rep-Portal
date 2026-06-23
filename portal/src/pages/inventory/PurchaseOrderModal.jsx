@@ -159,8 +159,13 @@ export default function PurchaseOrderModal({ po, dealers, catalog, onClose }) {
     if (!orderDate) { setError('Order date is required.'); return false }
     if (!dealerId) { setError('Location is required.'); return false }
     if (rows.length === 0) { setError('Add at least one item.'); return false }
-    const badIdx = rows.findIndex((r) => !safeStr(r.modelName).trim())
+    const badIdx = rows.findIndex((r) => !r.cancelled && !safeStr(r.modelName).trim())
     if (badIdx !== -1) { setError(`Row ${badIdx + 1}: Model name is required.`); return false }
+    const noCatalog = rows.findIndex((r) => !r.cancelled && (!r.catalogId || !safeStr(r.sku).trim()))
+    if (noCatalog !== -1) {
+      setError(`Row ${noCatalog + 1}: All items must be selected from the catalog and have a SKU. Use the "From Catalog" search to select an item.`)
+      return false
+    }
     const overReceived = rows.find((r) => (r.receivedQty ?? 0) > (parseInt(r.orderedQty) || 1))
     if (overReceived) {
       setError(`"${overReceived.modelName}": Ordered qty cannot be less than received qty (${overReceived.receivedQty}).`)

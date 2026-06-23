@@ -3,12 +3,16 @@ import { inventoryCol } from '../firebase/firestore'
 import { db } from '../firebase/config'
 import { writeTx } from './inventoryTransactions'
 
+const CATALOG_CATEGORY = { Drone: 'Drone Kit', Part: 'Parts', Accessory: 'Accessory', Service: 'Other', Other: 'Other' }
+
 /**
  * Auto-deduct inventory for a list of line items.
+ * Only catalog items (type === 'catalog' with a sku) are processed.
+ * Matching is by SKU only — catalog is the single source of truth.
+ * catalogMap: { [catalogId]: catalogItem } for metadata resolution.
  * source: { type: 'order'|'invoice', id, number, createdBy }
- * Returns { details, hadShortfall }
  */
-export async function autoDeductInventory(lineItems, dealerId, source = {}) {
+export async function autoDeductInventory(lineItems, dealerId, source = {}, catalogMap = {}) {
   const invSnap = await getDocs(inventoryCol)
   const inventory = invSnap.docs.map((d) => ({
     id: d.id,
@@ -16,37 +20,38 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
     _work: d.data().quantityOnHand ?? 0,
   }))
 
-  // Group by catalogId (best), then SKU, then normalized description
+  // Only process catalog line items that have a SKU — custom items are never deducted
+  const catalogLineItems = lineItems.filter((li) => li.type === 'catalog' && li.sku?.trim())
+
+  // Group by normalized SKU
   const groups = new Map()
-  for (const li of lineItems) {
-    const liSku = li.sku?.trim().toLowerCase() || ''
-    const key = li.catalogId || (liSku ? `sku:${liSku}` : li.description?.toLowerCase().trim()) || li.id
-    if (!groups.has(key)) {
-      groups.set(key, { catalogId: li.catalogId || null, description: li.description || '', sku: li.sku?.trim() || '', totalQty: 0 })
+  for (const li of catalogLineItems) {
+    const skuKey = li.sku.trim().toLowerCase()
+    if (!groups.has(skuKey)) {
+      const catItem = li.catalogId ? (catalogMap[li.catalogId] ?? null) : null
+      groups.set(skuKey, {
+        sku: li.sku.trim(),
+        catalogId: li.catalogId || null,
+        modelName: catItem?.name?.trim() || li.description || '',
+        brand: catItem?.manufacturer?.trim() || null,
+        category: catItem ? (CATALOG_CATEGORY[catItem.type] ?? null) : null,
+        totalQty: 0,
+      })
     }
-    groups.get(key).totalQty += (li.quantity ?? 1)
+    groups.get(skuKey).totalQty += (li.quantity ?? 1)
   }
 
   const details = []
   const txEntries = []
 
-  for (const [, group] of groups) {
+  for (const [skuKey, group] of groups) {
     let remaining = group.totalQty
 
-    const groupSku = group.sku.toLowerCase()
+    // Match inventory by SKU only — no name matching, no catalogId matching
     const matches = inventory
       .filter((inv) => {
         if (inv._work <= 0) return false
-        const invSku = (inv.sku ?? '').toLowerCase().trim()
-        // CatalogId is always authoritative
-        if (group.catalogId && inv.catalogId === group.catalogId) return true
-        // SKU present on line item → ONLY match by SKU, never fall through to name
-        if (groupSku) return invSku === groupSku
-        // No SKU: name match only as last resort
-        const m = (inv.modelName ?? '').toLowerCase().trim()
-        const d = group.description.toLowerCase().trim()
-        if (!m || !d) return false
-        return m === d || m.includes(d) || d.includes(m)
+        return (inv.sku ?? '').trim().toLowerCase() === skuKey
       })
       .sort((a, b) => {
         const ap = a.dealerId === dealerId ? 1 : 0
@@ -66,14 +71,14 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
       inv._work = newOnHand
       remaining -= toDeduct
 
-      details.push({ type: 'deducted', inventoryId: inv.id, model: inv.modelName || group.description, sku: inv.sku || '', qty: toDeduct })
+      details.push({ type: 'deducted', inventoryId: inv.id, model: inv.modelName || group.modelName, sku: inv.sku || '', qty: toDeduct })
       txEntries.push({
         type: 'deduction',
         qty: -toDeduct,
-        modelName: inv.modelName || group.description,
-        brand: inv.brand ?? null,
-        sku: inv.sku ?? null,
-        category: inv.category ?? null,
+        modelName: inv.modelName || group.modelName,
+        brand: inv.brand ?? group.brand ?? null,
+        sku: inv.sku ?? group.sku ?? null,
+        category: inv.category ?? group.category ?? null,
         dealerId: inv.dealerId ?? dealerId,
         inventoryId: inv.id,
         sourceType: source.type ?? null,
@@ -84,22 +89,30 @@ export async function autoDeductInventory(lineItems, dealerId, source = {}) {
     }
 
     if (remaining > 0) {
-      const shortfallSku = group.sku || null
+      // Shortfall — create negative inventory record with full catalog metadata
       const negRef = await addDoc(inventoryCol, {
         dealerId: dealerId || null,
         catalogId: group.catalogId || null,
-        modelName: group.description,
-        sku: shortfallSku, brand: null, category: null, condition: 'New',
-        quantityOnHand: -remaining, quantityReserved: 0, quantityAvailable: -remaining,
+        modelName: group.modelName,
+        sku: group.sku,
+        brand: group.brand,
+        category: group.category,
+        condition: 'New',
+        quantityOnHand: -remaining,
+        quantityReserved: 0,
+        quantityAvailable: -remaining,
         notes: 'Auto-created: inventory shortfall',
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       })
-      details.push({ type: 'shortfall', inventoryId: negRef.id, model: group.description, sku: shortfallSku ?? '', qty: -remaining })
+      details.push({ type: 'shortfall', inventoryId: negRef.id, model: group.modelName, sku: group.sku ?? '', qty: -remaining })
       txEntries.push({
         type: 'deduction',
         qty: -remaining,
-        modelName: group.description,
-        brand: null, sku: shortfallSku, category: null,
+        modelName: group.modelName,
+        brand: group.brand,
+        sku: group.sku,
+        category: group.category,
         dealerId,
         inventoryId: negRef.id,
         sourceType: source.type ?? null,
@@ -149,11 +162,10 @@ export async function undoInventoryDeduction(deductionDetails, dealerId, source 
         sourceType: source.type ?? null,
         sourceId: source.id ?? null,
         sourceNumber: source.number ?? null,
-        notes: `Reversed deduction`,
+        notes: 'Reversed deduction',
         createdBy: source.createdBy ?? '',
       })
     } else if (detail.type === 'shortfall') {
-      // Delete the negative inventory record that was auto-created
       try { await deleteDoc(doc(db, 'inventory', detail.inventoryId)) } catch {}
       txEntries.push({
         type: 'reversal',

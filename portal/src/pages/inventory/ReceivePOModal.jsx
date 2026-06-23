@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDoc, updateDoc, getDoc, getDocs, doc, serverTimestamp } from 'firebase/firestore'
+import { addDoc, updateDoc, deleteDoc, getDoc, getDocs, doc, serverTimestamp } from 'firebase/firestore'
 import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
@@ -258,7 +258,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
     const createdBy = profile?.displayName ?? user?.email ?? ''
 
     try {
-      // Fetch inventory once for shortfall reconciliation in legacy flow
+      // Fetch inventory once for shortfall reconciliation (both new and legacy flows)
       const allInvSnap = await getDocs(inventoryCol)
       const allInventory = allInvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
 
@@ -274,21 +274,52 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
 
           if (qty > 0) {
             if (item.inventoryIds?.length > 0) {
-              // New flow: update existing on_order record
+              // New flow: update existing on_order record, absorbing any matching shortfall
               const invId = item.inventoryIds[0]
               const invSnap = await getDoc(doc(db, 'inventory', invId))
               if (invSnap.exists()) {
                 const d = invSnap.data()
-                const newOnHand = (d.quantityOnHand ?? 0) + qty
+
+                // Find a matching shortfall to absorb (by catalogId, then SKU)
+                const itemSkuNorm = (item.sku ?? '').toLowerCase().trim()
+                const shortfall = allInventory.find((inv) => {
+                  if (inv.id === invId) return false
+                  if (inv.notes !== 'Auto-created: inventory shortfall') return false
+                  if (item.catalogId && inv.catalogId === item.catalogId) return true
+                  if (itemSkuNorm) return (inv.sku ?? '').toLowerCase().trim() === itemSkuNorm
+                  return false
+                })
+                const shortfallAbs = shortfall && (shortfall.quantityOnHand ?? 0) < 0
+                  ? Math.abs(shortfall.quantityOnHand)
+                  : 0
+                const absorbable = Math.min(qty, shortfallAbs)
+
+                const grossOnHand = (d.quantityOnHand ?? 0) + qty
+                const netOnHand = grossOnHand - absorbable
                 const newOnOrder = Math.max(0, (d.quantityOnOrder ?? item.orderedQty) - qty)
                 await updateDoc(doc(db, 'inventory', invId), {
-                  quantityOnHand: newOnHand,
+                  quantityOnHand: netOnHand,
                   quantityOnOrder: newOnOrder,
-                  quantityAvailable: Math.max(0, newOnHand - (d.quantityReserved ?? 0)),
+                  quantityAvailable: Math.max(0, netOnHand - (d.quantityReserved ?? 0)),
                   inventoryStatus: 'in_stock',
                   receivedDate,
                   updatedAt: serverTimestamp(),
                 })
+
+                // Delete or reduce the absorbed shortfall
+                if (absorbable > 0) {
+                  const newShortfallQty = (shortfall.quantityOnHand ?? 0) + absorbable
+                  if (newShortfallQty >= 0) {
+                    await deleteDoc(doc(db, 'inventory', shortfall.id))
+                  } else {
+                    await updateDoc(doc(db, 'inventory', shortfall.id), {
+                      quantityOnHand: newShortfallQty,
+                      quantityAvailable: newShortfallQty,
+                      updatedAt: serverTimestamp(),
+                    })
+                  }
+                }
+
                 await writeTx([{
                   type: 'po_receipt',
                   qty,

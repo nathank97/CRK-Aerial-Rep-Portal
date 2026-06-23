@@ -94,6 +94,7 @@ export default function InvoiceDetail() {
       id: item.id ?? crypto.randomUUID(),
       type: item.type ?? 'custom',
       catalogId: item.catalogId ?? null,
+      sku: item.sku ?? null,
       description: item.description ?? '',
       quantity: item.quantity ?? 1,
       unitPrice: item.unitPrice ?? 0,
@@ -631,7 +632,10 @@ export default function InvoiceDetail() {
                       const models = item.catalogId ? (catalogMap[item.catalogId]?.compatibleModels ?? []) : []
                       return (
                         <tr key={item.id ?? i}>
-                          <td className="py-2 pr-3 text-[#111111]">{item.description}</td>
+                          <td className="py-2 pr-3 text-[#111111]">
+                            <span>{item.description}</span>
+                            {item.sku && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku}</span>}
+                          </td>
                           <td className="py-2 px-2 text-xs text-[#9A9A9A]">{models.length > 0 ? models.join(', ') : '—'}</td>
                           <td className="py-2 px-2 text-right text-[#9A9A9A]">{qty}</td>
                           <td className="py-2 px-2 text-right text-[#9A9A9A]">{formatCurrency(item.unitPrice)}</td>

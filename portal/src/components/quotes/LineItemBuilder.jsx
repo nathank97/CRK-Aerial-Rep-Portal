@@ -29,6 +29,7 @@ function newCustomItem() {
     id: crypto.randomUUID(),
     type: 'custom',
     catalogId: null,
+    sku: null,
     description: '',
     quantity: 1,
     unitPrice: 0,
@@ -169,6 +170,9 @@ function SortableRow({
             className={inputCls}
           />
         </div>
+        {item.sku && (
+          <p className="text-xs text-[#9A9A9A] mt-0.5 font-mono">SKU: {item.sku}</p>
+        )}
         {item.type === 'catalog' && showDealerPricing && profile?.role === 'dealer' && item.msrp && (
           <p className="text-xs text-[#9A9A9A] mt-0.5">
             MSRP: {formatCurrency(item.msrp)} · Your cost: {formatCurrency(item.dealerCost)}
@@ -270,6 +274,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
       id: crypto.randomUUID(),
       type: 'catalog',
       catalogId: catalogItem.id,
+      sku: catalogItem.sku?.trim() || null,
       description: catalogItem.name,
       quantity: 1,
       unitPrice: catalogItem.msrp ?? 0,
@@ -288,6 +293,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
         ...item,
         type: 'catalog',
         catalogId: catalogItem.id,
+        sku: catalogItem.sku?.trim() || null,
         description: catalogItem.name,
         unitPrice: catalogItem.msrp ?? item.unitPrice,
         msrp: catalogItem.msrp ?? null,

@@ -127,7 +127,10 @@ export default function QuotePDF({ quote, logoSrc }) {
               : '—'
             return (
               <View key={item.id ?? i} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]}>
-                <Text style={[s.col1, s.td]}>{item.description}</Text>
+                <View style={s.col1}>
+                  <Text style={s.td}>{item.description}</Text>
+                  {item.sku ? <Text style={{ fontSize: 7, color: GRAY, marginTop: 1 }}>SKU: {item.sku}</Text> : null}
+                </View>
                 <Text style={[s.col2, s.td]}>{item.quantity}</Text>
                 <Text style={[s.col3, s.td]}>{formatCurrency(item.unitPrice)}</Text>
                 <Text style={[s.col4, s.td]}>{disc}</Text>

@@ -377,6 +377,7 @@ export default function InvoiceDetail() {
           source={{ type: 'invoice', id, number: invoice.invoiceNumber, createdBy: profile?.displayName ?? '' }}
           onClose={() => setShowDeduct(false)}
           onDone={handleInvoiceDeductDone}
+          catalogMap={catalogMap}
         />
       )}
       {showCCModal && (

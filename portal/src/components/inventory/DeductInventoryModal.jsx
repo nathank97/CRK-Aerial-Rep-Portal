@@ -5,6 +5,8 @@ import { db } from '../../firebase/config'
 import { writeTx } from '../../utils/inventoryTransactions'
 import { formatCurrency } from '../../utils/formatters'
 
+const CATALOG_CATEGORY = { Drone: 'Drone Kit', Part: 'Parts', Accessory: 'Accessory', Service: 'Other', Other: 'Other' }
+
 function autoMatchId(inventory, li, dealerId) {
   const desc = (li.description ?? '').toLowerCase().trim()
   const liSku = (li.sku ?? '').toLowerCase().trim()
@@ -31,7 +33,7 @@ function autoMatchId(inventory, li, dealerId) {
   return scored[0]?.inv.id ?? ''
 }
 
-export default function DeductInventoryModal({ lineItems, dealerId, title, alreadyDeducted, source, onClose, onDone }) {
+export default function DeductInventoryModal({ lineItems, dealerId, title, alreadyDeducted, source, onClose, onDone, catalogMap = {} }) {
   const [inventory, setInventory] = useState([])
   const [loadingInv, setLoadingInv] = useState(true)
   const [rows, setRows] = useState(() =>
@@ -99,20 +101,25 @@ export default function DeductInventoryModal({ lineItems, dealerId, title, alrea
         if (!row.inventoryId) {
           // No inventory selected → create negative shortfall record
           const liSku = row.lineItem.sku?.trim() || null
+          const catItem = row.lineItem.catalogId ? (catalogMap[row.lineItem.catalogId] ?? null) : null
+          const resolvedSku = catItem?.sku?.trim() || liSku
+          const resolvedBrand = catItem?.manufacturer?.trim() || null
+          const resolvedCategory = catItem ? (CATALOG_CATEGORY[catItem.type] ?? null) : null
+          const resolvedModelName = catItem?.name?.trim() || row.lineItem.description
           const negRef = await addDoc(inventoryCol, {
             dealerId: dealerId || null,
             catalogId: row.lineItem.catalogId ?? null,
-            modelName: row.lineItem.description,
-            sku: liSku, brand: null, category: null, condition: 'New',
+            modelName: resolvedModelName,
+            sku: resolvedSku, brand: resolvedBrand, category: resolvedCategory, condition: 'New',
             quantityOnHand: -qty, quantityReserved: 0, quantityAvailable: -qty,
             notes: 'Auto-created: inventory shortfall',
             createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           })
-          details.push({ type: 'shortfall', inventoryId: negRef.id, model: row.lineItem.description, sku: liSku ?? '', qty: -qty })
+          details.push({ type: 'shortfall', inventoryId: negRef.id, model: resolvedModelName, sku: resolvedSku ?? '', qty: -qty })
           txEntries.push({
             type: 'deduction', qty: -qty,
-            modelName: row.lineItem.description,
-            brand: null, sku: liSku, category: null, dealerId,
+            modelName: resolvedModelName,
+            brand: resolvedBrand, sku: resolvedSku, category: resolvedCategory, dealerId,
             inventoryId: negRef.id,
             sourceType: source?.type ?? null, sourceId: source?.id ?? null, sourceNumber: source?.number ?? null,
             notes: 'Shortfall — negative inventory created',

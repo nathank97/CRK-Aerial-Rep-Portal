@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { addDoc, updateDoc, getDoc, doc, serverTimestamp } from 'firebase/firestore'
+import { addDoc, updateDoc, getDoc, getDocs, doc, serverTimestamp } from 'firebase/firestore'
 import { inventoryCol } from '../../firebase/firestore'
 import { db } from '../../firebase/config'
 import { useAuth } from '../../context/AuthContext'
@@ -258,6 +258,10 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
     const createdBy = profile?.displayName ?? user?.email ?? ''
 
     try {
+      // Fetch inventory once for shortfall reconciliation in legacy flow
+      const allInvSnap = await getDocs(inventoryCol)
+      const allInventory = allInvSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+
       const updatedItems = await Promise.all(
         (po.items ?? []).map(async (item) => {
           if (item.cancelled) return item
@@ -305,28 +309,61 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
               }
               if (!isCancellingNow) return { ...item, receivedQty: newReceivedQty }
             } else {
-              // Legacy flow: create new inventory record
-              const invRef = await addDoc(inventoryCol, {
-                poId: po.id,
-                catalogId: item.catalogId ?? null,
-                inventoryStatus: 'in_stock',
-                dealerId: po.dealerId,
-                brand: item.brand ?? null,
-                category: item.category ?? null,
-                modelName: item.modelName,
-                sku: item.sku ?? null,
-                condition: item.condition ?? 'New',
-                quantityOnHand: qty,
-                quantityOnOrder: 0,
-                quantityReserved: 0,
-                quantityAvailable: qty,
-                msrp: item.msrp ?? null,
-                costPrice: item.costPrice ?? null,
-                lowStockThreshold: item.lowStockThreshold ?? null,
-                receivedDate,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+              // Legacy flow: reconcile against an existing shortfall if one matches, else create new record
+              const itemSku = (item.sku ?? '').toLowerCase().trim()
+              const shortfall = allInventory.find((inv) => {
+                if (inv.notes !== 'Auto-created: inventory shortfall') return false
+                if (item.catalogId && inv.catalogId === item.catalogId) return true
+                if (itemSku) return (inv.sku ?? '').toLowerCase().trim() === itemSku
+                return false
               })
+
+              let targetId
+              if (shortfall) {
+                const newOnHand = (shortfall.quantityOnHand ?? 0) + qty
+                await updateDoc(doc(db, 'inventory', shortfall.id), {
+                  quantityOnHand: newOnHand,
+                  quantityAvailable: Math.max(0, newOnHand - (shortfall.quantityReserved ?? 0)),
+                  poId: po.id,
+                  receivedDate,
+                  inventoryStatus: newOnHand > 0 ? 'in_stock' : 'shortfall',
+                  // Fill in any fields that were null on the shortfall from the PO item
+                  brand: shortfall.brand ?? item.brand ?? null,
+                  category: shortfall.category ?? item.category ?? null,
+                  sku: shortfall.sku ?? item.sku ?? null,
+                  modelName: shortfall.modelName || item.modelName,
+                  msrp: shortfall.msrp ?? item.msrp ?? null,
+                  costPrice: shortfall.costPrice ?? item.costPrice ?? null,
+                  lowStockThreshold: shortfall.lowStockThreshold ?? item.lowStockThreshold ?? null,
+                  ...(newOnHand >= 0 ? { notes: null } : {}),
+                  updatedAt: serverTimestamp(),
+                })
+                targetId = shortfall.id
+              } else {
+                const invRef = await addDoc(inventoryCol, {
+                  poId: po.id,
+                  catalogId: item.catalogId ?? null,
+                  inventoryStatus: 'in_stock',
+                  dealerId: po.dealerId,
+                  brand: item.brand ?? null,
+                  category: item.category ?? null,
+                  modelName: item.modelName,
+                  sku: item.sku ?? null,
+                  condition: item.condition ?? 'New',
+                  quantityOnHand: qty,
+                  quantityOnOrder: 0,
+                  quantityReserved: 0,
+                  quantityAvailable: qty,
+                  msrp: item.msrp ?? null,
+                  costPrice: item.costPrice ?? null,
+                  lowStockThreshold: item.lowStockThreshold ?? null,
+                  receivedDate,
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                })
+                targetId = invRef.id
+              }
+
               await writeTx([{
                 type: 'po_receipt',
                 qty,
@@ -335,7 +372,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
                 sku: item.sku ?? null,
                 category: item.category ?? null,
                 dealerId: po.dealerId,
-                inventoryId: invRef.id,
+                inventoryId: targetId,
                 sourceType: 'purchase_order',
                 sourceId: po.id,
                 sourceNumber: po.poNumber || po.supplierName,
@@ -345,7 +382,7 @@ export default function ReceivePOModal({ po, dealerMap, onClose }) {
                 createdBy,
               }])
               if (!isCancellingNow) {
-                return { ...item, receivedQty: newReceivedQty, inventoryIds: [...(item.inventoryIds ?? []), invRef.id] }
+                return { ...item, receivedQty: newReceivedQty, inventoryIds: [...(item.inventoryIds ?? []), targetId] }
               }
             }
           }

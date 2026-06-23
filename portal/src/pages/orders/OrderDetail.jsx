@@ -908,7 +908,7 @@ export default function OrderDetail() {
                   <tr key={item.id ?? i}>
                     <td className="py-2 pr-3 text-[#111111]">
                       <span>{item.description}</span>
-                      {item.sku && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku}</span>}
+                      {(item.sku || catalogMap[item.catalogId]?.sku) && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku || catalogMap[item.catalogId]?.sku}</span>}
                     </td>
                     <td className="py-2 px-2 text-xs text-[#9A9A9A]">{models.length > 0 ? models.join(', ') : '—'}</td>
                     <td className="py-2 px-2 text-right text-[#9A9A9A]">{item.quantity}</td>

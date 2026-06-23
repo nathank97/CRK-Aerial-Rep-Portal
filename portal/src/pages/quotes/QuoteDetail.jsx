@@ -68,6 +68,10 @@ export default function QuoteDetail() {
   const { quote, loading } = useQuote(id)
   const { catalog } = useCatalog()
   const catalogMap = useMemo(() => Object.fromEntries(catalog.map((c) => [c.id, c])), [catalog])
+  const pdfQuote = useMemo(() => quote ? ({
+    ...quote,
+    lineItems: (quote.lineItems ?? []).map(li => ({ ...li, sku: li.sku || catalogMap[li.catalogId]?.sku || null }))
+  }) : null, [quote, catalogMap])
 
   useEffect(() => {
     if (!loading && quote && !isAdmin && quote.dealerId !== profile?.id) {
@@ -158,7 +162,7 @@ export default function QuoteDetail() {
       const body = fillTemplate(emailTemplate.quoteBody, vars)
 
       const logoSrc = quote.logoChoice === 'custom' && quote.customLogoUrl ? quote.customLogoUrl : crkLogoUrl
-      const blob = await pdf(<QuotePDF quote={quote} logoSrc={logoSrc} />).toBlob()
+      const blob = await pdf(<QuotePDF quote={pdfQuote ?? quote} logoSrc={logoSrc} />).toBlob()
       const pdfBase64 = await blobToBase64(blob)
 
       await emailService.send({
@@ -335,7 +339,7 @@ export default function QuoteDetail() {
             )}
             <Suspense fallback={<span className="text-xs text-[#9A9A9A] px-3 py-1.5">Preparing PDF…</span>}>
               <PDFDownloadLink
-                document={<QuotePDF quote={quote} logoSrc={quote.logoChoice === 'custom' && quote.customLogoUrl ? quote.customLogoUrl : crkLogoUrl} />}
+                document={<QuotePDF quote={pdfQuote ?? quote} logoSrc={quote.logoChoice === 'custom' && quote.customLogoUrl ? quote.customLogoUrl : crkLogoUrl} />}
                 fileName={`${quote.quoteNumber}.pdf`}
                 className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors"
               >
@@ -453,7 +457,7 @@ export default function QuoteDetail() {
                           <tr key={item.id ?? i}>
                             <td className="py-2 pr-3 text-[#111111]">
                               <span>{item.description}</span>
-                              {item.sku && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku}</span>}
+                              {(item.sku || catalogMap[item.catalogId]?.sku) && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku || catalogMap[item.catalogId]?.sku}</span>}
                             </td>
                             <td className="py-2 px-2 text-xs text-[#9A9A9A]">{models.length > 0 ? models.join(', ') : '—'}</td>
                             <td className="py-2 px-2 text-right text-[#9A9A9A]">{item.quantity}</td>

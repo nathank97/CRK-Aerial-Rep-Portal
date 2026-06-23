@@ -108,6 +108,7 @@ function SortableRow({
   setDropdownSearch,
   positionDropdown,
   inputRefs,
+  catalogMap,
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
 
@@ -170,8 +171,8 @@ function SortableRow({
             className={inputCls}
           />
         </div>
-        {item.sku && (
-          <p className="text-xs text-[#9A9A9A] mt-0.5 font-mono">SKU: {item.sku}</p>
+        {(item.sku || catalogMap?.[item.catalogId]?.sku) && (
+          <p className="text-xs text-[#9A9A9A] mt-0.5 font-mono">SKU: {item.sku || catalogMap?.[item.catalogId]?.sku}</p>
         )}
         {item.type === 'catalog' && showDealerPricing && profile?.role === 'dealer' && item.msrp && (
           <p className="text-xs text-[#9A9A9A] mt-0.5">
@@ -233,6 +234,7 @@ function SortableRow({
 export default function LineItemBuilder({ items, onChange, showDealerPricing = true }) {
   const { profile } = useAuth()
   const { catalog } = useCatalog()
+  const catalogMap = useMemo(() => Object.fromEntries(catalog.map((c) => [c.id, c])), [catalog])
   const [showCatalog, setShowCatalog] = useState(false)
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dropdownSearch, setDropdownSearch] = useState({})
@@ -351,6 +353,7 @@ export default function LineItemBuilder({ items, onChange, showDealerPricing = t
                       setDropdownSearch={setDropdownSearch}
                       positionDropdown={positionDropdown}
                       inputRefs={inputRefs}
+                      catalogMap={catalogMap}
                     />
                   ))}
                 </tbody>

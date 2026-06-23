@@ -26,6 +26,10 @@ export default function InvoiceDetail() {
   const { invoice, loading } = useInvoice(id)
   const { catalog } = useCatalog()
   const catalogMap = useMemo(() => Object.fromEntries(catalog.map((c) => [c.id, c])), [catalog])
+  const pdfInvoice = useMemo(() => invoice ? ({
+    ...invoice,
+    lineItems: (invoice.lineItems ?? []).map(li => ({ ...li, sku: li.sku || catalogMap[li.catalogId]?.sku || null }))
+  }) : null, [invoice, catalogMap])
 
   useEffect(() => {
     if (!loading && invoice && !isAdmin && invoice.dealerId !== profile?.id) {
@@ -255,7 +259,7 @@ export default function InvoiceDetail() {
       const body = fillTemplate(emailTemplate.invoiceBody, vars)
 
       const logoSrc = invoice.logoChoice === 'custom' && invoice.customLogoUrl ? invoice.customLogoUrl : crkLogoUrl
-      const blob = await pdf(<InvoicePDF invoice={invoice} logoSrc={logoSrc} />).toBlob()
+      const blob = await pdf(<InvoicePDF invoice={pdfInvoice ?? invoice} logoSrc={logoSrc} />).toBlob()
       const pdfBase64 = await blobToBase64(blob)
 
       await emailService.send({
@@ -452,7 +456,7 @@ export default function InvoiceDetail() {
             )}
             <Suspense fallback={<span className="text-xs text-[#9A9A9A] px-3 py-1.5">Preparing PDF…</span>}>
               <PDFDownloadLink
-                document={<InvoicePDF invoice={invoice} logoSrc={invoice.logoChoice === 'custom' && invoice.customLogoUrl ? invoice.customLogoUrl : crkLogoUrl} />}
+                document={<InvoicePDF invoice={pdfInvoice ?? invoice} logoSrc={invoice.logoChoice === 'custom' && invoice.customLogoUrl ? invoice.customLogoUrl : crkLogoUrl} />}
                 fileName={`${invoice.invoiceNumber}.pdf`}
                 className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors"
               >
@@ -634,7 +638,7 @@ export default function InvoiceDetail() {
                         <tr key={item.id ?? i}>
                           <td className="py-2 pr-3 text-[#111111]">
                             <span>{item.description}</span>
-                            {item.sku && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku}</span>}
+                            {(item.sku || catalogMap[item.catalogId]?.sku) && <span className="block text-xs text-[#9A9A9A] font-mono mt-0.5">SKU: {item.sku || catalogMap[item.catalogId]?.sku}</span>}
                           </td>
                           <td className="py-2 px-2 text-xs text-[#9A9A9A]">{models.length > 0 ? models.join(', ') : '—'}</td>
                           <td className="py-2 px-2 text-right text-[#9A9A9A]">{qty}</td>

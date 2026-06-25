@@ -165,6 +165,10 @@ export default function InvoicePDF({ invoice, logoSrc }) {
             </View>
           </View>
 
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 8, color: GRAY, fontStyle: 'italic' }}>Please make checks payable to CRK Partners</Text>
+          </View>
+
           {invoice.notes && (
             <View style={s.notes}>
               <Text><Text style={{ fontFamily: 'Helvetica-Bold' }}>Notes: </Text>{invoice.notes}</Text>

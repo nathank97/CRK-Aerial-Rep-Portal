@@ -44,6 +44,10 @@ export default function InvoiceDetail() {
 
   // Edit mode state
   const [editMode, setEditMode] = useState(false)
+  const [editCustomerName, setEditCustomerName] = useState('')
+  const [editCustomerEmail, setEditCustomerEmail] = useState('')
+  const [editCustomerAddress, setEditCustomerAddress] = useState('')
+  const [editProjectName, setEditProjectName] = useState('')
   const [editPaymentTerms, setEditPaymentTerms] = useState('')
   const [editDueDate, setEditDueDate] = useState('')
   const [editNotes, setEditNotes] = useState('')
@@ -88,6 +92,10 @@ export default function InvoiceDetail() {
   }
 
   const enterEdit = () => {
+    setEditCustomerName(invoice.customerName ?? '')
+    setEditCustomerEmail(invoice.customerEmail ?? '')
+    setEditCustomerAddress(invoice.customerAddress ?? '')
+    setEditProjectName(invoice.projectName ?? '')
     setEditPaymentTerms(invoice.paymentTerms ?? 'Net 30')
     setEditDueDate(toDateString(invoice.dueDate))
     setEditNotes(invoice.notes ?? '')
@@ -122,6 +130,10 @@ export default function InvoiceDetail() {
       const balanceDue = total - paid
       const paymentStatus = computePaymentStatus({ total, amountPaid: paid, dueDate: dueTs })
       await updateDoc(invoiceDoc(id), {
+        customerName: editCustomerName,
+        customerEmail: editCustomerEmail,
+        customerAddress: editCustomerAddress,
+        projectName: editProjectName,
         lineItems: editLineItems.map(item => ({
           ...item,
           quantity: parseFloat(item.quantity) || 1,
@@ -524,6 +536,29 @@ export default function InvoiceDetail() {
       {editMode && (
         <div className="bg-white rounded-xl border border-[#8B6914]/30 shadow-sm p-5 mb-5">
           <h2 className="text-sm font-semibold text-[#111111] mb-4">Edit Invoice Details</h2>
+
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-3">Customer Information</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Customer Name</label>
+                <input type="text" value={editCustomerName} onChange={(e) => setEditCustomerName(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Customer Email</label>
+                <input type="email" value={editCustomerEmail} onChange={(e) => setEditCustomerEmail(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Customer Address</label>
+                <input type="text" value={editCustomerAddress} onChange={(e) => setEditCustomerAddress(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Project Name</label>
+                <input type="text" value={editProjectName} onChange={(e) => setEditProjectName(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Payment Terms</label>

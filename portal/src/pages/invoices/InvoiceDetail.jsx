@@ -1,6 +1,6 @@
 import { Suspense, useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
+import { updateDoc, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore'
 import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
 import { useAuth } from '../../context/AuthContext'
 import { useInvoice, computePaymentStatus } from '../../hooks/useInvoices'
@@ -18,6 +18,8 @@ import CCModal from '../../components/common/CCModal'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
 import { undoInventoryDeduction } from '../../utils/inventoryDeduction'
 import LineItemBuilder from '../../components/quotes/LineItemBuilder'
+
+const AR_CC_EMAIL = 'ar@crkllp.com'
 
 export default function InvoiceDetail() {
   const { id } = useParams()
@@ -274,16 +276,33 @@ export default function InvoiceDetail() {
       const blob = await pdf(<InvoicePDF invoice={pdfInvoice ?? invoice} logoSrc={logoSrc} />).toBlob()
       const pdfBase64 = await blobToBase64(blob)
 
+      const customerEmailLower = (invoice.customerEmail ?? '').trim().toLowerCase()
+      const finalCc = Array.from(
+        new Set([...(cc ?? []), AR_CC_EMAIL].map((e) => e.trim().toLowerCase()))
+      ).filter((e) => e && e !== customerEmailLower)
+
       await emailService.send({
         to: invoice.customerEmail,
         subject,
         body,
         pdfBase64,
         pdfFilename: `${invoice.invoiceNumber}.pdf`,
-        cc,
+        cc: finalCc,
       })
 
-      await updateDoc(invoiceDoc(id), { sentAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      await updateDoc(invoiceDoc(id), {
+        sentAt: serverTimestamp(),
+        sentTo: invoice.customerEmail,
+        sentCc: finalCc,
+        sendCount: (invoice.sendCount ?? 0) + 1,
+        sendHistory: arrayUnion({
+          sentAt: new Date(),
+          to: invoice.customerEmail,
+          cc: finalCc,
+          sentBy: profile?.displayName || user?.email || '',
+        }),
+        updatedAt: serverTimestamp(),
+      })
       flash('Invoice emailed successfully.')
       // Prompt inventory deduction for standalone invoices (no linked order)
       if (!invoice.linkedOrderId && !invoice.inventoryDeducted && (invoice.lineItems ?? []).length > 0) {
@@ -399,7 +418,9 @@ export default function InvoiceDetail() {
       )}
       {showCCModal && (
         <CCModal
+          title={invoice.sentAt ? 'Resend Invoice' : 'Send Invoice'}
           presets={emailTemplate.ccPresets}
+          alwaysCc={[AR_CC_EMAIL]}
           sending={saving}
           onCancel={() => setShowCCModal(false)}
           onSend={handleSendInvoiceConfirm}
@@ -449,7 +470,6 @@ export default function InvoiceDetail() {
             {invoice.customerAddress && <p className="text-sm text-[#9A9A9A]">{invoice.customerAddress}</p>}
             <div className="flex flex-wrap gap-4 mt-2 text-xs text-[#9A9A9A]">
               <span>Created: {formatDate(invoice.createdAt)}</span>
-              {invoice.sentAt && <span>Sent: {formatDateTime(invoice.sentAt)}</span>}
               {invoice.paymentTerms && <span>Terms: {invoice.paymentTerms}</span>}
               {invoice.dueDate && <span>Due: {formatDate(invoice.dueDate)}</span>}
               {invoice.paidAt && (
@@ -477,7 +497,7 @@ export default function InvoiceDetail() {
             </Suspense>
             <button onClick={handleSendInvoice} disabled={saving}
               className="text-sm border border-[#4A90B8] text-[#4A90B8] hover:bg-[#4A90B8]/5 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60">
-              Send Invoice
+              {invoice.sentAt ? 'Resend Invoice' : 'Send Invoice'}
             </button>
             {!invoice.linkedOrderId && (invoice.lineItems ?? []).length > 0 && (
               <div className="flex items-center gap-2">
@@ -519,6 +539,46 @@ export default function InvoiceDetail() {
               Duplicate
             </button>
           </div>
+        </div>
+
+        {/* Email/Send status */}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Email Status</p>
+            {invoice.sentAt ? (
+              <span className="text-xs font-semibold text-[#4CAF7D] bg-[#4CAF7D]/10 px-2 py-0.5 rounded-full">✓ Sent</span>
+            ) : (
+              <span className="text-xs font-semibold text-[#9A9A9A] bg-[#F4F4F5] px-2 py-0.5 rounded-full">Not Sent</span>
+            )}
+          </div>
+          {invoice.sentAt ? (
+            <div className="mt-2 text-sm text-[#111111] space-y-1">
+              <p>Sent to <span className="font-medium">{invoice.sentTo || invoice.customerEmail}</span></p>
+              {(invoice.sentCc?.length ?? 0) > 0 && (
+                <p className="text-xs text-[#9A9A9A]">CC: {invoice.sentCc.join(', ')}</p>
+              )}
+              <p className="text-xs text-[#9A9A9A]">
+                Last sent {formatDateTime(invoice.sentAt)}
+                {(invoice.sendCount ?? 1) > 1 && ` · sent ${invoice.sendCount} times`}
+              </p>
+              {(invoice.sendHistory?.length ?? 0) > 1 && (
+                <details className="text-xs text-[#9A9A9A] mt-1">
+                  <summary className="cursor-pointer text-[#8B6914] hover:underline">View send history</summary>
+                  <ul className="mt-1.5 space-y-1">
+                    {[...invoice.sendHistory].reverse().map((h, i) => (
+                      <li key={i}>
+                        {formatDateTime(h.sentAt)} — to {h.to}
+                        {(h.cc?.length ?? 0) > 0 ? `, cc: ${h.cc.join(', ')}` : ''}
+                        {h.sentBy ? ` (by ${h.sentBy})` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-[#9A9A9A]">This invoice has not been emailed to the customer yet.</p>
+          )}
         </div>
 
         {/* Linked order */}

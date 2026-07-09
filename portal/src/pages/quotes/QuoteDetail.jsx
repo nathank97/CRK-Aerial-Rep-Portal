@@ -5,7 +5,7 @@ import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
 import { useAuth } from '../../context/AuthContext'
 import { useQuote } from '../../hooks/useQuotes'
 import { useCatalog } from '../../hooks/useCatalog'
-import { quotesCol, ordersCol } from '../../firebase/firestore'
+import { quotesCol, ordersCol, presetQuotesCol } from '../../firebase/firestore'
 import { quoteDoc, orderDoc } from '../../firebase/firestore'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonCard } from '../../components/common/SkeletonCard'
@@ -61,6 +61,61 @@ function ConvertModal({ quote, onClose, onConfirm, saving }) {
   )
 }
 
+function SavePresetModal({ initialName, onClose, onConfirm, saving }) {
+  const [name, setName] = useState(initialName ?? '')
+  const [description, setDescription] = useState('')
+  const [error, setError] = useState('')
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!name.trim()) { setError('Preset name is required.'); return }
+    onConfirm({ name: name.trim(), description: description.trim() })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-[#111111]">Save as Preset Quote</h2>
+          <p className="text-xs text-[#9A9A9A] mt-0.5">Saves this quote's line items, notes, and terms as a reusable template.</p>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Preset Name <span className="text-[#D95F5F]">*</span></label>
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError('') }}
+              placeholder="e.g. Starter Package"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider mb-1">Description</label>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Short description for dealers"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#8B6914]"
+            />
+          </div>
+          {error && <p className="text-sm text-[#D95F5F]">{error}</p>}
+        </div>
+        <div className="flex gap-2 px-5 pb-5 pt-2 border-t border-gray-100">
+          <button type="button" onClick={onClose} disabled={saving}
+            className="flex-1 border border-gray-200 text-[#111111] rounded-lg py-2 text-sm hover:bg-[#F4F4F5] disabled:opacity-50">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving}
+            className="flex-1 bg-[#8B6914] text-white rounded-lg py-2 text-sm font-medium hover:bg-[#7a5c12] disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save Preset'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export default function QuoteDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -90,6 +145,8 @@ export default function QuoteDetail() {
   const [actionMsg, setActionMsg] = useState('')
   const [showConvertModal, setShowConvertModal] = useState(false)
   const [showCCModal, setShowCCModal] = useState(false)
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false)
+  const [savingPreset, setSavingPreset] = useState(false)
 
   const flash = (msg) => {
     setActionMsg(msg)
@@ -181,6 +238,30 @@ export default function QuoteDetail() {
       flash('Failed to send quote. Please try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveAsPreset = async ({ name, description }) => {
+    setSavingPreset(true)
+    try {
+      await addDoc(presetQuotesCol, {
+        name,
+        description,
+        notes: quote.notes ?? '',
+        terms: quote.terms ?? '',
+        lineItems: quote.lineItems ?? [],
+        createdById: profile?.uid ?? null,
+        createdByName: profile?.displayName ?? 'Admin',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      setShowSavePresetModal(false)
+      flash('Saved as preset quote.')
+    } catch (err) {
+      console.error(err)
+      flash('Failed to save preset. Please try again.')
+    } finally {
+      setSavingPreset(false)
     }
   }
 
@@ -280,6 +361,14 @@ export default function QuoteDetail() {
           onSend={handleSendQuoteConfirm}
         />
       )}
+      {showSavePresetModal && (
+        <SavePresetModal
+          initialName={quote.projectName || ''}
+          saving={savingPreset}
+          onClose={() => setShowSavePresetModal(false)}
+          onConfirm={handleSaveAsPreset}
+        />
+      )}
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm mb-5">
@@ -369,6 +458,14 @@ export default function QuoteDetail() {
                 className="text-sm border border-[#D95F5F] text-[#D95F5F] hover:bg-[#D95F5F]/5 px-3 py-1.5 rounded-lg transition-colors"
               >
                 Mark Declined
+              </button>
+            )}
+            {isAdmin && (quote.lineItems ?? []).length > 0 && (
+              <button
+                onClick={() => setShowSavePresetModal(true)}
+                className="text-sm border border-gray-200 text-[#111111] hover:bg-[#F4F4F5] px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Save as Preset
               </button>
             )}
           </div>

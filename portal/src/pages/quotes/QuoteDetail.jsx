@@ -1,6 +1,6 @@
 import { Suspense, useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { updateDoc, addDoc, serverTimestamp } from 'firebase/firestore'
+import { updateDoc, addDoc, serverTimestamp, arrayUnion } from 'firebase/firestore'
 import { pdf, PDFDownloadLink } from '@react-pdf/renderer'
 import { useAuth } from '../../context/AuthContext'
 import { useQuote } from '../../hooks/useQuotes'
@@ -231,7 +231,45 @@ export default function QuoteDetail() {
         cc,
       })
 
-      await updateDoc(quoteDoc(id), { sentAt: serverTimestamp(), status: 'Sent', updatedAt: serverTimestamp() })
+      const snapshotSource = pdfQuote ?? quote
+      const snapshot = {
+        quoteNumber: snapshotSource.quoteNumber ?? null,
+        projectName: snapshotSource.projectName ?? null,
+        customerName: snapshotSource.linkedCustomerName || snapshotSource.linkedLeadName || null,
+        customerEmail: snapshotSource.customerEmail ?? null,
+        customerAddress: snapshotSource.customerAddress ?? null,
+        lineItems: (snapshotSource.lineItems ?? []).map((li) => ({
+          description: li.description ?? '',
+          quantity: li.quantity ?? 0,
+          unitPrice: li.unitPrice ?? 0,
+          discount: li.discount ?? 0,
+          discountType: li.discountType ?? null,
+          sku: li.sku ?? null,
+        })),
+        subtotal: snapshotSource.subtotal ?? 0,
+        taxRate: snapshotSource.taxRate ?? 0,
+        taxAmount: snapshotSource.taxAmount ?? 0,
+        taxExempt: snapshotSource.taxExempt ?? false,
+        total: snapshotSource.total ?? 0,
+        notes: snapshotSource.notes ?? null,
+        terms: snapshotSource.terms ?? null,
+      }
+
+      await updateDoc(quoteDoc(id), {
+        sentAt: serverTimestamp(),
+        sentTo: quote.customerEmail,
+        sentCc: cc ?? [],
+        sendCount: (quote.sendCount ?? 0) + 1,
+        sendHistory: arrayUnion({
+          sentAt: new Date(),
+          to: quote.customerEmail,
+          cc: cc ?? [],
+          sentBy: profile?.displayName || user?.email || '',
+          snapshot,
+        }),
+        status: 'Sent',
+        updatedAt: serverTimestamp(),
+      })
       flash('Quote emailed successfully.')
     } catch (err) {
       console.error(err)
@@ -402,9 +440,57 @@ export default function QuoteDetail() {
             {quote.customerAddress && <p className="text-sm text-[#9A9A9A]">{quote.customerAddress}</p>}
             <div className="flex flex-wrap gap-4 mt-2 text-xs text-[#9A9A9A]">
               <span>Created: {formatDate(quote.createdAt)}</span>
-              {quote.sentAt && <span>Sent: {formatDateTime(quote.sentAt)}</span>}
+              {quote.sentAt && <span>Sent: {formatDateTime(quote.sentAt)}{(quote.sendCount ?? 1) > 1 && ` · sent ${quote.sendCount} times`}</span>}
               {quote.createdByName && <span>By: {quote.createdByName}</span>}
             </div>
+            {(quote.sendHistory?.length ?? 0) > 1 && (
+              <details className="text-xs text-[#9A9A9A] mt-1">
+                <summary className="cursor-pointer text-[#8B6914] hover:underline">View send history</summary>
+                <ul className="mt-1.5 space-y-2">
+                  {[...quote.sendHistory].reverse().map((h, i) => (
+                    <li key={i}>
+                      <div>
+                        {formatDateTime(h.sentAt)} — to {h.to}
+                        {(h.cc?.length ?? 0) > 0 ? `, cc: ${h.cc.join(', ')}` : ''}
+                        {h.sentBy ? ` (by ${h.sentBy})` : ''}
+                      </div>
+                      {h.snapshot && (
+                        <details className="mt-1 ml-2">
+                          <summary className="cursor-pointer text-[#8B6914] hover:underline">View what was sent</summary>
+                          <div className="mt-1 border border-gray-100 rounded-lg p-2 bg-[#FAFAFA]">
+                            <table className="w-full text-[11px]">
+                              <thead>
+                                <tr className="text-left text-[#9A9A9A]">
+                                  <th className="font-medium pb-1">Item</th>
+                                  <th className="font-medium pb-1 text-right">Qty</th>
+                                  <th className="font-medium pb-1 text-right">Price</th>
+                                  <th className="font-medium pb-1 text-right">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(h.snapshot.lineItems ?? []).map((li, j) => (
+                                  <tr key={j}>
+                                    <td className="py-0.5">{li.description}{li.sku ? ` (${li.sku})` : ''}</td>
+                                    <td className="py-0.5 text-right">{li.quantity}</td>
+                                    <td className="py-0.5 text-right">{formatCurrency(li.unitPrice)}</td>
+                                    <td className="py-0.5 text-right">{formatCurrency(calcLineTotal(li))}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <div className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-0.5">
+                              <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(h.snapshot.subtotal)}</span></div>
+                              <div className="flex justify-between"><span>Tax ({h.snapshot.taxRate ?? 0}%)</span><span>{formatCurrency(h.snapshot.taxAmount)}</span></div>
+                              <div className="flex justify-between font-semibold text-[#111111]"><span>Total</span><span>{formatCurrency(h.snapshot.total)}</span></div>
+                            </div>
+                          </div>
+                        </details>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </div>
 
           {/* Actions */}

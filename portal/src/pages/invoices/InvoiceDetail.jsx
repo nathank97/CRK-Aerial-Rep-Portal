@@ -17,7 +17,7 @@ import { emailService, blobToBase64 } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
 import { undoInventoryDeduction } from '../../utils/inventoryDeduction'
-import LineItemBuilder from '../../components/quotes/LineItemBuilder'
+import LineItemBuilder, { calcLineTotal } from '../../components/quotes/LineItemBuilder'
 
 const AR_CC_EMAIL = 'ar@crkllp.com'
 
@@ -290,6 +290,34 @@ export default function InvoiceDetail() {
         cc: finalCc,
       })
 
+      const snapshotSource = pdfInvoice ?? invoice
+      const snapshot = {
+        invoiceNumber: snapshotSource.invoiceNumber ?? null,
+        projectName: snapshotSource.projectName ?? null,
+        dueDate: snapshotSource.dueDate ?? null,
+        paymentTerms: snapshotSource.paymentTerms ?? null,
+        customerName: snapshotSource.customerName ?? null,
+        customerEmail: snapshotSource.customerEmail ?? null,
+        customerAddress: snapshotSource.customerAddress ?? null,
+        lineItems: (snapshotSource.lineItems ?? []).map((li) => ({
+          description: li.description ?? '',
+          quantity: li.quantity ?? 0,
+          unitPrice: li.unitPrice ?? 0,
+          discount: li.discount ?? 0,
+          discountType: li.discountType ?? null,
+          sku: li.sku ?? null,
+        })),
+        subtotal: snapshotSource.subtotal ?? 0,
+        taxRate: snapshotSource.taxRate ?? 0,
+        taxAmount: snapshotSource.taxAmount ?? 0,
+        taxExempt: snapshotSource.taxExempt ?? false,
+        exemptionType: snapshotSource.exemptionType ?? null,
+        exemptionCertificate: snapshotSource.exemptionCertificate ?? null,
+        total: snapshotSource.total ?? 0,
+        amountPaid: snapshotSource.amountPaid ?? 0,
+        notes: snapshotSource.notes ?? null,
+      }
+
       await updateDoc(invoiceDoc(id), {
         sentAt: serverTimestamp(),
         sentTo: invoice.customerEmail,
@@ -300,6 +328,7 @@ export default function InvoiceDetail() {
           to: invoice.customerEmail,
           cc: finalCc,
           sentBy: profile?.displayName || user?.email || '',
+          snapshot,
         }),
         updatedAt: serverTimestamp(),
       })
@@ -564,12 +593,46 @@ export default function InvoiceDetail() {
               {(invoice.sendHistory?.length ?? 0) > 1 && (
                 <details className="text-xs text-[#9A9A9A] mt-1">
                   <summary className="cursor-pointer text-[#8B6914] hover:underline">View send history</summary>
-                  <ul className="mt-1.5 space-y-1">
+                  <ul className="mt-1.5 space-y-2">
                     {[...invoice.sendHistory].reverse().map((h, i) => (
                       <li key={i}>
-                        {formatDateTime(h.sentAt)} — to {h.to}
-                        {(h.cc?.length ?? 0) > 0 ? `, cc: ${h.cc.join(', ')}` : ''}
-                        {h.sentBy ? ` (by ${h.sentBy})` : ''}
+                        <div>
+                          {formatDateTime(h.sentAt)} — to {h.to}
+                          {(h.cc?.length ?? 0) > 0 ? `, cc: ${h.cc.join(', ')}` : ''}
+                          {h.sentBy ? ` (by ${h.sentBy})` : ''}
+                        </div>
+                        {h.snapshot && (
+                          <details className="mt-1 ml-2">
+                            <summary className="cursor-pointer text-[#8B6914] hover:underline">View what was sent</summary>
+                            <div className="mt-1 border border-gray-100 rounded-lg p-2 bg-[#FAFAFA]">
+                              <table className="w-full text-[11px]">
+                                <thead>
+                                  <tr className="text-left text-[#9A9A9A]">
+                                    <th className="font-medium pb-1">Item</th>
+                                    <th className="font-medium pb-1 text-right">Qty</th>
+                                    <th className="font-medium pb-1 text-right">Price</th>
+                                    <th className="font-medium pb-1 text-right">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(h.snapshot.lineItems ?? []).map((li, j) => (
+                                    <tr key={j}>
+                                      <td className="py-0.5">{li.description}{li.sku ? ` (${li.sku})` : ''}</td>
+                                      <td className="py-0.5 text-right">{li.quantity}</td>
+                                      <td className="py-0.5 text-right">{formatCurrency(li.unitPrice)}</td>
+                                      <td className="py-0.5 text-right">{formatCurrency(calcLineTotal(li))}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              <div className="mt-1.5 pt-1.5 border-t border-gray-200 space-y-0.5">
+                                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(h.snapshot.subtotal)}</span></div>
+                                <div className="flex justify-between"><span>Tax ({h.snapshot.taxRate ?? 0}%)</span><span>{formatCurrency(h.snapshot.taxAmount)}</span></div>
+                                <div className="flex justify-between font-semibold text-[#111111]"><span>Total</span><span>{formatCurrency(h.snapshot.total)}</span></div>
+                              </div>
+                            </div>
+                          </details>
+                        )}
                       </li>
                     ))}
                   </ul>

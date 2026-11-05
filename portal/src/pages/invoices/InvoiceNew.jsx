@@ -181,7 +181,7 @@ export default function InvoiceNew() {
         customLogoUrl: logoChoice === 'custom' ? (profile?.logoUrl ?? null) : null,
         sentAt: null,
         repId: preRepId || null,
-        dealerId: user.uid,
+        dealerId: profile?.id ?? user.uid,
         dealerName: profile?.displayName ?? '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

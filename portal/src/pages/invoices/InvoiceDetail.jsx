@@ -392,8 +392,8 @@ export default function InvoiceDetail() {
         amountPaid: 0,
         balanceDue: invoice.total ?? 0,
         sentAt: null,
-        dealerId: user.uid,
-        dealerName: profile?.displayName ?? '',
+        dealerId: invoice.dealerId ?? profile?.id ?? user.uid,
+        dealerName: invoice.dealerName ?? profile?.displayName ?? '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })

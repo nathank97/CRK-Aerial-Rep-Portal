@@ -27,7 +27,7 @@ const STATUS_COLORS = {
 }
 
 export function useDashboardData() {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [leads, setLeads] = useState([])
   const [orders, setOrders] = useState([])
   const [quotes, setQuotes] = useState([])
@@ -35,6 +35,7 @@ export function useDashboardData() {
   const [dealers, setDealers] = useState([])
   const [loadedCount, setLoadedCount] = useState(0)
 
+  const dealerId = profile?.id ?? user?.uid
   const TOTAL_COLLECTIONS = 5
   const loading = loadedCount < TOTAL_COLLECTIONS
 
@@ -44,19 +45,21 @@ export function useDashboardData() {
     const mark = () => setLoadedCount((c) => c + 1)
 
     // Dealers can only read their own docs — filter to avoid permission errors
-    const leadsQ = isAdmin ? leadsCol : query(leadsCol, where('assignedDealerId', '==', user.uid))
-    const ordersQ = isAdmin ? ordersCol : query(ordersCol, where('dealerId', '==', user.uid))
-    const quotesQ = isAdmin ? quotesCol : query(quotesCol, where('dealerId', '==', user.uid))
-    const ticketsQ = isAdmin ? serviceTicketsCol : query(serviceTicketsCol, where('dealerId', '==', user.uid))
+    // (profile.id follows admin "view as" impersonation; user.uid does not)
+    const errored = (label) => (err) => { console.error(`[useDashboardData] ${label} query failed:`, err); mark() }
+    const leadsQ = isAdmin ? leadsCol : query(leadsCol, where('assignedDealerId', '==', dealerId))
+    const ordersQ = isAdmin ? ordersCol : query(ordersCol, where('dealerId', '==', dealerId))
+    const quotesQ = isAdmin ? quotesCol : query(quotesCol, where('dealerId', '==', dealerId))
+    const ticketsQ = isAdmin ? serviceTicketsCol : query(serviceTicketsCol, where('dealerId', '==', dealerId))
 
-    const u1 = onSnapshot(leadsQ, (snap) => { setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
-    const u2 = onSnapshot(ordersQ, (snap) => { setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
-    const u3 = onSnapshot(quotesQ, (snap) => { setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
-    const u4 = onSnapshot(ticketsQ, (snap) => { setServiceTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
+    const u1 = onSnapshot(leadsQ, (snap) => { setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() }, errored('leadsQ'))
+    const u2 = onSnapshot(ordersQ, (snap) => { setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() }, errored('ordersQ'))
+    const u3 = onSnapshot(quotesQ, (snap) => { setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() }, errored('quotesQ'))
+    const u4 = onSnapshot(ticketsQ, (snap) => { setServiceTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() }, errored('ticketsQ'))
     const u5 = onSnapshot(query(usersCol, where('role', '==', 'dealer')), (snap) => { setDealers(snap.docs.map((d) => ({ id: d.id, ...d.data() }))); mark() })
 
     return () => { u1(); u2(); u3(); u4(); u5() }
-  }, [user, isAdmin])
+  }, [user, dealerId, isAdmin])
 
   // --- KPIs ---
   const now = new Date()

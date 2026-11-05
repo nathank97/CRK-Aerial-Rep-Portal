@@ -17,6 +17,9 @@ export function useLeads() {
     const unsub = onSnapshot(q, (snap) => {
       setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useLeads.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [user?.uid])
@@ -32,6 +35,9 @@ export function useLead(leadId) {
     if (!leadId) return
     const unsub = onSnapshot(doc(db, 'leads', leadId), (d) => {
       setLead(d.exists() ? { id: d.id, ...d.data() } : null)
+      setLoading(false)
+    }, (err) => {
+      console.error('[useLeads.js] query failed:', err)
       setLoading(false)
     })
     return unsub
@@ -49,6 +55,9 @@ export function useLeadsByDealer(dealerId) {
     const unsub = onSnapshot(q, (snap) => {
       setLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useLeads.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [dealerId])
@@ -64,6 +73,9 @@ export function useLeadActivity(leadId) {
     const q = query(leadActivityCol(leadId), orderBy('timestamp', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setActivity(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    }, (err) => {
+      console.error('[useLeads.js] query failed:', err)
       setLoading(false)
     })
     return unsub
@@ -81,6 +93,9 @@ export function useLeadChat(leadId) {
     const q = query(leadChatCol(leadId), orderBy('timestamp', 'asc'))
     const unsub = onSnapshot(q, (snap) => {
       setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    }, (err) => {
+      console.error('[useLeads.js] query failed:', err)
       setLoading(false)
     })
     return unsub

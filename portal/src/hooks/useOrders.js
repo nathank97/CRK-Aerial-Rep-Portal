@@ -18,6 +18,9 @@ export function useOrders() {
     const unsub = onSnapshot(q, (snap) => {
       setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useOrders.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [user?.uid, profile?.id, isAdmin])
@@ -32,6 +35,9 @@ export function useOrder(id) {
     if (!id) return
     const unsub = onSnapshot(doc(db, 'orders', id), (d) => {
       setOrder(d.exists() ? { id: d.id, ...d.data() } : null)
+      setLoading(false)
+    }, (err) => {
+      console.error('[useOrders.js] query failed:', err)
       setLoading(false)
     })
     return unsub

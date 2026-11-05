@@ -328,14 +328,14 @@ export default function QuoteDetail() {
         fulfillmentDate: null,
         inventoryReserved: false,
         reservedItems: [],
-        dealerId: user.uid,
-        dealerName: profile?.displayName ?? '',
+        dealerId: quote.dealerId ?? profile?.id ?? user.uid,
+        dealerName: quote.dealerName ?? profile?.displayName ?? '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
 
       if (reserve && (quote.lineItems ?? []).length > 0) {
-        const results = await matchAndReserve(quote.lineItems, user.uid)
+        const results = await matchAndReserve(quote.lineItems, quote.dealerId ?? profile?.id ?? user.uid)
         const anyMatched = results.some((r) => r.matched)
         await updateDoc(orderDoc(orderRef.id), {
           inventoryReserved: anyMatched,

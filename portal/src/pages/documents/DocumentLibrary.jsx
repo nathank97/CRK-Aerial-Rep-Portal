@@ -52,7 +52,7 @@ function UploadModal({ onClose, isAdmin, dealers }) {
     setUploading(true)
     setError('')
     // Dealers always upload to themselves; admins upload to the selected dealer
-    const dealerId = isAdmin ? targetDealerId : user.uid
+    const dealerId = isAdmin ? targetDealerId : (profile?.id ?? user.uid)
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
@@ -233,7 +233,7 @@ function PreviewModal({ doc: docItem, onClose }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DocumentLibrary() {
-  const { user, isAdmin } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const { users } = useAllUsers()
   const dealers = useMemo(() => users.filter((u) => u.role === 'dealer').sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? '')), [users])
   const [docs, setDocs] = useState([])
@@ -248,13 +248,16 @@ export default function DocumentLibrary() {
     if (!user) return
     const q = isAdmin
       ? query(documentsCol, orderBy('createdAt', 'desc'))
-      : query(documentsCol, where('dealerId', '==', user.uid), orderBy('createdAt', 'desc'))
+      : query(documentsCol, where('dealerId', '==', profile?.id ?? user.uid), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[DocumentLibrary.jsx] query failed:', err)
+      setLoading(false)
     })
     return unsub
-  }, [user?.uid, isAdmin])
+  }, [user?.uid, profile?.id, isAdmin])
 
   const filtered = useMemo(() => {
     return docs.filter((d) => {

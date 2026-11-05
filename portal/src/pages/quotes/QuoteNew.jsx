@@ -67,7 +67,7 @@ export default function QuoteNew() {
         subtotal,
         taxAmount,
         total,
-        dealerId: user.uid,
+        dealerId: profile?.id ?? user.uid,
         dealerName: profile?.displayName ?? '',
         createdByName: profile?.displayName ?? '',
         repId: preRepId || null,

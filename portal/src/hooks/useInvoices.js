@@ -18,6 +18,9 @@ export function useInvoices() {
     const unsub = onSnapshot(q, (snap) => {
       setInvoices(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useInvoices.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [user?.uid, profile?.id, isAdmin])
@@ -33,6 +36,9 @@ export function useInvoice(id) {
     const unsub = onSnapshot(doc(db, 'invoices', id), (d) => {
       setInvoice(d.exists() ? { id: d.id, ...d.data() } : null)
       setLoading(false)
+    }, (err) => {
+      console.error('[useInvoices.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [id])
@@ -47,6 +53,9 @@ export function useRepInvoices(repId) {
     const q = query(invoicesCol, where('repId', '==', repId), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setInvoices(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    }, (err) => {
+      console.error('[useInvoices.js] query failed:', err)
       setLoading(false)
     })
     return unsub

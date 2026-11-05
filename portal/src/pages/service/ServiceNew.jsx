@@ -41,7 +41,7 @@ export default function ServiceNew() {
       const ticketNumber = await nextTicketNumber()
       await addDoc(serviceTicketsCol, {
         ticketNumber,
-        dealerId: isAdmin ? (selectedCustomer?.assignedDealerId ?? user.uid) : user.uid,
+        dealerId: isAdmin ? (selectedCustomer?.assignedDealerId ?? user.uid) : (profile?.id ?? user.uid),
         customerId: customerId || null,
         customerName: selectedCustomer?.name || '',
         subject: subject.trim(),

@@ -17,6 +17,9 @@ export function useCustomers() {
     const unsub = onSnapshot(q, (snap) => {
       setCustomers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useCustomers.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [user?.uid])
@@ -32,6 +35,9 @@ export function useCustomer(customerId) {
     if (!customerId) return
     const unsub = onSnapshot(doc(db, 'customers', customerId), (d) => {
       setCustomer(d.exists() ? { id: d.id, ...d.data() } : null)
+      setLoading(false)
+    }, (err) => {
+      console.error('[useCustomers.js] query failed:', err)
       setLoading(false)
     })
     return unsub
@@ -50,6 +56,9 @@ export function useCustomerOrders(customerId) {
     const unsub = onSnapshot(q, (snap) => {
       setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useCustomers.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [customerId])
@@ -66,6 +75,9 @@ export function useCustomerServiceTickets(customerId) {
     const q = query(serviceTicketsCol, where('customerId', '==', customerId), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setTickets(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    }, (err) => {
+      console.error('[useCustomers.js] query failed:', err)
       setLoading(false)
     })
     return unsub

@@ -573,8 +573,8 @@ export default function OrderDetail() {
         linkedOrderId: id,
         linkedOrderNumber: order.orderNumber,
         sentAt: null,
-        dealerId: user.uid,
-        dealerName: profile?.displayName ?? '',
+        dealerId: order.dealerId ?? profile?.id ?? user.uid,
+        dealerName: order.dealerName ?? profile?.displayName ?? '',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })

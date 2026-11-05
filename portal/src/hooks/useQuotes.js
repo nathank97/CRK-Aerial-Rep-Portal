@@ -18,6 +18,9 @@ export function useQuotes() {
     const unsub = onSnapshot(q, (snap) => {
       setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
       setLoading(false)
+    }, (err) => {
+      console.error('[useQuotes.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [user?.uid, profile?.id, isAdmin])
@@ -33,6 +36,9 @@ export function useQuote(id) {
     const unsub = onSnapshot(doc(db, 'quotes', id), (d) => {
       setQuote(d.exists() ? { id: d.id, ...d.data() } : null)
       setLoading(false)
+    }, (err) => {
+      console.error('[useQuotes.js] query failed:', err)
+      setLoading(false)
     })
     return unsub
   }, [id])
@@ -47,6 +53,9 @@ export function useRepQuotes(repId) {
     const q = query(quotesCol, where('repId', '==', repId), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setQuotes(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      setLoading(false)
+    }, (err) => {
+      console.error('[useQuotes.js] query failed:', err)
       setLoading(false)
     })
     return unsub

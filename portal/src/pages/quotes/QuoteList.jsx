@@ -41,6 +41,8 @@ export default function QuoteList() {
     return matchStatus && matchSearch && matchRep
   })
 
+  const totals = { total: filtered.reduce((sum, q) => sum + (q.total ?? 0), 0) }
+
   const selected = filtered.filter((r) => selectedIds.has(r.id))
   const allSelected = filtered.length > 0 && selected.length === filtered.length
   const toggleOne = (id) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -193,6 +195,17 @@ export default function QuoteList() {
               ))
             )}
           </tbody>
+          {!loading && filtered.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 bg-[#F4F4F5]">
+                <td colSpan={isAdmin ? 5 : 3} className="py-2.5 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">
+                  Totals · {filtered.length} quote{filtered.length !== 1 ? 's' : ''}
+                </td>
+                <td className="py-2.5 px-3 text-right font-bold text-[#111111]">{formatCurrency(totals.total)}</td>
+                <td colSpan={isAdmin ? 2 : 1} />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -248,6 +261,14 @@ export default function QuoteList() {
           ))
         )}
       </div>
+
+      {/* Mobile totals */}
+      {!loading && filtered.length > 0 && (
+        <div className="sm:hidden mt-3 mb-20 bg-[#F4F4F5] rounded-xl border border-gray-200 p-4 text-sm text-[#9A9A9A] space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider">Totals · {filtered.length} quote{filtered.length !== 1 ? 's' : ''}</p>
+          <div className="flex justify-between"><span>Quote total</span><span className="font-bold text-[#111111]">{formatCurrency(totals.total)}</span></div>
+        </div>
+      )}
 
       {/* Mobile FAB */}
       <button onClick={() => navigate('/quotes/new')}

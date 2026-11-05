@@ -45,6 +45,11 @@ export default function InvoiceList() {
     return matchStatus && matchSearch && matchRep
   })
 
+  const totals = filtered.reduce((t, inv) => ({
+    total: t.total + (inv.total ?? 0),
+    balance: t.balance + ((inv.total ?? 0) - (inv.amountPaid ?? 0)),
+  }), { total: 0, balance: 0 })
+
   const selected = filtered.filter((r) => selectedIds.has(r.id))
   const allSelected = filtered.length > 0 && selected.length === filtered.length
   const toggleOne = (id) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -223,6 +228,18 @@ export default function InvoiceList() {
               })
             )}
           </tbody>
+          {!loading && filtered.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 bg-[#F4F4F5]">
+                <td colSpan={isAdmin ? 5 : 3} className="py-2.5 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">
+                  Totals · {filtered.length} invoice{filtered.length !== 1 ? 's' : ''}
+                </td>
+                <td className="py-2.5 px-3 text-right font-bold text-[#111111]">{formatCurrency(totals.total)}</td>
+                <td className="py-2.5 px-3 text-right font-bold text-[#111111]">{formatCurrency(totals.balance)}</td>
+                <td colSpan={isAdmin ? 4 : 3} />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -297,6 +314,15 @@ export default function InvoiceList() {
           })
         )}
       </div>
+
+      {/* Mobile totals */}
+      {!loading && filtered.length > 0 && (
+        <div className="sm:hidden mt-3 mb-20 bg-[#F4F4F5] rounded-xl border border-gray-200 p-4 text-sm text-[#9A9A9A] space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider">Totals · {filtered.length} invoice{filtered.length !== 1 ? 's' : ''}</p>
+          <div className="flex justify-between"><span>Invoice total</span><span className="font-bold text-[#111111]">{formatCurrency(totals.total)}</span></div>
+          <div className="flex justify-between"><span>Balance due</span><span className="font-bold text-[#111111]">{formatCurrency(totals.balance)}</span></div>
+        </div>
+      )}
 
       {/* Mobile FAB */}
       <button onClick={() => navigate('/invoices/new')}

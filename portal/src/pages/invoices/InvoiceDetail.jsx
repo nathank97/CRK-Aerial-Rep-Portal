@@ -15,6 +15,7 @@ import crkLogoUrl from '../../assets/logo.png'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
+import { AssignRepControl } from '../../components/common/AssignRep'
 import DeductInventoryModal from '../../components/inventory/DeductInventoryModal'
 import { undoInventoryDeduction } from '../../utils/inventoryDeduction'
 import LineItemBuilder, { calcLineTotal } from '../../components/quotes/LineItemBuilder'
@@ -505,6 +506,7 @@ export default function InvoiceDetail() {
                 <span className="text-[#4CAF7D] font-semibold">Paid: {formatDate(invoice.paidAt)}</span>
               )}
             </div>
+            <AssignRepControl collectionName="invoices" record={invoice} />
           </div>
 
           {/* Actions */}

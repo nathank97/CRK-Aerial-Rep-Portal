@@ -7,6 +7,8 @@ import { db } from '../../firebase/config'
 import StatusBadge from '../../components/common/StatusBadge'
 import { SkeletonRow } from '../../components/common/SkeletonCard'
 import { formatCurrency, formatDate } from '../../utils/formatters'
+import { RepSelect, BulkAssignBar } from '../../components/common/AssignRep'
+import { useAssignableReps, repLabel } from '../../utils/assignRep'
 
 const STATUSES = ['All', 'Unpaid', 'Partial', 'Paid', 'Overdue']
 
@@ -18,6 +20,13 @@ export default function InvoiceList() {
   const [search, setSearch] = useState('')
   const [deleteItem, setDeleteItem] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [repFilter, setRepFilter] = useState('All')
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const { all: assignable } = useAssignableReps()
+  const repName = (r) => {
+    const u = assignable.find((x) => x.id === r.dealerId)
+    return u ? repLabel(u) : (r.dealerName || '—')
+  }
 
   const enriched = invoices.map((inv) => ({
     ...inv,
@@ -31,8 +40,15 @@ export default function InvoiceList() {
       !term ||
       (inv.customerName ?? '').toLowerCase().includes(term) ||
       (inv.invoiceNumber ?? '').toLowerCase().includes(term)
-    return matchStatus && matchSearch
+    const matchRep = !isAdmin || repFilter === 'All' ||
+      (repFilter === '__none' ? !assignable.some((u) => u.id === inv.dealerId) : inv.dealerId === repFilter)
+    return matchStatus && matchSearch && matchRep
   })
+
+  const selected = filtered.filter((r) => selectedIds.has(r.id))
+  const allSelected = filtered.length > 0 && selected.length === filtered.length
+  const toggleOne = (id) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(filtered.map((r) => r.id)))
 
   const isDueDateOverdue = (inv) => {
     if (!inv.dueDate) return false
@@ -51,7 +67,7 @@ export default function InvoiceList() {
     }
   }
 
-  const colSpan = isAdmin ? 9 : 8
+  const colSpan = isAdmin ? 11 : 8
 
   return (
     <div className="p-3 sm:p-5">
@@ -111,14 +127,26 @@ export default function InvoiceList() {
             <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
           ))}
         </select>
+        {isAdmin && (
+          <RepSelect value={repFilter} onChange={setRepFilter}
+            extraOptions={<><option value="All">All Reps</option><option value="__none">Unassigned / removed</option></>} />
+        )}
       </div>
+
+      {isAdmin && <BulkAssignBar collectionName="invoices" selected={selected} onDone={() => setSelectedIds(new Set())} />}
 
       {/* Desktop table */}
       <div className="hidden sm:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-[#F4F4F5]">
+              {isAdmin && (
+                <th className="py-2 pl-3 w-8">
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" className="accent-[#8B6914]" />
+                </th>
+              )}
               <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Invoice #</th>
+              {isAdmin && <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Rep</th>}
               <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Customer</th>
               <th className="text-left py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Status</th>
               <th className="text-right py-2 px-3 text-xs font-semibold text-[#9A9A9A] uppercase tracking-wider">Total</th>
@@ -154,7 +182,13 @@ export default function InvoiceList() {
                     onClick={() => navigate(`/invoices/${inv.id}`)}
                     className="hover:bg-[#F4F4F5] cursor-pointer transition-colors"
                   >
+                    {isAdmin && (
+                      <td className="py-2 pl-3 w-8" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedIds.has(inv.id)} onChange={() => toggleOne(inv.id)} aria-label="Select" className="accent-[#8B6914]" />
+                      </td>
+                    )}
                     <td className="py-2 px-3 font-mono text-xs font-semibold text-[#8B6914]">{inv.invoiceNumber}</td>
+                    {isAdmin && <td className="py-2 px-3 text-[#111111]">{repName(inv)}</td>}
                     <td className="py-2 px-3 font-medium text-[#111111]">
                       {inv.customerName || <span className="text-[#9A9A9A]">—</span>}
                     </td>
@@ -218,7 +252,13 @@ export default function InvoiceList() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-mono text-xs font-semibold text-[#8B6914]">{inv.invoiceNumber}</p>
+                    <div className="flex items-center gap-2">
+                      {isAdmin && (
+                        <input type="checkbox" checked={selectedIds.has(inv.id)} onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(inv.id)} aria-label="Select" className="accent-[#8B6914]" />
+                      )}
+                      <p className="font-mono text-xs font-semibold text-[#8B6914]">{inv.invoiceNumber}</p>
+                    </div>
+                    {isAdmin && <p className="text-xs text-[#9A9A9A]">Rep: {repName(inv)}</p>}
                     <p className="font-semibold text-[#111111] mt-0.5 truncate">{inv.customerName || '—'}</p>
                   </div>
                   <StatusBadge status={inv.paymentStatus} />

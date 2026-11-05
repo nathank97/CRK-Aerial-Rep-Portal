@@ -16,6 +16,7 @@ import QuotePDF from '../../components/quotes/QuotePDF'
 import { useEmailTemplate, fillTemplate } from '../../hooks/useEmailTemplate'
 import { emailService, blobToBase64 } from '../../services/emailService'
 import CCModal from '../../components/common/CCModal'
+import { AssignRepControl } from '../../components/common/AssignRep'
 import { matchAndReserve } from '../../utils/inventoryReservation'
 import crkLogoUrl from '../../assets/logo.png'
 
@@ -443,6 +444,7 @@ export default function QuoteDetail() {
               {quote.sentAt && <span>Sent: {formatDateTime(quote.sentAt)}{(quote.sendCount ?? 1) > 1 && ` · sent ${quote.sendCount} times`}</span>}
               {quote.createdByName && <span>By: {quote.createdByName}</span>}
             </div>
+            <AssignRepControl collectionName="quotes" record={quote} />
             {(quote.sendHistory?.length ?? 0) > 1 && (
               <details className="text-xs text-[#9A9A9A] mt-1">
                 <summary className="cursor-pointer text-[#8B6914] hover:underline">View send history</summary>

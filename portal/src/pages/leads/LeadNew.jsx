@@ -79,8 +79,8 @@ export default function LeadNew() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.firstName || !form.lastName || !form.email || !form.phone) {
-      setError('First name, last name, email, and phone are required.')
+    if (!form.firstName || !form.lastName || !form.phone) {
+      setError('First name, last name, and phone are required.')
       return
     }
     setSaving(true)
@@ -142,7 +142,7 @@ export default function LeadNew() {
 
         {/* Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Email" required>
+          <Field label="Email">
             <input type="email" value={form.email} onChange={set('email')} placeholder="jane@farm.com" className={inputCls} />
           </Field>
           <Field label="Phone" required>
